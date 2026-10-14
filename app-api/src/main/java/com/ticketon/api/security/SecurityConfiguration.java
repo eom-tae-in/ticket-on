@@ -49,7 +49,8 @@ public class SecurityConfiguration {
                         .accessDeniedHandler(securityErrorResponseHandler))
                 // 로그인 화면으로 보냈다가 돌아오는 방식이 아니다. 막힌 요청을 세션에 저장하지 않는다(익명 세션이 쌓이지 않게)
                 .requestCache(RequestCacheConfigurer::disable)
-                // 로그아웃은 계정마다 유스케이스로 만든다(#12 등). 기본 /logout(로그인 화면으로 이동)은 쓰지 않는다
+                // 로그아웃은 계정마다 로그인 컨트롤러가 SessionLogin.logOut으로 지금 세션만 끊는다(예: /api/auth/audience/logout).
+                // 기본 /logout(로그인 화면으로 이동)은 쓰지 않는다
                 .logout(LogoutConfigurer::disable)
                 .build();
     }
