@@ -35,7 +35,7 @@ public record NotificationSettingsResponse(
                     + "BOOKING_OPEN(예매 오픈 알림)", requiredMode = REQUIRED)
             NotificationPreferenceCode preference,
 
-            @Schema(description = "받는지. 바꾼 적 없으면 받음이다", requiredMode = REQUIRED)
+            @Schema(description = "받는지. 바꾼 적 없는 묶음은 기본값(지금은 받음)이다", requiredMode = REQUIRED)
             boolean receives) {
     }
 }

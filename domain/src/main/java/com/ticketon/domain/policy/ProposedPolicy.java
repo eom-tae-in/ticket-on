@@ -14,7 +14,8 @@ import java.time.Duration;
  * 숫자가 아니라 다른 도메인의 종류끼리 잇는 대응표인 제안은 여기 둘 수 없다(이 패키지는 다른 도메인 패키지를 부르지 않는다).
  * 그런 제안은 그 도메인 패키지에 두고 설명 첫머리에 같은 "확인 필요 (#이슈 번호)"를 적은 뒤, 아래 목록에 위치를 남긴다.
  * <ul>
- *   <li>확인 필요 (#13) — 알림 수신 설정의 세 묶음이 각각 어느 알림 종류를 덮는지: {@code domain.notification.NotificationPreference}</li>
+ *   <li>확인 필요 (#13) — 알림 수신 설정의 세 묶음이 각각 어느 알림 종류를 덮는지: {@code domain.notification.NotificationPreference}.
+ *       세 묶음의 기본값은 값이라 아래 상수({@code ..._RECEIVED_BY_DEFAULT})로 둔다.</li>
  * </ul>
  */
 public final class ProposedPolicy {
@@ -39,6 +40,27 @@ public final class ProposedPolicy {
      * (docs/01 "가입 경로 — 직접 가입"). 운영진 로그인(#15)·비밀번호 재설정(#16)도 같은 값을 쓴다.
      */
     public static final int PASSWORD_MINIMUM_LENGTH = 8;
+
+    /**
+     * 확인 필요 (#13, docs/12:120 리마인더 ☐ 예시와 :137 '받는 게 기본'이 어긋남) — 알림 설정 '예매·취소 확인'을 처음에 받는지.
+     * 받음을 제안한다: 알림 설정의 세 줄은 거래 알림이라 받는 게 기본이라고 적혀 있다(docs/12 "마케팅 수신은 구분해서 표시").
+     * 설정 예시 그림(docs/12 "알림 설정")에서도 켜져 있다.
+     */
+    public static final boolean BOOKING_CONFIRMATION_NOTICE_RECEIVED_BY_DEFAULT = true;
+
+    /**
+     * 확인 필요 (#13, docs/12:120 리마인더 ☐ 예시와 :137 '받는 게 기본'이 어긋남) — 알림 설정 '공연 전날 리마인더'를 처음에 받는지.
+     * 받음을 제안한다: 거래 알림이라 받는 게 기본이라는 문장(docs/12 "마케팅 수신은 구분해서 표시")을 따랐고, 리마인더는 노쇼를 눈에 띄게
+     * 줄인다(docs/12 "전날 리마인더를 문자로 하는 게 효과가 큽니다"). 다만 설정 예시 그림(docs/12 "알림 설정")은 꺼진 칸(☐)으로 그려져 있다.
+     */
+    public static final boolean DAY_BEFORE_REMINDER_RECEIVED_BY_DEFAULT = true;
+
+    /**
+     * 확인 필요 (#13, docs/12:120 리마인더 ☐ 예시와 :137 '받는 게 기본'이 어긋남) — 알림 설정 '예매 오픈 알림'을 처음에 받는지.
+     * 받음을 제안한다: 거래 알림이라 받는 게 기본이고(docs/12 "마케팅 수신은 구분해서 표시"), 오픈 알림은 관객이 행사마다 직접 신청한
+     * 사람에게만 간다(docs/12 "예매 오픈 알림 (신청자)"). 설정 예시 그림(docs/12 "알림 설정")에서도 켜져 있다.
+     */
+    public static final boolean BOOKING_OPEN_NOTICE_RECEIVED_BY_DEFAULT = true;
 
     private ProposedPolicy() {
     }

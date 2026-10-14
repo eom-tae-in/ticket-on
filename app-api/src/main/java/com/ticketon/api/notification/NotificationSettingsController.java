@@ -32,7 +32,7 @@ public class NotificationSettingsController {
         this.changeNotificationPreferenceUseCase = changeNotificationPreferenceUseCase;
     }
 
-    @Operation(summary = "내 알림 설정 조회", description = "끌 수 있는 세 묶음과 받는지를 화면 순서대로 돌려준다. 바꾼 적 없으면 모두 받음이다. "
+    @Operation(summary = "내 알림 설정 조회", description = "끌 수 있는 세 묶음과 받는지를 화면 순서대로 돌려준다. 바꾼 적 없는 묶음은 기본값(지금은 받음)이다. "
             + "끌 수 없는 알림(행사 변경·취소·연기·장소·시간·출연자 변경·공연 중단)은 목록에 없다.")
     @GetMapping
     public NotificationSettingsResponse getSettings(@CurrentAccount AccountRef account) {

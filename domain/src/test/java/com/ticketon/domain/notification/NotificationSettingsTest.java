@@ -2,6 +2,7 @@ package com.ticketon.domain.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ticketon.domain.policy.ProposedPolicy;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -35,10 +36,21 @@ class NotificationSettingsTest {
 
         @ParameterizedTest(name = "{0}")
         @EnumSource(NotificationPreference.class)
-        @DisplayName("거래 알림이라 처음에는 모두 받는다")
+        @DisplayName("제안 (#13): 거래 알림이라 처음에는 모두 받는다")
         void receivedByDefault(NotificationPreference preference) {
             assertThat(preference.receivesByDefault()).isTrue();
             assertThat(NotificationSettings.defaultsFor(SEOYUN).receives(preference)).isTrue();
+        }
+
+        @Test
+        @DisplayName("기본값은 정책 숫자 모음의 '확인 필요' 구역 값을 따른다")
+        void defaultsComeFromProposedPolicy() {
+            assertThat(NotificationPreference.BOOKING_CONFIRMATION.receivesByDefault())
+                    .isEqualTo(ProposedPolicy.BOOKING_CONFIRMATION_NOTICE_RECEIVED_BY_DEFAULT);
+            assertThat(NotificationPreference.DAY_BEFORE_REMINDER.receivesByDefault())
+                    .isEqualTo(ProposedPolicy.DAY_BEFORE_REMINDER_RECEIVED_BY_DEFAULT);
+            assertThat(NotificationPreference.BOOKING_OPEN.receivesByDefault())
+                    .isEqualTo(ProposedPolicy.BOOKING_OPEN_NOTICE_RECEIVED_BY_DEFAULT);
         }
 
         @Test
@@ -92,7 +104,7 @@ class NotificationSettingsTest {
     class Receives {
 
         @Test
-        @DisplayName("바꾼 적 없는 계정은 모든 종류를 받는다")
+        @DisplayName("제안 (#13): 바꾼 적 없는 계정은 모든 종류를 받는다")
         void defaultsReceiveEverything() {
             NotificationSettings settings = NotificationSettings.defaultsFor(SEOYUN);
 
