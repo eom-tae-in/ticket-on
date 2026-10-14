@@ -25,7 +25,8 @@ import java.util.Set;
  *   <li>같은 번호로 가입한 계정이 있거나 차단된 번호면 막는다 — 번호 하나에 계정 하나.</li>
  *   <li>같은 이메일의 관객 계정이 있으면 막는다 — 이메일이 로그인 아이디다.</li>
  * </ul>
- * 비밀번호는 해시({@link PasswordHash})로만 갖는다. 원문의 최소 규칙은 {@link NewPassword}가 지킨다.
+ * 비밀번호는 해시({@link PasswordHash})로만 갖는다. 원문의 최소 규칙은 {@link NewPassword}가 지킨다. 비밀번호는 비밀번호 찾기로만
+ * 다시 정한다({@link #resetPassword}).
  * 상태는 의도가 드러나는 메서드로만 바꾼다. 시각은 인자로 받는다.
  * <p>
  * <b>관객에게 거는 제재는 이용 정지 하나뿐이다</b>({@link #suspend}, {@link #lift}). 정지 중에는 새 예매·변경·신고만 막히고
@@ -37,10 +38,10 @@ public final class AudienceAccount {
 
     private final Long id;
     private final AudiencePersonalInformation personalInformation;
-    private final PasswordHash passwordHash;
     private final Instant signedUpAt;
     private final List<ConsentRecord> consentRecords;
     private final List<AudienceSuspension> suspensions;
+    private PasswordHash passwordHash;
     private AudienceAccountStatus status;
     private Instant emailVerifiedAt;
 
@@ -167,6 +168,26 @@ public final class AudienceAccount {
                 status = AudienceAccountStatus.ACTIVE;
             }
             case PENDING_VERIFICATION, ACTIVE -> throw new RuleViolationException(AccountErrorCode.AUDIENCE_NOT_SUSPENDED);
+            case WITHDRAWN -> throw new RuleViolationException(AccountErrorCode.AUDIENCE_WITHDRAWN);
+        }
+    }
+
+    /**
+     * 비밀번호를 새로 정한다 — 비밀번호 찾기로 받은 재설정 링크({@link PasswordResetToken})를 거쳐서만 부른다. 지금 비밀번호는 묻지 않는다
+     * (잊어버려서 하는 일이다).
+     * <p>
+     * 로그인할 수 있는 계정({@link AudienceAction#RESET_PASSWORD} — 활동·이용 정지)만 바꾼다. 이용 정지 중에도 로그인은 되므로
+     * 로그인을 되찾는 일도 막지 않는다.
+     *
+     * @param newPasswordHash 새 비밀번호 해시 — 최소 규칙을 지킨 원문({@link NewPassword})을 어댑터가 바꾼 값
+     * @throws RuleViolationException 인증 대기({@link AccountErrorCode#AUDIENCE_NOT_ACTIVE})이거나
+     *                                탈퇴한 계정({@link AccountErrorCode#AUDIENCE_WITHDRAWN})이면
+     */
+    public void resetPassword(PasswordHash newPasswordHash) {
+        Objects.requireNonNull(newPasswordHash, "newPasswordHash");
+        switch (status) {
+            case ACTIVE, SUSPENDED -> passwordHash = newPasswordHash;
+            case PENDING_VERIFICATION -> throw new RuleViolationException(AccountErrorCode.AUDIENCE_NOT_ACTIVE);
             case WITHDRAWN -> throw new RuleViolationException(AccountErrorCode.AUDIENCE_WITHDRAWN);
         }
     }
