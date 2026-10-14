@@ -195,6 +195,61 @@ class AudienceAccountPersistenceAdapterTest {
     }
 
     @Nested
+    @DisplayName("이메일로 가입한 계정 찾기 — 로그인")
+    class FindRegisteredByEmail {
+
+        @Test
+        @DisplayName("대소문자를 가리지 않고 찾는다 — 가입할 때 적은 그대로의 이메일과 해시가 돌아온다")
+        void findsIgnoringCase() {
+            long id = adapter.add(newAccount(SEOYUN_PHONE, SEOYUN_EMAIL, false)).id().getAsLong();
+
+            AudienceAccount found = adapter.findRegisteredByEmail(EmailAddress.of("SEOYUN@example.com")).orElseThrow();
+
+            assertThat(found.id()).hasValue(id);
+            assertThat(found.personalInformation().email()).isEqualTo(EmailAddress.of(SEOYUN_EMAIL));
+            assertThat(found.passwordHash()).isEqualTo(PASSWORD_HASH);
+        }
+
+        @Test
+        @DisplayName("인증 대기 계정도 찾는다 — 로그인할 수 있는지는 계정이 판단한다")
+        void findsPendingAccount() {
+            adapter.add(newAccount(SEOYUN_PHONE, SEOYUN_EMAIL, false));
+
+            assertThat(adapter.findRegisteredByEmail(EmailAddress.of(SEOYUN_EMAIL)))
+                    .hasValueSatisfying(found -> assertThat(found.status())
+                            .isEqualTo(AudienceAccountStatus.PENDING_VERIFICATION));
+        }
+
+        @Test
+        @DisplayName("가입한 적 없는 이메일이면 비어 있다")
+        void unknownEmailIsEmpty() {
+            adapter.add(newAccount(SEOYUN_PHONE, SEOYUN_EMAIL, false));
+
+            assertThat(adapter.findRegisteredByEmail(EmailAddress.of("other@example.com"))).isEmpty();
+        }
+
+        @Test
+        @DisplayName("탈퇴한 계정은 찾지 않는다")
+        void skipsWithdrawnAccount() {
+            long id = adapter.add(newAccount(SEOYUN_PHONE, SEOYUN_EMAIL, false)).id().getAsLong();
+            markWithdrawn(id);
+
+            assertThat(adapter.findRegisteredByEmail(EmailAddress.of(SEOYUN_EMAIL))).isEmpty();
+        }
+
+        @Test
+        @DisplayName("탈퇴한 뒤 같은 이메일로 다시 가입했으면 새 계정을 찾는다")
+        void findsNewAccountAfterWithdrawnOne() {
+            long withdrawnId = adapter.add(newAccount(SEOYUN_PHONE, SEOYUN_EMAIL, false)).id().getAsLong();
+            markWithdrawn(withdrawnId);
+            long newId = adapter.add(newAccount(SEOYUN_PHONE, "seoyun@example.com", false)).id().getAsLong();
+
+            assertThat(adapter.findRegisteredByEmail(EmailAddress.of(SEOYUN_EMAIL)))
+                    .hasValueSatisfying(found -> assertThat(found.id()).hasValue(newId));
+        }
+    }
+
+    @Nested
     @DisplayName("동시 가입 경합 — 표의 유일 색인이 하나만 남기고, 진 쪽은 409 오류가 된다")
     class SignupRace {
 

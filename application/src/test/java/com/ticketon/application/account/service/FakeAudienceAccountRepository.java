@@ -20,7 +20,7 @@ import java.util.Set;
 
 /**
  * 메모리 관객 계정 저장소 — 저장소 약속을 표처럼 지킨다: 탈퇴하지 않은 계정 사이에서 번호·이메일(대소문자 무시)이 하나,
- * 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만.
+ * 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만, 이메일로 찾을 때 탈퇴한 계정은 빼고.
  */
 final class FakeAudienceAccountRepository implements AudienceAccountRepository {
 
@@ -37,6 +37,19 @@ final class FakeAudienceAccountRepository implements AudienceAccountRepository {
     /** 다음 저장 직전에 같은 번호의 다른 가입이 먼저 저장된 것처럼 — 확인은 통과했지만 저장에서 진다. */
     void letAnotherSignupWinNextAdd() {
         anotherSignupWinsNextAdd = true;
+    }
+
+    /**
+     * 저장된 계정을 바꿔 둔다 — 아직 저장 기능이 없는 관리자 이용 정지(#125)·회원 탈퇴(#83)가 만들 상태를 흉내 낸다.
+     *
+     * @param changedAccount 저장된 계정을 읽어 상태를 바꾼 것(id가 있어야 한다)
+     */
+    void replace(AudienceAccount changedAccount) {
+        long id = changedAccount.id().orElseThrow();
+        if (!accounts.containsKey(id)) {
+            throw new IllegalArgumentException("저장된 적 없는 계정: " + id);
+        }
+        accounts.put(id, copyOf(changedAccount, id));
     }
 
     List<AudienceAccount> savedAccounts() {
@@ -72,6 +85,14 @@ final class FakeAudienceAccountRepository implements AudienceAccountRepository {
     @Override
     public Optional<AudienceAccount> findById(long id) {
         return Optional.ofNullable(accounts.get(id)).map(account -> copyOf(account, id));
+    }
+
+    @Override
+    public Optional<AudienceAccount> findRegisteredByEmail(EmailAddress email) {
+        return registeredAccounts()
+                .filter(account -> sameEmail(account.personalInformation().email(), email))
+                .findFirst()
+                .map(account -> copyOf(account, account.id().getAsLong()));
     }
 
     @Override

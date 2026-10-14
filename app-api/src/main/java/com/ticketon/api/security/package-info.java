@@ -9,7 +9,10 @@
  * <ul>
  *   <li>로그인 주체는 계정 종류 + id({@link com.ticketon.domain.account.AccountRef})다. 세션에는 주체 이름 "종류:id"로 저장된다
  *       (spring_session.principal_name, 예: {@code AUDIENCE:7}). 같은 이메일로 만든 관객 계정과 운영진 로그인이 섞이지 않는다.</li>
- *   <li>로그인 컨트롤러는 로그인 유스케이스로 계정을 확인한 뒤 {@link com.ticketon.api.security.SessionLogin}으로 세션을 연다.</li>
+ *   <li>로그인 컨트롤러는 로그인 유스케이스로 계정을 확인한 뒤 {@link com.ticketon.api.security.SessionLogin}으로 세션을 연다.
+ *       로그인 뒤 돌아갈 화면 경로는 같은 사이트 안의 경로만 돌려준다({@link com.ticketon.api.security.ReturnPath}).</li>
+ *   <li>로그아웃은 같은 컨트롤러가 {@link com.ticketon.api.security.SessionLogin#logOut}으로 지금 세션 하나만 끊는다.
+ *       같은 주체가 다른 기기에서 로그인한 세션은 남는다. 정지·탈퇴처럼 모두 끊을 때는 SessionTerminationPort를 쓴다.</li>
  *   <li>컨트롤러는 {@link com.ticketon.api.security.CurrentAccount @CurrentAccount}로 주체를 받아 Command에 담는다.</li>
  * </ul>
  *
