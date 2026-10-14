@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 
 /**
  * 서비스 기준 시각 (한국 시각, Asia/Seoul).
@@ -50,5 +51,16 @@ public final class KoreanTime {
      */
     public static Instant endOfDay(LocalDate date) {
         return startOfDay(date.plusDays(1));
+    }
+
+    /**
+     * 기준 순간의 한국 날짜부터 대상 날짜까지의 달력 일수.
+     * <p>
+     * 공제율 구간의 '관람일 N일 전'이 이 값이다(docs/08). 시각은 보지 않고 날짜만 본다:
+     * 공연 3/15이면 3/12 23:50은 3일 전, 3/13 10:00은 2일 전, 3/15 당일은 0이다.
+     * 대상 날짜가 지났으면 음수다.
+     */
+    public static long daysUntil(Instant reference, LocalDate targetDate) {
+        return ChronoUnit.DAYS.between(toDate(reference), targetDate);
     }
 }

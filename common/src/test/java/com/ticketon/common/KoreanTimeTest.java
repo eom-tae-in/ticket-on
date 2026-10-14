@@ -78,4 +78,46 @@ class KoreanTimeTest {
         assertThat(KoreanTime.toDate(endOfYear)).isEqualTo(LocalDate.of(2027, 1, 1));
         assertThat(KoreanTime.toDate(endOfYear.minusNanos(1))).isEqualTo(LocalDate.of(2026, 12, 31));
     }
+
+    @Test
+    @DisplayName("관람일 10일 전·9일 전·당일의 남은 일수")
+    void daysUntilSessionDate() {
+        LocalDate sessionDate = LocalDate.of(2026, 3, 15);
+
+        assertThat(KoreanTime.daysUntil(koreanInstant(2026, 3, 5, 18, 0), sessionDate)).isEqualTo(10);
+        assertThat(KoreanTime.daysUntil(koreanInstant(2026, 3, 6, 9, 0), sessionDate)).isEqualTo(9);
+        assertThat(KoreanTime.daysUntil(koreanInstant(2026, 3, 15, 13, 0), sessionDate)).isZero();
+    }
+
+    @Test
+    @DisplayName("공연 3/15: 3/12 23:50은 3일 전, 3/13 10:00은 2일 전 (docs/08 관리자 대신 취소 예시)")
+    void daysUntilIgnoresTimeOfDay() {
+        LocalDate sessionDate = LocalDate.of(2026, 3, 15);
+
+        assertThat(KoreanTime.daysUntil(koreanInstant(2026, 3, 12, 23, 50), sessionDate)).isEqualTo(3);
+        assertThat(KoreanTime.daysUntil(koreanInstant(2026, 3, 13, 10, 0), sessionDate)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("남은 일수는 UTC 날짜가 아니라 한국 날짜로 센다")
+    void daysUntilUsesKoreanDate() {
+        LocalDate sessionDate = LocalDate.of(2026, 3, 15);
+
+        // UTC로는 3/4이지만 한국 시각으로 3/5 0시 → 10일 전
+        assertThat(KoreanTime.daysUntil(Instant.parse("2026-03-04T15:00:00Z"), sessionDate)).isEqualTo(10);
+        // 한국 시각 3/5 23:59:59 → 아직 10일 전
+        assertThat(KoreanTime.daysUntil(Instant.parse("2026-03-05T14:59:59Z"), sessionDate)).isEqualTo(10);
+        // 한국 시각 3/6 0시 → 9일 전
+        assertThat(KoreanTime.daysUntil(Instant.parse("2026-03-05T15:00:00Z"), sessionDate)).isEqualTo(9);
+    }
+
+    @Test
+    @DisplayName("관람일이 지나면 남은 일수는 음수다")
+    void daysUntilPastDateIsNegative() {
+        assertThat(KoreanTime.daysUntil(koreanInstant(2026, 3, 16, 0, 0), LocalDate.of(2026, 3, 15))).isEqualTo(-1);
+    }
+
+    private static Instant koreanInstant(int year, int month, int day, int hour, int minute) {
+        return KoreanTime.toInstant(LocalDateTime.of(year, month, day, hour, minute));
+    }
 }
