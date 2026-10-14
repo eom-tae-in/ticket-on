@@ -4,11 +4,13 @@ import com.ticketon.application.notification.port.in.SendNotificationCommand;
 import com.ticketon.application.notification.port.in.SendNotificationUseCase;
 import com.ticketon.application.notification.port.out.AudienceContactPort;
 import com.ticketon.application.notification.port.out.EmailSendPort;
+import com.ticketon.application.notification.port.out.NotificationInboxRepository;
 import com.ticketon.application.notification.port.out.NotificationSendRecordRepository;
 import com.ticketon.application.notification.port.out.NotificationSettingsRepository;
 import com.ticketon.application.notification.port.out.OrganizerStaffContactPort;
 import com.ticketon.application.notification.port.out.SmsSendPort;
 import com.ticketon.domain.notification.ContactPoint;
+import com.ticketon.domain.notification.InboxNotification;
 import com.ticketon.domain.notification.NotificationChannel;
 import com.ticketon.domain.notification.NotificationContent;
 import com.ticketon.domain.notification.NotificationKind;
@@ -30,6 +32,10 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>
  * 관객 계정으로 보낼 때 받을 곳이 없으면(탈퇴한 계정) 보내지 않고 이력도 남기지 않는다 — 탈퇴하면 연락처를 파기한다(docs/11).
  * 관객이 끈 묶음의 알림도 보내지 않는다.
+ * <p>
+ * 관객 계정으로 보내는 알림은 그 계정의 알림함에도 한 줄 쌓는다({@link InboxNotification#keptFor}). 알림함은 보낸 알림을 한 벌 더
+ * 쌓아 두는 기록이라 이메일·문자의 성공 여부와 상관없이 남고(docs/12 "문자가 실패해도 알림함에는 그대로 남습니다"), 보내지 않은
+ * 알림(끈 묶음·탈퇴한 계정)은 남지 않는다(docs/12 "보낸 알림이 여기에도 쌓임").
  */
 @Service
 public class SendNotificationService implements SendNotificationUseCase {
@@ -40,18 +46,20 @@ public class SendNotificationService implements SendNotificationUseCase {
     private final EmailSendPort emailSendPort;
     private final SmsSendPort smsSendPort;
     private final NotificationSendRecordRepository sendRecordRepository;
+    private final NotificationInboxRepository inboxRepository;
     private final Clock clock;
 
     public SendNotificationService(AudienceContactPort audienceContactPort,
             NotificationSettingsRepository settingsRepository, OrganizerStaffContactPort organizerStaffContactPort,
             EmailSendPort emailSendPort, SmsSendPort smsSendPort, NotificationSendRecordRepository sendRecordRepository,
-            Clock clock) {
+            NotificationInboxRepository inboxRepository, Clock clock) {
         this.audienceContactPort = audienceContactPort;
         this.settingsRepository = settingsRepository;
         this.organizerStaffContactPort = organizerStaffContactPort;
         this.emailSendPort = emailSendPort;
         this.smsSendPort = smsSendPort;
         this.sendRecordRepository = sendRecordRepository;
+        this.inboxRepository = inboxRepository;
         this.clock = clock;
     }
 
@@ -63,6 +71,10 @@ public class SendNotificationService implements SendNotificationUseCase {
         List<Delivery> deliveries = contactsOf(kind, command.recipient()).stream()
                 .flatMap(contact -> kind.channelsReaching(contact).stream().map(channel -> new Delivery(contact, channel)))
                 .toList();
+        if (deliveries.isEmpty()) {
+            return;
+        }
+        InboxNotification.keptFor(command.recipient(), kind, command.content(), now).ifPresent(inboxRepository::add);
         for (Delivery delivery : deliveries) {
             deliver(kind, command.content(), delivery, now);
         }
