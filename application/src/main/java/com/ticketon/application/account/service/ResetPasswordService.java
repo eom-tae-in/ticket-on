@@ -5,6 +5,7 @@ import com.ticketon.application.account.port.in.ResetPasswordUseCase;
 import com.ticketon.application.account.port.out.AudienceAccountRepository;
 import com.ticketon.application.account.port.out.PasswordHashPort;
 import com.ticketon.application.account.port.out.PasswordResetTokenRepository;
+import com.ticketon.application.account.port.out.SessionTerminationPort;
 import com.ticketon.application.account.port.out.StaffAccountRepository;
 import com.ticketon.domain.account.AccountErrorCode;
 import com.ticketon.domain.account.AccountRef;
@@ -24,6 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>
  * 링크의 사용과 새 비밀번호를 한 트랜잭션으로 저장한다. 같은 링크를 거의 동시에 연 요청 가운데 하나만 링크 사용 저장을 통과하고, 진 쪽은
  * 비밀번호도 바뀌지 않는다.
+ * <p>
+ * 비밀번호를 바꾸면 그 계정이 로그인해 있는 세션을 모두 끊는다({@link SessionTerminationPort}) — 이전 비밀번호를 아는 누군가가 로그인해
+ * 있었다면 거기서 끝나야 한다. 같은 이메일의 다른 쪽 계정(관객 ↔ 운영진 로그인) 세션은 다른 주체라 그대로 둔다. 세션 끊기도 같은
+ * 트랜잭션이라, 비밀번호가 바뀌지 않으면 세션도 그대로다.
  */
 @Service
 public class ResetPasswordService implements ResetPasswordUseCase {
@@ -32,15 +37,17 @@ public class ResetPasswordService implements ResetPasswordUseCase {
     private final AudienceAccountRepository audienceAccountRepository;
     private final StaffAccountRepository staffAccountRepository;
     private final PasswordHashPort passwordHashPort;
+    private final SessionTerminationPort sessionTerminationPort;
     private final Clock clock;
 
     public ResetPasswordService(PasswordResetTokenRepository tokenRepository,
             AudienceAccountRepository audienceAccountRepository, StaffAccountRepository staffAccountRepository,
-            PasswordHashPort passwordHashPort, Clock clock) {
+            PasswordHashPort passwordHashPort, SessionTerminationPort sessionTerminationPort, Clock clock) {
         this.tokenRepository = tokenRepository;
         this.audienceAccountRepository = audienceAccountRepository;
         this.staffAccountRepository = staffAccountRepository;
         this.passwordHashPort = passwordHashPort;
+        this.sessionTerminationPort = sessionTerminationPort;
         this.clock = clock;
     }
 
@@ -57,6 +64,7 @@ public class ResetPasswordService implements ResetPasswordUseCase {
             case STAFF -> resetStaffPassword(token, newPasswordHash, now);
             case ADMIN, CHECKIN -> throw new IllegalStateException("재설정 링크가 가리킬 수 없는 계정 종류입니다: " + account);
         }
+        sessionTerminationPort.terminateAllSessions(account);
     }
 
     private void resetAudiencePassword(PasswordResetToken token, PasswordHash newPasswordHash, Instant now) {

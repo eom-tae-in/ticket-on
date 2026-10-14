@@ -14,6 +14,7 @@ import com.ticketon.common.MutableClock;
 import com.ticketon.common.WebAddress;
 import com.ticketon.domain.account.AccountErrorCode;
 import com.ticketon.domain.account.AccountKind;
+import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.account.AudienceAccount;
 import com.ticketon.domain.account.AudienceAccountStatus;
 import com.ticketon.domain.account.EmailAddress;
@@ -54,6 +55,7 @@ class ResetPasswordServiceTest {
     private final FakeStaffAccountRepository staffAccountRepository = new FakeStaffAccountRepository();
     private final FakePasswordResetTokenRepository tokenRepository = new FakePasswordResetTokenRepository();
     private final FakePasswordHashPort passwordHashPort = new FakePasswordHashPort();
+    private final RecordingSessionTerminationPort sessionTerminationPort = new RecordingSessionTerminationPort();
     private final MutableClock clock = MutableClock.at(REQUEST_TIME);
     private final StoredAudienceAccounts audienceAccounts = new StoredAudienceAccounts(audienceAccountRepository);
     private final StoredStaffAccounts staffAccounts = new StoredStaffAccounts(staffAccountRepository);
@@ -63,7 +65,7 @@ class ResetPasswordServiceTest {
             new FixedTokenGenerator(FIRST_TOKEN, SECOND_TOKEN), WebAddress.of("https://ticket-on.example"), clock);
 
     private final ResetPasswordService service = new ResetPasswordService(tokenRepository, audienceAccountRepository,
-            staffAccountRepository, passwordHashPort, clock);
+            staffAccountRepository, passwordHashPort, sessionTerminationPort, clock);
 
     private final LogInAudienceService audienceLogin = new LogInAudienceService(audienceAccountRepository, passwordHashPort);
 
@@ -128,6 +130,46 @@ class ResetPasswordServiceTest {
             AudienceAccount saved = audienceAccountRepository.findById(id).orElseThrow();
             assertThat(saved.passwordHash()).isEqualTo(FakePasswordHashPort.hashOf(NEW_PASSWORD));
             assertThat(saved.passwordHash().value()).doesNotContain(NEW_PASSWORD);
+        }
+    }
+
+    @Nested
+    @DisplayName("바꾸면 그 계정의 기존 로그인 세션을 모두 끊는다")
+    class TerminatesSessions {
+
+        @Test
+        @DisplayName("관객 계정을 바꾸면 그 관객 주체(AUDIENCE:id)의 세션을 끊는다")
+        void terminatesAudienceSessions() {
+            long id = audienceAccounts.active(SEOYUN_EMAIL, SEOYUN_PHONE);
+            requestAudienceReset(SEOYUN_EMAIL);
+
+            service.resetPassword(audienceReset(FIRST_TOKEN));
+
+            assertThat(sessionTerminationPort.terminatedAccounts()).containsExactly(AccountRef.of(AccountKind.AUDIENCE, id));
+        }
+
+        @Test
+        @DisplayName("운영진 로그인을 바꾸면 그 주체(STAFF:id)의 세션만 끊는다 — 같은 이메일의 관객 세션은 다른 주체라 그대로다")
+        void terminatesOnlyStaffSessions() {
+            audienceAccounts.active(JUNGHOON_EMAIL, "010-2345-6789");
+            long staffId = staffAccounts.active(JUNGHOON_EMAIL, "조용한고래");
+            requestService.requestReset(new RequestPasswordResetCommand(AccountKind.STAFF, EmailAddress.of(JUNGHOON_EMAIL)));
+
+            service.resetPassword(staffReset(FIRST_TOKEN));
+
+            assertThat(sessionTerminationPort.terminatedAccounts()).containsExactly(AccountRef.of(AccountKind.STAFF, staffId));
+        }
+
+        @Test
+        @DisplayName("바뀌지 않으면(유효 시간이 지난 링크 등) 세션도 끊지 않는다")
+        void keepsSessionsWhenNotReset() {
+            audienceAccounts.active(SEOYUN_EMAIL, SEOYUN_PHONE);
+            requestAudienceReset(SEOYUN_EMAIL);
+            clock.advance(Duration.ofHours(1));
+
+            assertRejected(() -> service.resetPassword(audienceReset(FIRST_TOKEN)),
+                    AccountErrorCode.PASSWORD_RESET_LINK_EXPIRED);
+            assertThat(sessionTerminationPort.terminatedAccounts()).isEmpty();
         }
     }
 

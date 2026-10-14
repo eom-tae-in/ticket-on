@@ -62,7 +62,7 @@ public class PasswordResetController {
 
     @Operation(summary = "관객 비밀번호 재설정", description = "관객 재설정 메일 링크의 token과 새 비밀번호로 비밀번호를 바꾼다. 링크는 한 번만 쓴다. "
             + "발급한 적 없는 링크(주최자 쪽 링크 포함)는 404 PASSWORD_RESET_LINK_NOT_FOUND, 이미 쓴 링크·새 링크로 대체된 링크·유효 시간이 "
-            + "지난 링크는 409. 로그인은 되지 않는다 — 새 비밀번호로 로그인한다.")
+            + "지난 링크는 409. 바꾸면 그 관객이 로그인해 둔 세션(다른 기기 포함)이 모두 끊기고, 로그인되지도 않는다 — 새 비밀번호로 로그인한다.")
     @PostMapping("/audience/password-reset")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void resetAudiencePassword(@Valid @RequestBody ResetPasswordRequest request) {
@@ -71,7 +71,7 @@ public class PasswordResetController {
 
     @Operation(summary = "주최자 비밀번호 재설정", description = "주최자 재설정 메일 링크의 token과 새 비밀번호로 운영진 로그인의 비밀번호를 바꾼다. "
             + "링크는 한 번만 쓴다. 발급한 적 없는 링크(관객 쪽 링크 포함)는 404 PASSWORD_RESET_LINK_NOT_FOUND, 이미 쓴 링크·새 링크로 대체된 "
-            + "링크·유효 시간이 지난 링크는 409.")
+            + "링크·유효 시간이 지난 링크는 409. 바꾸면 그 운영진 로그인의 세션(다른 기기 포함)이 모두 끊긴다.")
     @PostMapping("/staff/password-reset")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void resetStaffPassword(@Valid @RequestBody ResetPasswordRequest request) {

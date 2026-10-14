@@ -41,7 +41,8 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * 서버 전체를 진짜 PostgreSQL(마이그레이션 전체)로 띄우고, 실제 HTTP 요청으로 비밀번호 찾기 → 재설정 메일 → 재설정 → 로그인을 끝까지
  * 돌린다. 가입 여부·계정 상태와 상관없이 비밀번호 찾기 응답이 똑같은지, 관객 쪽 요청이 같은 이메일의 운영진 로그인 비밀번호를 바꾸지
- * 않는지, 쓴 링크·대체된 링크를 다시 쓸 수 없는지 본다. Docker가 없는 환경에서는 건너뛴다.
+ * 않는지, 쓴 링크·대체된 링크를 다시 쓸 수 없는지, 비밀번호를 바꾸면 그 계정의 이전 세션이 끊기는지 본다. Docker가 없는 환경에서는
+ * 건너뛴다.
  * <p>
  * 비밀번호 찾기는 응답과 떼어 처리되므로(PasswordResetController) 메일은 응답 뒤에 나간다. 재설정 메일은 '기록만' 어댑터의 로그에 찍힐
  * 때까지 기다렸다가 링크를 꺼내 연다 — 메일을 열어 링크를 누르는 것과 같다. 브라우저 하나를 쿠키를 기억하는 HTTP 클라이언트 하나로 흉내
@@ -67,6 +68,10 @@ class PasswordResetIntegrationTest {
     private static final String AUDIENCE_LOGIN_PATH = "/api/auth/audience/login";
 
     private static final String STAFF_LOGIN_PATH = "/api/auth/staff/login";
+
+    private static final String AUDIENCE_ACCOUNT_PATH = "/api/audience/account";
+
+    private static final String NICKNAME_PATH = "/api/organizer/account/nickname";
 
     private static final String CSRF_TOKEN_PATH = "/api/auth/test/csrf";
 
@@ -227,6 +232,35 @@ class PasswordResetIntegrationTest {
         }
     }
 
+    @Test
+    @DisplayName("비밀번호를 바꾸면 그 관객이 로그인해 둔 세션은 401이 되고, 같은 이메일의 운영진 로그인 세션은 그대로다")
+    void resetTerminatesPreviousSessions(CapturedOutput output) throws Exception {
+        String email = "sessions@example.com";
+        try (Browser phone = new Browser(); Browser laptop = new Browser(); Browser organizerBrowser = new Browser()) {
+            phone.signUpAudience(email, "010-4444-0041");
+            phone.verifyAudienceEmail(email);
+            phone.signUpStaff(email, "세션고래");
+            phone.verifyStaffEmail(email);
+            assertThat(phone.post(AUDIENCE_LOGIN_PATH, loginBody(email, AUDIENCE_PASSWORD), phone.csrfToken()).statusCode())
+                    .isEqualTo(200);
+            assertThat(phone.get(AUDIENCE_ACCOUNT_PATH).statusCode()).isEqualTo(200);
+            assertThat(organizerBrowser.post(STAFF_LOGIN_PATH, loginBody(email, STAFF_PASSWORD),
+                    organizerBrowser.csrfToken()).statusCode()).isEqualTo(200);
+            String audiencePrincipal = "AUDIENCE:" + audienceAccountIdOf(email);
+            assertThat(sessionCountOf(audiencePrincipal)).isEqualTo(1);
+
+            laptop.post(AUDIENCE_REQUEST_PATH, Map.of("email", email), laptop.csrfToken());
+            String token = awaitResetTokens(output, email, AUDIENCE_SUBJECT, AUDIENCE_RESET_LINK, 1).getFirst();
+            assertThat(laptop.post(AUDIENCE_RESET_PATH, resetBody(token, NEW_PASSWORD), laptop.csrfToken()).statusCode())
+                    .isEqualTo(204);
+
+            expectError(phone.get(AUDIENCE_ACCOUNT_PATH), 401, "UNAUTHENTICATED");
+            assertThat(sessionCountOf(audiencePrincipal)).isZero();
+            assertThat(organizerBrowser.put(NICKNAME_PATH, Map.of("nickname", "세션고래"), organizerBrowser.csrfToken())
+                    .statusCode()).isEqualTo(200);
+        }
+    }
+
     private void expectError(HttpResponse<String> response, int status, String code) {
         assertThat(response.statusCode()).isEqualTo(status);
         assertThat(jsonMapper.readValue(response.body(), ErrorResponse.class).code()).isEqualTo(code);
@@ -267,6 +301,18 @@ class PasswordResetIntegrationTest {
         return tokens;
     }
 
+    private long audienceAccountIdOf(String email) {
+        Long id = jdbcTemplate.queryForObject("SELECT id FROM audience_account WHERE email = ?", Long.class, email);
+        assertThat(id).isNotNull();
+        return id;
+    }
+
+    private long sessionCountOf(String principalName) {
+        Long count = jdbcTemplate.queryForObject("SELECT count(*) FROM spring_session WHERE principal_name = ?",
+                Long.class, principalName);
+        return count == null ? 0 : count;
+    }
+
     private String staffPasswordHashOf(String email) {
         return jdbcTemplate.queryForObject("SELECT password_hash FROM staff_account WHERE email = ?", String.class, email);
     }
@@ -303,13 +349,11 @@ class PasswordResetIntegrationTest {
          * @param csrfToken 이 세션의 CSRF 토큰
          */
         HttpResponse<String> post(String path, Object body, String csrfToken) throws Exception {
-            BodyPublisher publisher = body == null ? HttpRequest.BodyPublishers.noBody()
-                    : HttpRequest.BodyPublishers.ofString(jsonMapper.writeValueAsString(body), StandardCharsets.UTF_8);
-            HttpRequest.Builder request = HttpRequest.newBuilder(uri(path)).header(CSRF_HEADER, csrfToken);
-            if (body != null) {
-                request.header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
-            }
-            return send(request.POST(publisher).build());
+            return send(withBody(path, "POST", body, csrfToken));
+        }
+
+        HttpResponse<String> put(String path, Object body, String csrfToken) throws Exception {
+            return send(withBody(path, "PUT", body, csrfToken));
         }
 
         /** 지금 세션의 CSRF 토큰. 세션이 없으면 서버가 세션을 만들어 쿠키를 내려 준다. */
@@ -360,6 +404,16 @@ class PasswordResetIntegrationTest {
                     WHERE s.email = ?""", String.class, email);
             assertThat(post("/api/auth/staff/email-verification", Map.of("token", token), csrfToken()).statusCode())
                     .isEqualTo(204);
+        }
+
+        private HttpRequest withBody(String path, String method, Object body, String csrfToken) {
+            BodyPublisher publisher = body == null ? HttpRequest.BodyPublishers.noBody()
+                    : HttpRequest.BodyPublishers.ofString(jsonMapper.writeValueAsString(body), StandardCharsets.UTF_8);
+            HttpRequest.Builder request = HttpRequest.newBuilder(uri(path)).header(CSRF_HEADER, csrfToken);
+            if (body != null) {
+                request.header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
+            }
+            return request.method(method, publisher).build();
         }
 
         private HttpResponse<String> send(HttpRequest request) throws Exception {
