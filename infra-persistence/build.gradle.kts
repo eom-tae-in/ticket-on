@@ -54,3 +54,8 @@ jooq {
 tasks.named("jooqCodegen") {
     inputs.files(fileTree("src/main/resources/db/migration"))
 }
+
+// 생성한 jOOQ 코드를 main 소스에 넣는다. 태스크 출력을 소스로 잡으므로 컴파일 전에 코드 생성이 먼저 돈다
+sourceSets.main {
+    java.srcDir(tasks.named("jooqCodegen"))
+}

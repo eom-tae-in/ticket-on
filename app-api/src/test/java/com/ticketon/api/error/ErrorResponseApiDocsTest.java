@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ticketon.api.security.SecurityConfiguration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,8 @@ import org.springframework.test.web.servlet.ResultActions;
 /**
  * /v3/api-docs에 ErrorResponse 스키마와 공통 오류 응답이 실리는지 확인한다.
  * <p>
- * DB 없이 돌도록 웹 슬라이스에 springdoc 자동 설정만 더한다.
+ * DB 없이 돌도록 웹 슬라이스에 springdoc 자동 설정만 더한다. 실제 보안 설정을 함께 올려 명세 경로가 로그인 없이 열리는지도 본다
+ * (화면 타입 생성 npm run api:types가 로그인 없이 명세를 읽는다).
  */
 @DisplayName("OpenAPI 명세의 공통 오류 응답")
 class ErrorResponseApiDocsTest {
@@ -32,7 +34,7 @@ class ErrorResponseApiDocsTest {
 
     @Nested
     @WebMvcTest(controllers = ErrorTestController.class)
-    @Import({ErrorTestController.class, ErrorResponseOpenApiConfiguration.class})
+    @Import({ErrorTestController.class, ErrorResponseOpenApiConfiguration.class, SecurityConfiguration.class})
     @ImportAutoConfiguration({SpringDocConfiguration.class, SpringDocConfigProperties.class, SpringDocWebMvcConfiguration.class})
     @DisplayName("API가 있을 때")
     class WithOperations {
@@ -59,10 +61,11 @@ class ErrorResponseApiDocsTest {
         }
     }
 
-    /** 지금 서버처럼 컨트롤러 없이 오류 처리기만 있는 상태. */
+    /** 지금 서버처럼 API 없이 오류 처리기와 오류 응답 경로(/error, 명세에서 숨김)만 있는 상태. */
     @Nested
     @WebMvcTest(useDefaultFilters = false)
-    @Import({ApiExceptionHandler.class, ErrorResponseOpenApiConfiguration.class})
+    @Import({ApiExceptionHandler.class, ApiErrorController.class, ErrorResponseOpenApiConfiguration.class,
+            SecurityConfiguration.class})
     @ImportAutoConfiguration({SpringDocConfiguration.class, SpringDocConfigProperties.class, SpringDocWebMvcConfiguration.class})
     @DisplayName("API가 하나도 없을 때")
     class WithoutOperations {

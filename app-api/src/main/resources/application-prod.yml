@@ -1,0 +1,7 @@
+# 운영 프로필 — HTTPS로만 서비스한다.
+server:
+  servlet:
+    session:
+      cookie:
+        # 세션 쿠키를 HTTPS 연결에만 싣는다
+        secure: true
