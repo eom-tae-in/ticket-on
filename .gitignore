@@ -7,7 +7,9 @@ build/
 .idea/
 *.iml
 .vscode/
-out/
+# IntelliJ 출력 폴더는 루트·모듈 바로 아래만. 'out/'만 쓰면 application의 port/out 패키지까지 무시된다
+/out/
+/*/out/
 
 # OS
 .DS_Store
