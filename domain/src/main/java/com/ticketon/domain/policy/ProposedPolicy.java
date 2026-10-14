@@ -10,6 +10,12 @@ import java.time.Duration;
  * <p>
  * #135에서 사용자가 확정하면 docs/99 C에 기록하고, 값을 {@link TimePolicy}·{@link QuantityPolicy}·
  * {@link RecordRetentionPolicy} 중 맞는 곳으로 옮긴 뒤 여기서 지운다. 제안값과 달라지면 관련 테스트도 고친다.
+ * <p>
+ * 숫자가 아니라 다른 도메인의 종류끼리 잇는 대응표인 제안은 여기 둘 수 없다(이 패키지는 다른 도메인 패키지를 부르지 않는다).
+ * 그런 제안은 그 도메인 패키지에 두고 설명 첫머리에 같은 "확인 필요 (#이슈 번호)"를 적은 뒤, 아래 목록에 위치를 남긴다.
+ * <ul>
+ *   <li>확인 필요 (#13) — 알림 수신 설정의 세 묶음이 각각 어느 알림 종류를 덮는지: {@code domain.notification.NotificationPreference}</li>
+ * </ul>
  */
 public final class ProposedPolicy {
 

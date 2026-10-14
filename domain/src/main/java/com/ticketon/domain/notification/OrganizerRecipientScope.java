@@ -1,0 +1,20 @@
+package com.ticketon.domain.notification;
+
+/**
+ * 주최자 쪽 알림을 받는 사람의 범위(docs/12 "주최자 대상").
+ * <p>
+ * <b>주최자에 관한 알림은 소유자와 운영자 전원</b>에게 가고, <b>정산 계좌처럼 소유자만 다루는 일은 소유자에게만</b> 간다.
+ * 운영자 초대·내보내기처럼 한 사람에게 일어난 일은 그 사람에게만 간다. 앞의 둘은 주최자 id로 받는 사람을 펼치고
+ * ({@link OrganizerStaffContacts#emailsFor}), 마지막은 그 사람의 연락처로 바로 보낸다.
+ */
+public enum OrganizerRecipientScope {
+
+    /** 소유자와 운영자 전원 — 주최자에 관한 알림. */
+    ALL_STAFF,
+
+    /** 소유자에게만 — 정산 계좌처럼 소유자만 다루는 일(docs/01 "권한 두 가지"). */
+    OWNER_ONLY,
+
+    /** 그 사람에게 — 초대받은 사람, 내보내진 사람, 프로필이 초기화된 사람. 주최자 id로 펼치지 않고 연락처로 보낸다. */
+    INDIVIDUAL
+}
