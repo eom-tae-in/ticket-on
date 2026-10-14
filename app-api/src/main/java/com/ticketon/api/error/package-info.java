@@ -19,6 +19,8 @@
  *           {@link com.ticketon.domain.error.ConflictException 충돌(동시성 패배)}</td><td>409</td><td>도메인 오류 코드</td></tr>
  *   <tr><td>Spring MVC가 상태를 정한 그 밖의 요청 오류(없는 주소 404, 지원하지 않는 메서드 405 등)</td><td>그 상태</td>
  *       <td>NOT_FOUND · UNSUPPORTED_REQUEST 등 {@link com.ticketon.api.error.ApiErrorCode}, fieldErrors는 빈 배열</td></tr>
+ *   <tr><td>Spring Security 예외(메서드 보안의 권한 없음 등)</td><td>401 / 403</td>
+ *       <td>보안 필터로 되돌려 로그인하지 않았으면 UNAUTHENTICATED, 했으면 ACCESS_DENIED</td></tr>
  *   <tr><td>그 밖의 모든 예외</td><td>500</td><td>INTERNAL_ERROR — 내부 내용은 숨기고 로그에만 남긴다</td></tr>
  * </table>
  *
@@ -44,9 +46,14 @@
  * <h2>로그</h2>
  * 400·401·403·404·409는 정상적인 거절이라 debug로만 남긴다. 500은 예외 전체를 error로 남기고, 응답에는 정해진 문구만 보낸다.
  *
- * <h2>여기서 다루지 않는 것 (#8 보안 설정)</h2>
- * 컨트롤러에 닿기 전 보안 필터가 막는 요청(미인증 401, 권한 없음 403)은 이 처리기를 거치지 않는다. 보안 설정에서 같은
- * {@link com.ticketon.api.error.ErrorResponse}로 응답하게 한다({@code ApiErrorCode.UNAUTHENTICATED}, {@code ACCESS_DENIED}).
- * 메서드 보안이 던지는 Spring Security 예외는 여기 마지막 처리(500)에 걸리지 않게 그때 따로 다룬다.
+ * <h2>컨트롤러 밖에서 막히거나 난 오류</h2>
+ * 같은 {@link com.ticketon.api.error.ErrorResponse} 모양으로 응답한다. 화면은 어디서 막혔는지 몰라도 된다.
+ * <ul>
+ *   <li>보안 필터가 막은 요청(미인증 401 UNAUTHENTICATED, 권한 없음·CSRF 실패 403 ACCESS_DENIED)은 이 처리기를 거치지 않고
+ *       보안 설정이 응답한다(api/security의 SecurityErrorResponseHandler).</li>
+ *   <li>메서드 보안이 던지는 Spring Security 예외는 위 표처럼 보안 필터로 되돌려 같은 401/403이 된다. 500으로 새지 않는다.</li>
+ *   <li>그 밖에 서블릿 필터 단계에서 난 오류(예외, 방화벽이 거절한 주소 등)는 Spring Boot 기본 오류 본문 대신
+ *       {@link com.ticketon.api.error.ApiErrorController}가 상태를 지켜 응답한다.</li>
+ * </ul>
  */
 package com.ticketon.api.error;

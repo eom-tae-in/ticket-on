@@ -6,6 +6,7 @@ import com.ticketon.domain.error.DomainException;
 import com.ticketon.domain.error.NotFoundException;
 import com.ticketon.domain.error.PermissionDeniedException;
 import com.ticketon.domain.error.RuleViolationException;
+import io.swagger.v3.oas.annotations.Hidden;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -95,6 +98,17 @@ public class ApiExceptionHandler {
     }
 
     /**
+     * Spring Security 예외(메서드 보안의 권한 없음 등)는 여기서 응답하지 않고 보안 필터로 되돌린다. 필터가 로그인 여부를 보고
+     * 401(로그인하지 않음)과 403(권한 없음)을 나눠 같은 ErrorResponse로 응답한다(api/security). 아래 마지막 처리(500)에
+     * 걸리지 않게 먼저 받는다. 응답을 만들지 않으므로 명세에는 싣지 않는다.
+     */
+    @Hidden
+    @ExceptionHandler({AccessDeniedException.class, AuthenticationException.class})
+    public void rethrowToSecurityFilter(RuntimeException exception) {
+        throw exception;
+    }
+
+    /**
      * 위에서 다루지 않은 예외. Spring MVC가 상태를 정해 둔 요청 오류(없는 주소, 지원하지 않는 메서드 등)는 그 상태를 지키고,
      * 나머지는 500으로 응답한다. 500은 내부 내용을 숨기고 로그에만 남긴다.
      */
@@ -124,16 +138,6 @@ public class ApiExceptionHandler {
         log.debug("요청 오류 {}: {}", status.value(), frameworkError.getBody().getDetail());
         return ResponseEntity.status(status)
                 .headers(frameworkError.getHeaders())
-                .body(ErrorResponse.of(clientErrorCode(status)));
-    }
-
-    private static ApiErrorCode clientErrorCode(HttpStatusCode status) {
-        return switch (status.value()) {
-            case 400 -> ApiErrorCode.INVALID_INPUT;
-            case 401 -> ApiErrorCode.UNAUTHENTICATED;
-            case 403 -> ApiErrorCode.ACCESS_DENIED;
-            case 404 -> ApiErrorCode.NOT_FOUND;
-            default -> ApiErrorCode.UNSUPPORTED_REQUEST;
-        };
+                .body(ErrorResponse.of(ApiErrorCode.forStatus(status)));
     }
 }

@@ -1,6 +1,7 @@
 package com.ticketon.api.error;
 
 import com.ticketon.domain.error.ErrorCode;
+import org.springframework.http.HttpStatusCode;
 
 /**
  * 도메인 오류 코드가 없는 오류에 쓰는 API 공통 코드 — 입력 형식, 로그인, 없는 주소, 처리하지 못한 오류.
@@ -31,6 +32,20 @@ public enum ApiErrorCode implements ErrorCode {
 
     ApiErrorCode(String message) {
         this.message = message;
+    }
+
+    /**
+     * 상태 코드만 알고 오류 코드가 따로 없는 오류(프레임워크가 상태를 정한 요청 오류, 필터 단계 오류)의 공통 코드.
+     * 4xx 가운데 400·401·403·404가 아닌 것은 UNSUPPORTED_REQUEST, 나머지(5xx 등)는 INTERNAL_ERROR다.
+     */
+    public static ApiErrorCode forStatus(HttpStatusCode status) {
+        return switch (status.value()) {
+            case 400 -> INVALID_INPUT;
+            case 401 -> UNAUTHENTICATED;
+            case 403 -> ACCESS_DENIED;
+            case 404 -> NOT_FOUND;
+            default -> status.is4xxClientError() ? UNSUPPORTED_REQUEST : INTERNAL_ERROR;
+        };
     }
 
     @Override
