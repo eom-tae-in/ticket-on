@@ -64,6 +64,31 @@ class PasswordTest {
     }
 
     @Nested
+    @DisplayName("확인하려고 적은 비밀번호 — 로그인")
+    class EnteredPasswordRule {
+
+        @ParameterizedTest(name = "\"{0}\"")
+        @ValueSource(strings = {"abc", "a", "        ", " seoyun1234 "})
+        @DisplayName("새 비밀번호의 최소 길이는 보지 않고 적은 그대로 쓴다 — 짧으면 어떤 해시와도 맞지 않을 뿐이다")
+        void keepsValueAsTypedWithoutMinimumLength(String input) {
+            assertThat(new EnteredPassword(input).value()).isEqualTo(input);
+        }
+
+        @Test
+        @DisplayName("비었거나 없으면 받지 않는다")
+        void rejectsEmptyOrNull() {
+            assertThatThrownBy(() -> new EnteredPassword("")).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> new EnteredPassword(null)).isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        @DisplayName("문자열로 바꾸면 원문을 가린다 — 로그에 새지 않게")
+        void toStringHidesValue() {
+            assertThat(new EnteredPassword("seoyun1234")).hasToString("EnteredPassword[****]");
+        }
+    }
+
+    @Nested
     @DisplayName("비밀번호 해시")
     class Hash {
 

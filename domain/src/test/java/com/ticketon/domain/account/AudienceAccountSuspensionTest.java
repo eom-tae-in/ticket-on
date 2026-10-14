@@ -55,10 +55,19 @@ class AudienceAccountSuspensionTest {
         }
 
         @ParameterizedTest(name = "{0}")
-        @EnumSource(value = AudienceAction.class, names = {"LOG_IN", "VIEW_TICKETS", "SHOW_TICKET_QR", "CANCEL_TICKET"})
-        @DisplayName("되는 것 — 로그인·기존 티켓 보기·QR·취소, 산 표는 뺏지 않는다 (docs/01)")
+        @EnumSource(value = AudienceAction.class,
+                names = {"LOG_IN", "VIEW_ACCOUNT", "VIEW_TICKETS", "SHOW_TICKET_QR", "CANCEL_TICKET"})
+        @DisplayName("되는 것 — 로그인·계정 정보 보기·기존 티켓 보기·QR·취소, 산 표는 뺏지 않는다 (docs/01)")
         void allowedActions(AudienceAction action) {
             assertThat(suspendedAccount().can(action)).isTrue();
+        }
+
+        @Test
+        @DisplayName("이용 정지 중으로 보인다 — 활동 중인 계정과 인증 대기 계정은 아니다")
+        void isSuspended() {
+            assertThat(suspendedAccount().isSuspended()).isTrue();
+            assertThat(activeAccount().isSuspended()).isFalse();
+            assertThat(newlySignedUpAccount().isSuspended()).isFalse();
         }
 
         @Test
@@ -86,6 +95,7 @@ class AudienceAccountSuspensionTest {
             assertThat(account.status()).isEqualTo(AudienceAccountStatus.ACTIVE);
             assertThat(account.can(AudienceAction.BOOK)).isTrue();
             assertThat(account.currentSuspension()).isEmpty();
+            assertThat(account.isSuspended()).isFalse();
         }
 
         @Test

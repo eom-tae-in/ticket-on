@@ -212,6 +212,11 @@ public final class AudienceAccount {
         return emailVerifiedAt != null;
     }
 
+    /** 지금 이용 정지 중인지. 정지 중에도 로그인은 되므로 화면이 이 값으로 정지 여부를 알려 준다(docs/01 "관객 이용 정지"). */
+    public boolean isSuspended() {
+        return status == AudienceAccountStatus.SUSPENDED;
+    }
+
     /** 이메일 인증 일시. 인증 전이면 비어 있다. */
     public Optional<Instant> emailVerifiedAt() {
         return Optional.ofNullable(emailVerifiedAt);
