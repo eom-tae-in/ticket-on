@@ -68,7 +68,7 @@ public class SignUpAudienceService implements SignUpAudienceUseCase {
     }
 
     private void sendVerificationMail(AudiencePersonalInformation personalInformation, EmailVerificationToken token) {
-        SendResult result = emailSendPort.send(EmailVerificationMail.of(personalInformation.email(), token, webAddress));
+        SendResult result = emailSendPort.send(EmailVerificationMail.toAudience(personalInformation.email(), token, webAddress));
         if (result instanceof SendResult.Failure failure) {
             throw new IllegalStateException("이메일 인증 메일을 보내지 못해 가입을 되돌립니다 (계정 "
                     + token.audienceAccountId() + "): " + failure.reason());
