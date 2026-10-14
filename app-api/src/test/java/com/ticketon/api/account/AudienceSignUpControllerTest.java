@@ -45,6 +45,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.convention.TestBean;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.json.JsonMapper;
@@ -102,7 +103,7 @@ class AudienceSignUpControllerTest {
         void returnsCreatedWithEmail() throws Exception {
             mockMvc.perform(signUpRequest(validBody()))
                     .andExpect(status().isCreated())
-                    .andExpect(content().json("{\"email\":\"seoyun@example.com\"}", true));
+                    .andExpect(content().json("{\"email\":\"seoyun@example.com\"}", JsonCompareMode.STRICT));
         }
 
         @Test
