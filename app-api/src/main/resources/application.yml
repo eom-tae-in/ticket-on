@@ -31,6 +31,11 @@ server:
         # 다른 사이트에서 시작한 POST 등에는 쿠키가 실리지 않는다. 링크를 눌러 들어오는 GET에는 실린다
         same-site: lax
 
+ticketon:
+  web:
+    # 화면(웹) 기준 주소 — 메일·문자 속 링크(이메일 인증 등)가 이 주소로 시작한다. 운영은 application-prod.yml
+    base-url: ${WEB_BASE_URL:http://localhost:3000}
+
 springdoc:
   api-docs:
     path: /v3/api-docs
