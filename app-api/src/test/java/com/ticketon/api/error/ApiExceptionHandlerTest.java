@@ -1,5 +1,6 @@
 package com.ticketon.api.error;
 
+import static com.ticketon.api.error.ErrorResponseMatchers.errorBody;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
@@ -23,7 +25,12 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultMatcher;
 
+/**
+ * 컨트롤러에서 나온 예외의 응답만 본다. 보안 필터가 막는 요청의 응답은 api/security의 테스트가 본다.
+ * 시험용 주소(/test/errors)는 영역 접두사 밖이라 보안 필터가 모두 막으므로 여기서는 필터를 빼고 돌린다.
+ */
 @WebMvcTest(controllers = ErrorTestController.class)
+@AutoConfigureMockMvc(addFilters = false)
 @Import(ErrorTestController.class)
 @ExtendWith(OutputCaptureExtension.class)
 @DisplayName("오류 응답 — 예외마다 정해진 상태 코드와 ErrorResponse 본문")
@@ -239,15 +246,5 @@ class ApiExceptionHandlerTest {
 
     private static ResultMatcher fieldError(String field, String message) {
         return jsonPath("$.fieldErrors[?(@.field == '%s')].message", field).value(message);
-    }
-
-    private static ResultMatcher errorBody(String code, String message) {
-        return result -> {
-            content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON).match(result);
-            jsonPath("$.code").value(code).match(result);
-            jsonPath("$.message").value(message).match(result);
-            jsonPath("$.fieldErrors").isArray().match(result);
-            jsonPath("$.fieldErrors").isEmpty().match(result);
-        };
     }
 }
