@@ -20,4 +20,7 @@ dependencies {
     runtimeOnly(project(":infra-payment"))
     runtimeOnly(project(":infra-message"))
     runtimeOnly(project(":infra-storage"))
+
+    // 통합 테스트에서 Clock 빈을 고정·이동 가능한 시계로 바꾼다 (MutableClock)
+    testImplementation(testFixtures(project(":common")))
 }
