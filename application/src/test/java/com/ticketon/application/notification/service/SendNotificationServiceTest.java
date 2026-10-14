@@ -10,6 +10,7 @@ import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.account.PhoneNumber;
 import com.ticketon.domain.notification.ContactPoint;
 import com.ticketon.domain.notification.EmailMessage;
+import com.ticketon.domain.notification.InboxNotification;
 import com.ticketon.domain.notification.NotificationChannel;
 import com.ticketon.domain.notification.NotificationContent;
 import com.ticketon.domain.notification.NotificationKind;
@@ -48,10 +49,11 @@ class SendNotificationServiceTest {
     private final RecordingSmsSendPort smsSendPort = new RecordingSmsSendPort();
     private final RecordingNotificationSendRecordRepository sendRecordRepository =
             new RecordingNotificationSendRecordRepository();
+    private final FakeNotificationInboxRepository inboxRepository = new FakeNotificationInboxRepository();
     private final MutableClock clock = MutableClock.at(NOW);
 
     private final SendNotificationService service = new SendNotificationService(audienceContactPort, settingsRepository,
-            organizerStaffContactPort, emailSendPort, smsSendPort, sendRecordRepository, clock);
+            organizerStaffContactPort, emailSendPort, smsSendPort, sendRecordRepository, inboxRepository, clock);
 
     @BeforeEach
     void registerRecipients() {
@@ -210,6 +212,103 @@ class SendNotificationServiceTest {
             assertThat(smsSendPort.sentMessages()).hasSize(1);
             assertThat(sendRecordRepository.records()).extracting(NotificationSendRecord::succeeded)
                     .containsExactly(false, true);
+        }
+    }
+
+    @Nested
+    @DisplayName("알림함 (docs/12 \"전달 수단과 알림함\")")
+    class Inbox {
+
+        @Test
+        @DisplayName("관객 계정에 보낸 알림은 이메일·문자 두 통이어도 알림함에 한 줄, 같은 제목·본문·보낸 시각으로 새로 온 것이다")
+        void audienceMemberGetsOneInboxLine() {
+            sendToSeoyun(NotificationKind.BOOKING_COMPLETED);
+
+            assertThat(inboxRepository.all()).singleElement().satisfies(notification -> {
+                assertThat(notification.audienceAccountId()).isEqualTo(SEOYUN);
+                assertThat(notification.kind()).isEqualTo(NotificationKind.BOOKING_COMPLETED);
+                assertThat(notification.content()).isEqualTo(CONTENT);
+                assertThat(notification.sentAt()).isEqualTo(KoreanTime.toInstant(NOW));
+                assertThat(notification.isNew()).isTrue();
+            });
+        }
+
+        @Test
+        @DisplayName("문자로만 보내는 전날 리마인더도 알림함에 남는다")
+        void smsOnlyKindIsKept() {
+            sendToSeoyun(NotificationKind.DAY_BEFORE_REMINDER);
+
+            assertThat(inboxRepository.all()).extracting(InboxNotification::kind)
+                    .containsExactly(NotificationKind.DAY_BEFORE_REMINDER);
+        }
+
+        @Test
+        @DisplayName("문자가 실패해도 알림함에는 그대로 남는다 (docs/12 \"전화번호는 인증하지 않습니다\")")
+        void smsFailureStillKept() {
+            smsSendPort.failWith("없는 번호");
+
+            sendToSeoyun(NotificationKind.DAY_BEFORE_REMINDER);
+
+            assertThat(sendRecordRepository.records()).extracting(NotificationSendRecord::succeeded).containsExactly(false);
+            assertThat(inboxRepository.all()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("이메일과 문자가 모두 실패해도 알림함에는 남는다")
+        void allChannelsFailedStillKept() {
+            emailSendPort.failWith("메일 서버 응답 없음");
+            smsSendPort.failWith("없는 번호");
+
+            sendToSeoyun(NotificationKind.SESSION_CANCELLED);
+
+            assertThat(inboxRepository.all()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("끈 묶음의 알림은 보내지 않았으니 알림함에도 없다 — 보낸 알림만 쌓인다")
+        void turnedOffKindNotKept() {
+            settingsRepository.saveChoice(SEOYUN, NotificationPreference.DAY_BEFORE_REMINDER, false);
+
+            sendToSeoyun(NotificationKind.DAY_BEFORE_REMINDER);
+            sendToSeoyun(NotificationKind.SESSION_CANCELLED);
+
+            assertThat(inboxRepository.all()).extracting(InboxNotification::kind)
+                    .containsExactly(NotificationKind.SESSION_CANCELLED);
+        }
+
+        @Test
+        @DisplayName("연락처가 없는 관객 계정(탈퇴)에는 알림함에도 남기지 않는다")
+        void withdrawnAccountNotKept() {
+            service.send(new SendNotificationCommand(NotificationRecipient.audience(404), NotificationKind.SESSION_CANCELLED,
+                    CONTENT));
+
+            assertThat(inboxRepository.all()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("연락처만 아는 초대권 받는 사람과 주최자 쪽 알림은 알림함이 없다")
+        void directContactAndOrganizerNotKept() {
+            service.send(new SendNotificationCommand(
+                    NotificationRecipient.contact(ContactPoint.phoneNumberOnly(PhoneNumber.of("010-9876-5432"))),
+                    NotificationKind.SESSION_CANCELLED, CONTENT));
+            service.send(new SendNotificationCommand(NotificationRecipient.organizer(ORGANIZER),
+                    NotificationKind.SETTLEMENT_COMPLETED, CONTENT));
+            service.send(new SendNotificationCommand(
+                    NotificationRecipient.contact(ContactPoint.emailOnly(EmailAddress.of("invitee@example.com"))),
+                    NotificationKind.OPERATOR_INVITED, CONTENT));
+
+            assertThat(sendRecordRepository.records()).hasSize(5);
+            assertThat(inboxRepository.all()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("보낼 수 없는 받는 사람이면 알림함에도 남기지 않는다")
+        void rejectedNotKept() {
+            assertThatThrownBy(() -> service.send(new SendNotificationCommand(NotificationRecipient.audience(SEOYUN),
+                    NotificationKind.SETTLEMENT_COMPLETED, CONTENT)))
+                    .isInstanceOf(IllegalArgumentException.class);
+
+            assertThat(inboxRepository.all()).isEmpty();
         }
     }
 
