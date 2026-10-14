@@ -24,7 +24,16 @@ public enum AccountErrorCode implements ErrorCode {
     EMAIL_ALREADY_VERIFIED("이미 이메일 인증을 마친 계정입니다."),
 
     /** 탈퇴한 계정에는 아무것도 할 수 없다. */
-    AUDIENCE_WITHDRAWN("탈퇴한 계정입니다.");
+    AUDIENCE_WITHDRAWN("탈퇴한 계정입니다."),
+
+    /** 활동 중인 계정이 아니다. 이용 정지는 이메일 인증을 마친 활동 중인 계정에만 건다. */
+    AUDIENCE_NOT_ACTIVE("활동 중인 계정이 아닙니다."),
+
+    /** 이미 이용 정지된 계정이다(docs/01 "관객 이용 정지"). */
+    AUDIENCE_ALREADY_SUSPENDED("이미 이용 정지된 계정입니다."),
+
+    /** 이용 정지된 계정이 아니라 해제할 정지가 없다(docs/01 "관객 이용 정지"). */
+    AUDIENCE_NOT_SUSPENDED("이용 정지된 계정이 아닙니다.");
 
     private final String message;
 

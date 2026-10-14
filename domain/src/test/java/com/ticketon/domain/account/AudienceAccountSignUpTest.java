@@ -173,7 +173,7 @@ class AudienceAccountSignUpTest {
             Instant agreedLater = SIGNUP_TIME.plusSeconds(86_400);
             AudienceAccount account = AudienceAccount.restore(7, adultPersonalInformation(), SIGNUP_TIME,
                     List.of(new ConsentRecord(MARKETING, true, agreedLater), new ConsentRecord(MARKETING, false, SIGNUP_TIME)),
-                    AudienceAccountStatus.ACTIVE, SIGNUP_TIME);
+                    AudienceAccountStatus.ACTIVE, SIGNUP_TIME, List.of());
 
             assertThat(account.latestConsent(MARKETING)).contains(new ConsentRecord(MARKETING, true, agreedLater));
             assertThat(account.isMarketingAgreed()).isTrue();
@@ -249,7 +249,7 @@ class AudienceAccountSignUpTest {
         @DisplayName("탈퇴한 계정은 인증할 수 없다")
         void withdrawnAccountCannotVerify() {
             AudienceAccount account = AudienceAccount.restore(7, adultPersonalInformation(), SIGNUP_TIME,
-                    REQUIRED_ONLY.recordsAt(SIGNUP_TIME), AudienceAccountStatus.WITHDRAWN, null);
+                    REQUIRED_ONLY.recordsAt(SIGNUP_TIME), AudienceAccountStatus.WITHDRAWN, null, List.of());
 
             assertRejected(() -> account.verifyEmail(SIGNUP_TIME), AccountErrorCode.AUDIENCE_WITHDRAWN);
         }
@@ -263,7 +263,8 @@ class AudienceAccountSignUpTest {
         @DisplayName("저장된 값 그대로 되살린다")
         void restoresSavedValues() {
             AudienceAccount account = AudienceAccount.restore(7, adultPersonalInformation(), SIGNUP_TIME,
-                    REQUIRED_ONLY.recordsAt(SIGNUP_TIME), AudienceAccountStatus.ACTIVE, SIGNUP_TIME.plusSeconds(60));
+                    REQUIRED_ONLY.recordsAt(SIGNUP_TIME), AudienceAccountStatus.ACTIVE, SIGNUP_TIME.plusSeconds(60),
+                    List.of());
 
             assertThat(account.id()).hasValue(7);
             assertThat(account.status()).isEqualTo(AudienceAccountStatus.ACTIVE);
@@ -277,16 +278,17 @@ class AudienceAccountSignUpTest {
             List<ConsentRecord> records = REQUIRED_ONLY.recordsAt(SIGNUP_TIME);
 
             assertThatThrownBy(() -> AudienceAccount.restore(7, adultPersonalInformation(), SIGNUP_TIME, records,
-                    AudienceAccountStatus.PENDING_VERIFICATION, SIGNUP_TIME)).isInstanceOf(IllegalArgumentException.class);
+                    AudienceAccountStatus.PENDING_VERIFICATION, SIGNUP_TIME, List.of()))
+                    .isInstanceOf(IllegalArgumentException.class);
             assertThatThrownBy(() -> AudienceAccount.restore(7, adultPersonalInformation(), SIGNUP_TIME, records,
-                    AudienceAccountStatus.ACTIVE, null)).isInstanceOf(IllegalArgumentException.class);
+                    AudienceAccountStatus.ACTIVE, null, List.of())).isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
         @DisplayName("id는 1 이상이다")
         void idMustBePositive() {
             assertThatThrownBy(() -> AudienceAccount.restore(0, adultPersonalInformation(), SIGNUP_TIME,
-                    REQUIRED_ONLY.recordsAt(SIGNUP_TIME), AudienceAccountStatus.ACTIVE, SIGNUP_TIME))
+                    REQUIRED_ONLY.recordsAt(SIGNUP_TIME), AudienceAccountStatus.ACTIVE, SIGNUP_TIME, List.of()))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }
