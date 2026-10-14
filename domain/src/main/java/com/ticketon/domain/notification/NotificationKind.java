@@ -15,7 +15,9 @@ import java.util.Set;
  * <p>
  * <b>긴급하거나 돈이 걸린 것만 문자, 나머지는 이메일</b>(docs/12 "원칙"). 관객 쪽은 종류마다 이메일·문자 중 무엇으로 보내는지가
  * 정해져 있고, <b>주최자 쪽은 전부 이메일</b>이며 제목에 [주최]가 붙는다({@link EmailSubject#notice}). 주최자 쪽은 종류마다
- * 받는 사람의 범위도 정해져 있다({@link OrganizerRecipientScope}).
+ * 받는 사람의 범위도 정해져 있다({@link OrganizerRecipientScope}). 주최자에 관한 알림은 소유자와 운영자 전원에게, 소유자만 다루는 일은
+ * 소유자에게만 가고(docs/12 "주최자 대상 — 받는 사람"), 주최자 운영진이 없는 때의 결과(주최자 신청·다시 열기의 승인·반려)와
+ * 한 사람에게 일어난 일은 그 사람에게 간다.
  * <p>
  * 표의 한 줄에 둘이 적힌 것(승인 / 반려, 접수 확인 · 처리 결과, 정지 · 해제 등)은 서로 다른 일이라 종류를 나눴다. 채널과 받는 사람은 같다.
  * <p>
@@ -105,11 +107,17 @@ public enum NotificationKind {
 
     // ── 주최자 대상 (docs/12 "주최자 대상") — 전부 이메일, 제목에 [주최] ──
 
-    /** 주최자 신청 승인. */
-    ORGANIZER_APPLICATION_APPROVED(OrganizerRecipientScope.ALL_STAFF),
+    /**
+     * 주최자 신청 승인 — 신청서의 통지 이메일로(docs/01 "신청 항목": 이메일 — 통지). 승인되는 순간 신청한 사람이 소유자가 되므로
+     * 받는 사람은 같지만, 반려와 같은 곳으로 보내려고 신청서 이메일을 쓴다.
+     */
+    ORGANIZER_APPLICATION_APPROVED(OrganizerRecipientScope.INDIVIDUAL),
 
-    /** 주최자 신청 반려. */
-    ORGANIZER_APPLICATION_REJECTED(OrganizerRecipientScope.ALL_STAFF),
+    /**
+     * 주최자 신청 반려 — 사유 포함, 신청서의 통지 이메일로(docs/01 "신청 항목", "반려"). 반려할 때는 소유자도 운영자도 없어
+     * 주최자로 펼칠 수 없다(docs/01 "승인되면 신청한 사람이 소유자가 되고").
+     */
+    ORGANIZER_APPLICATION_REJECTED(OrganizerRecipientScope.INDIVIDUAL),
 
     /** 주최자 정지 통지. */
     ORGANIZER_SUSPENDED(OrganizerRecipientScope.ALL_STAFF),
@@ -165,11 +173,14 @@ public enum NotificationKind {
     /** 운영자가 행사 제목을 바꿈 — 소유자에게. 승인이 아니라 알림. */
     EVENT_TITLE_CHANGED_BY_OPERATOR(OrganizerRecipientScope.OWNER_ONLY),
 
-    /** 다시 열기 승인. */
-    REOPEN_APPROVED(OrganizerRecipientScope.ALL_STAFF),
+    /**
+     * 다시 열기 승인 — 다시 열기를 신청한 사람(그 운영진 로그인)에게. 닫힌 주최자는 운영진이 전원 빠져 있어 주최자로 펼칠 수 없다
+     * (docs/01 "닫은 뒤에는", "닫힌 주최자의 소유자였다면 '다시 열기 신청'도 보입니다").
+     */
+    REOPEN_APPROVED(OrganizerRecipientScope.INDIVIDUAL),
 
-    /** 다시 열기 반려. */
-    REOPEN_REJECTED(OrganizerRecipientScope.ALL_STAFF),
+    /** 다시 열기 반려 — 다시 열기를 신청한 사람(그 운영진 로그인)에게. 승인과 같은 까닭이다. */
+    REOPEN_REJECTED(OrganizerRecipientScope.INDIVIDUAL),
 
     /** 닉네임 · 소개가 초기화됨 — 그 사람에게, 관리자 조치. */
     STAFF_PROFILE_RESET(OrganizerRecipientScope.INDIVIDUAL),

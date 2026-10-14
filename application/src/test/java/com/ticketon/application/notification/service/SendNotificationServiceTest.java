@@ -254,6 +254,38 @@ class SendNotificationServiceTest {
         }
 
         @Test
+        @DisplayName("주최자 신청 반려는 신청서의 통지 이메일로 바로 가고 [주최]가 붙는다 — 주최자 운영진으로 펼치지 않는다")
+        void applicationRejectionToApplicationEmail() {
+            service.send(new SendNotificationCommand(
+                    NotificationRecipient.contact(ContactPoint.emailOnly(EmailAddress.of("applicant@example.com"))),
+                    NotificationKind.ORGANIZER_APPLICATION_REJECTED, new NotificationContent("주최자 신청이 반려되었습니다", "사유")));
+
+            assertThat(emailSendPort.sentMessages()).singleElement().satisfies(mail -> {
+                assertThat(mail.recipientAddress()).isEqualTo("applicant@example.com");
+                assertThat(mail.subject().value()).isEqualTo("[주최] 주최자 신청이 반려되었습니다");
+            });
+            assertThat(sendRecordRepository.records()).singleElement()
+                    .satisfies(record -> assertThat(record.kind()).isEqualTo(NotificationKind.ORGANIZER_APPLICATION_REJECTED));
+        }
+
+        @Test
+        @DisplayName("다시 열기 승인은 신청한 운영진의 이메일로 간다 — 닫힌 주최자 id로는 보낼 수 없다")
+        void reopenApprovalToApplicant() {
+            assertThatThrownBy(() -> service.send(new SendNotificationCommand(NotificationRecipient.organizer(ORGANIZER),
+                    NotificationKind.REOPEN_APPROVED, CONTENT)))
+                    .isInstanceOf(IllegalArgumentException.class);
+
+            service.send(new SendNotificationCommand(
+                    NotificationRecipient.contact(ContactPoint.emailOnly(EmailAddress.of(OWNER_EMAIL))),
+                    NotificationKind.REOPEN_APPROVED, new NotificationContent("다시 열기가 승인되었습니다", "본문")));
+
+            assertThat(emailSendPort.sentMessages()).singleElement().satisfies(mail -> {
+                assertThat(mail.recipientAddress()).isEqualTo(OWNER_EMAIL);
+                assertThat(mail.subject().value()).isEqualTo("[주최] 다시 열기가 승인되었습니다");
+            });
+        }
+
+        @Test
         @DisplayName("없는 주최자면 거부하고 한 통도 보내지 않는다")
         void unknownOrganizerRejected() {
             assertThatThrownBy(() -> service.send(new SendNotificationCommand(NotificationRecipient.organizer(99),

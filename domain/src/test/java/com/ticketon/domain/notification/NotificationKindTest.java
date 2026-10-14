@@ -114,18 +114,45 @@ class NotificationKindTest {
         @Test
         @DisplayName("그 사람에게 — 운영자 초대, 운영진에서 내보내짐, 닉네임·소개 초기화")
         void individualKinds() {
-            assertThat(kindsWithScope(OrganizerRecipientScope.INDIVIDUAL)).containsExactlyInAnyOrder(
+            assertThat(kindsWithScope(OrganizerRecipientScope.INDIVIDUAL)).contains(
                     NotificationKind.OPERATOR_INVITED, NotificationKind.REMOVED_FROM_STAFF,
                     NotificationKind.STAFF_PROFILE_RESET);
+        }
+
+        @Test
+        @DisplayName("주최자 신청 승인·반려는 신청서의 통지 이메일로 — 반려 때는 소유자가 없다 (docs/01 \"신청 항목\", \"승인되면 신청한 사람이 소유자가 되고\")")
+        void applicationResultGoesToApplicant() {
+            assertThat(NotificationKind.ORGANIZER_APPLICATION_APPROVED.organizerRecipientScope())
+                    .contains(OrganizerRecipientScope.INDIVIDUAL);
+            assertThat(NotificationKind.ORGANIZER_APPLICATION_REJECTED.organizerRecipientScope())
+                    .contains(OrganizerRecipientScope.INDIVIDUAL);
+        }
+
+        @Test
+        @DisplayName("다시 열기 승인·반려는 신청한 사람에게 — 닫힌 주최자는 운영진이 전원 빠져 있다 (docs/01 \"닫은 뒤에는\")")
+        void reopenResultGoesToApplicant() {
+            assertThat(NotificationKind.REOPEN_APPROVED.organizerRecipientScope()).contains(OrganizerRecipientScope.INDIVIDUAL);
+            assertThat(NotificationKind.REOPEN_REJECTED.organizerRecipientScope()).contains(OrganizerRecipientScope.INDIVIDUAL);
+        }
+
+        @Test
+        @DisplayName("그 사람에게 가는 종류는 위의 일곱이 전부다")
+        void individualKindsAreExactlySeven() {
+            assertThat(kindsWithScope(OrganizerRecipientScope.INDIVIDUAL)).containsExactlyInAnyOrder(
+                    NotificationKind.OPERATOR_INVITED, NotificationKind.REMOVED_FROM_STAFF,
+                    NotificationKind.STAFF_PROFILE_RESET, NotificationKind.ORGANIZER_APPLICATION_APPROVED,
+                    NotificationKind.ORGANIZER_APPLICATION_REJECTED, NotificationKind.REOPEN_APPROVED,
+                    NotificationKind.REOPEN_REJECTED);
         }
 
         @Test
         @DisplayName("나머지 주최자에 관한 알림은 소유자와 운영자 전원에게 — 소유자 변경·주최자명 변경·로고 초기화 포함")
         void restGoToAllStaff() {
             assertThat(kindsWithScope(OrganizerRecipientScope.ALL_STAFF))
-                    .hasSize(18)
+                    .hasSize(14)
                     .contains(NotificationKind.OWNER_CHANGED, NotificationKind.ORGANIZER_NAME_CHANGED,
-                            NotificationKind.ORGANIZER_LOGO_RESET, NotificationKind.SETTLEMENT_COMPLETED);
+                            NotificationKind.ORGANIZER_LOGO_RESET, NotificationKind.SETTLEMENT_COMPLETED,
+                            NotificationKind.ORGANIZER_SUSPENDED);
         }
     }
 
@@ -160,6 +187,15 @@ class NotificationKindTest {
             assertThat(NotificationKind.OPERATOR_INVITED.canBeSentTo(directContact)).isTrue();
             assertThat(NotificationKind.OPERATOR_INVITED.canBeSentTo(organizer)).isFalse();
             assertThat(NotificationKind.OPERATOR_INVITED.canBeSentTo(audienceMember)).isFalse();
+        }
+
+        @Test
+        @DisplayName("주최자 신청 반려·다시 열기 반려는 주최자 id로 보낼 수 없고 신청한 사람의 연락처로 보낸다")
+        void applicationResultsByDirectContact() {
+            assertThat(NotificationKind.ORGANIZER_APPLICATION_REJECTED.canBeSentTo(directContact)).isTrue();
+            assertThat(NotificationKind.ORGANIZER_APPLICATION_REJECTED.canBeSentTo(organizer)).isFalse();
+            assertThat(NotificationKind.REOPEN_REJECTED.canBeSentTo(directContact)).isTrue();
+            assertThat(NotificationKind.REOPEN_REJECTED.canBeSentTo(organizer)).isFalse();
         }
     }
 
