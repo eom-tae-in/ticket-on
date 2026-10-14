@@ -20,6 +20,8 @@ spring:
 springdoc:
   api-docs:
     path: /v3/api-docs
+  # 응답 본문은 모두 JSON이다. 명세의 응답 형식을 */* 대신 application/json으로 적어 화면 타입이 정확해진다
+  default-produces-media-type: application/json
 
 management:
   endpoints:

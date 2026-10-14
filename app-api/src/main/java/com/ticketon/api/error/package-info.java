@@ -37,6 +37,10 @@
  * Request의 제약에는 화면에 띄울 문구를 직접 적는다. 다국어는 만들지 않으므로(docs/99 "만들지 않기로 한 것")
  * 문구의 언어는 요청 언어(Accept-Language)와 상관없이 한국어로 고정한다(application.yml {@code spring.web.locale}).
  *
+ * <h2>OpenAPI 명세</h2>
+ * 처리 메서드마다 붙인 {@code @ResponseStatus}를 springdoc이 읽어 모든 API에 400·401·403·404·409·500 → ErrorResponse를 싣는다.
+ * ErrorResponse 스키마는 API가 하나도 없어도 실린다({@link com.ticketon.api.error.ErrorResponseOpenApiConfiguration}).
+ *
  * <h2>로그</h2>
  * 400·401·403·404·409는 정상적인 거절이라 debug로만 남긴다. 500은 예외 전체를 error로 남기고, 응답에는 정해진 문구만 보낸다.
  *
