@@ -61,10 +61,11 @@ class ErrorResponseApiDocsTest {
         }
     }
 
-    /** 지금 서버처럼 컨트롤러 없이 오류 처리기만 있는 상태. */
+    /** 지금 서버처럼 API 없이 오류 처리기와 오류 응답 경로(/error, 명세에서 숨김)만 있는 상태. */
     @Nested
     @WebMvcTest(useDefaultFilters = false)
-    @Import({ApiExceptionHandler.class, ErrorResponseOpenApiConfiguration.class, SecurityConfiguration.class})
+    @Import({ApiExceptionHandler.class, ApiErrorController.class, ErrorResponseOpenApiConfiguration.class,
+            SecurityConfiguration.class})
     @ImportAutoConfiguration({SpringDocConfiguration.class, SpringDocConfigProperties.class, SpringDocWebMvcConfiguration.class})
     @DisplayName("API가 하나도 없을 때")
     class WithoutOperations {

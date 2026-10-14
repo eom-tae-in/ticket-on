@@ -47,6 +47,7 @@
  *   <li>401 UNAUTHENTICATED — 로그인이 필요한 경로에 로그인 없이 왔다. 세션이 만료됐거나 끊긴 경우도 같다.</li>
  *   <li>403 ACCESS_DENIED — 그 영역의 계정 종류가 아니다. CSRF 토큰이 없거나 틀려도 403이다.</li>
  * </ul>
+ * 컨트롤러 안에서 Spring Security 예외(메서드 보안 등)가 나도 ApiExceptionHandler가 보안 필터로 되돌려 같은 401/403이 된다.
  *
  * <h2>세션 쿠키와 CSRF</h2>
  * <ul>
