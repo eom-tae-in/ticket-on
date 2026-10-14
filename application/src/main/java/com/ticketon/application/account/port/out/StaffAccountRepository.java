@@ -67,4 +67,12 @@ public interface StaffAccountRepository {
      *                           그 사이 계정이 활동 중이 아니게 됐으면({@code STAFF_NOT_ACTIVE})
      */
     void saveNickname(StaffAccount changedAccount);
+
+    /**
+     * 비밀번호 찾기로 새로 정한 비밀번호 해시를 저장한다. 저장소의 계정이 활동 중일 때만 바꾼다.
+     *
+     * @param changedAccount {@link StaffAccount#resetPassword}로 비밀번호를 바꾼 계정
+     * @throws ConflictException 그 사이 계정이 활동 중이 아니게 됐으면({@code STAFF_NOT_ACTIVE})
+     */
+    void savePassword(StaffAccount changedAccount);
 }

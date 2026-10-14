@@ -367,6 +367,62 @@ class AudienceAccountPersistenceAdapterTest {
         }
     }
 
+    @Nested
+    @DisplayName("비밀번호 저장 — 비밀번호 찾기")
+    class PasswordSave {
+
+        private static final PasswordHash NEW_PASSWORD_HASH = new PasswordHash("{test}new-password");
+
+        @Test
+        @DisplayName("새로 정한 비밀번호 해시를 저장한다")
+        void savesNewPasswordHash() {
+            long id = activeAccount();
+            AudienceAccount account = adapter.findById(id).orElseThrow();
+            account.resetPassword(NEW_PASSWORD_HASH);
+
+            adapter.savePassword(account);
+
+            assertThat(adapter.findById(id).orElseThrow().passwordHash()).isEqualTo(NEW_PASSWORD_HASH);
+        }
+
+        @Test
+        @DisplayName("이용 정지 중인 계정도 저장한다 — 정지 중에도 로그인은 된다")
+        void savesForSuspendedAccount() {
+            long id = activeAccount();
+            AudienceAccount account = adapter.findById(id).orElseThrow();
+            account.resetPassword(NEW_PASSWORD_HASH);
+            dsl.update(AUDIENCE_ACCOUNT)
+                    .set(AUDIENCE_ACCOUNT.STATUS, AudienceAccountStatus.SUSPENDED.name())
+                    .where(AUDIENCE_ACCOUNT.ID.eq(id))
+                    .execute();
+
+            adapter.savePassword(account);
+
+            assertThat(dsl.select(AUDIENCE_ACCOUNT.PASSWORD_HASH).from(AUDIENCE_ACCOUNT).fetchSingle().value1())
+                    .isEqualTo(NEW_PASSWORD_HASH.value());
+        }
+
+        @Test
+        @DisplayName("그 사이 탈퇴했으면 저장하지 않는다")
+        void conflictsWhenWithdrawn() {
+            long id = activeAccount();
+            AudienceAccount account = adapter.findById(id).orElseThrow();
+            account.resetPassword(NEW_PASSWORD_HASH);
+            markWithdrawn(id);
+
+            assertConflict(() -> adapter.savePassword(account), AccountErrorCode.AUDIENCE_NOT_ACTIVE);
+            assertThat(adapter.findById(id).orElseThrow().passwordHash()).isEqualTo(PASSWORD_HASH);
+        }
+
+        /** 가입하고 이메일 인증까지 마친 계정을 저장하고 id를 돌려준다. */
+        private long activeAccount() {
+            AudienceAccount account = adapter.add(newAccount(SEOYUN_PHONE, SEOYUN_EMAIL, false));
+            account.verifyEmail(SIGNUP_TIME.plusSeconds(300));
+            adapter.saveEmailVerification(account);
+            return account.id().getAsLong();
+        }
+    }
+
     private static AudienceAccount newAccount(String phoneNumber, String email, boolean marketingAgreed) {
         AudiencePersonalInformation personalInformation = AudiencePersonalInformation.of("한서윤",
                 LocalDate.of(1998, 4, 2), email, phoneNumber);

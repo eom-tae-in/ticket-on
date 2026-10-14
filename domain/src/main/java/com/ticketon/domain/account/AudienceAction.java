@@ -27,6 +27,12 @@ public enum AudienceAction {
     /** 티켓 취소 — 정지 중에도 된다. */
     CANCEL_TICKET(false),
 
+    /**
+     * 비밀번호 찾기·재설정 — 정지 중에도 된다. 정지 중에도 로그인은 되므로 로그인을 되찾는 일도 막지 않는다
+     * (docs/01 "같은 이메일로 양쪽 가입"의 비밀번호 찾기).
+     */
+    RESET_PASSWORD(false),
+
     /** 새 예매 — 정지 중에는 막힌다. */
     BOOK(true),
 

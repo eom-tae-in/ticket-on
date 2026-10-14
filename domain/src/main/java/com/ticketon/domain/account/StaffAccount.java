@@ -16,7 +16,8 @@ import java.util.OptionalLong;
  * <p>
  * 새 계정은 {@link #signUp}으로만 만든다. 이메일과 닉네임이 겹치면 막고, 인증 대기 상태로 시작한다. 이메일 인증을 마쳐야
  * 로그인할 수 있다. 닉네임은 바꿀 수 있다({@link #changeNickname}) — 참여 이력은 계정을 가리키므로 그대로 따라간다.
- * 비밀번호는 해시({@link PasswordHash})로만 갖는다. 원문의 최소 규칙은 {@link NewPassword}가 지킨다.
+ * 비밀번호는 해시({@link PasswordHash})로만 갖는다. 원문의 최소 규칙은 {@link NewPassword}가 지킨다. 비밀번호는 비밀번호 찾기로만
+ * 다시 정한다({@link #resetPassword}).
  * 시각은 인자로 받는다.
  * <p>
  * 저장소에서 다시 읽을 때는 {@link #restore}를 쓴다. 저장 전 계정은 id가 없다.
@@ -25,9 +26,9 @@ public final class StaffAccount {
 
     private final Long id;
     private final StaffPersonalInformation personalInformation;
-    private final PasswordHash passwordHash;
     private final Instant signedUpAt;
     private Nickname nickname;
+    private PasswordHash passwordHash;
     private StaffAccountStatus status;
     private Instant emailVerifiedAt;
 
@@ -108,6 +109,31 @@ public final class StaffAccount {
     /** 로그인할 수 있는지 — 이메일 인증을 마친 활동 중인 계정만. 인증 대기와 탈퇴는 로그인할 수 없다. */
     public boolean canLogIn() {
         return status == StaffAccountStatus.ACTIVE;
+    }
+
+    /**
+     * 비밀번호 찾기를 할 수 있는지 — 로그인할 수 있는 계정({@link #canLogIn})만. 비밀번호 찾기는 로그인을 되찾는 일이라, 인증 대기·탈퇴처럼
+     * 비밀번호가 맞아도 로그인할 수 없는 계정에는 재설정 링크를 보내지 않는다.
+     */
+    public boolean canResetPassword() {
+        return canLogIn();
+    }
+
+    /**
+     * 비밀번호를 새로 정한다 — 비밀번호 찾기로 받은 재설정 링크({@link PasswordResetToken})를 거쳐서만 부른다. 지금 비밀번호는 묻지 않는다
+     * (잊어버려서 하는 일이다).
+     *
+     * @param newPasswordHash 새 비밀번호 해시 — 최소 규칙을 지킨 원문({@link NewPassword})을 어댑터가 바꾼 값
+     * @throws RuleViolationException 인증 대기({@link AccountErrorCode#STAFF_NOT_ACTIVE})이거나
+     *                                탈퇴한 계정({@link AccountErrorCode#STAFF_WITHDRAWN})이면
+     */
+    public void resetPassword(PasswordHash newPasswordHash) {
+        Objects.requireNonNull(newPasswordHash, "newPasswordHash");
+        switch (status) {
+            case ACTIVE -> passwordHash = newPasswordHash;
+            case PENDING_VERIFICATION -> throw new RuleViolationException(AccountErrorCode.STAFF_NOT_ACTIVE);
+            case WITHDRAWN -> throw new RuleViolationException(AccountErrorCode.STAFF_WITHDRAWN);
+        }
     }
 
     /**

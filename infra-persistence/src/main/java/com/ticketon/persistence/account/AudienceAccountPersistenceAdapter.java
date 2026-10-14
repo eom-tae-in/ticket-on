@@ -135,6 +135,19 @@ public class AudienceAccountPersistenceAdapter implements AudienceAccountReposit
         }
     }
 
+    @Override
+    public void savePassword(AudienceAccount changedAccount) {
+        long id = changedAccount.id().orElseThrow(() -> new IllegalArgumentException("저장하지 않은 계정입니다"));
+        int updatedRows = dsl.update(AUDIENCE_ACCOUNT)
+                .set(AUDIENCE_ACCOUNT.PASSWORD_HASH, changedAccount.passwordHash().value())
+                .where(AUDIENCE_ACCOUNT.ID.eq(id))
+                .and(AUDIENCE_ACCOUNT.STATUS.in(AudienceAccountStatus.ACTIVE.name(), AudienceAccountStatus.SUSPENDED.name()))
+                .execute();
+        if (updatedRows == 0) {
+            throw new ConflictException(AccountErrorCode.AUDIENCE_NOT_ACTIVE, "비밀번호를 바꿀 수 없게 된 계정: " + id);
+        }
+    }
+
     private boolean isRegistered(PhoneNumber phoneNumber) {
         return dsl.fetchExists(AUDIENCE_ACCOUNT,
                 AUDIENCE_ACCOUNT.PHONE_NUMBER.eq(phoneNumber.digits()).and(notWithdrawn()));

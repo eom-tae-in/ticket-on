@@ -21,7 +21,7 @@ import java.util.stream.Stream;
 
 /**
  * 메모리 운영진 계정 저장소 — 저장소 약속을 표처럼 지킨다: 탈퇴하지 않은 계정 사이에서 이메일(대소문자 무시)이 하나, 모든 계정 사이에서
- * 닉네임이 하나, 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만, 닉네임 저장은 활동 중일 때만,
+ * 닉네임이 하나, 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만, 닉네임·비밀번호 저장은 활동 중일 때만,
  * 이메일로 찾을 때 탈퇴한 계정은 빼고. 저장소에 물은 횟수를 센다.
  */
 final class FakeStaffAccountRepository implements StaffAccountRepository {
@@ -30,6 +30,7 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
     private AccountErrorCode signupRaceLoss;
     private boolean anotherNicknameChangeWinsNextSave;
     private int takenNicknameQueries;
+    private WriteLog passwordSaveLog = new WriteLog();
     private long nextId = 1;
 
     /** 다음 저장 직전에 같은 이메일·닉네임의 다른 가입이 먼저 저장된 것처럼 — 확인은 통과했지만 저장에서 진다. */
@@ -122,6 +123,21 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
             anotherNicknameChangeWinsNextSave = false;
             throw new ConflictException(AccountErrorCode.STAFF_NICKNAME_ALREADY_TAKEN, "닉네임 변경 경합(흉내)");
         }
+        if (accounts.get(id).status() != StaffAccountStatus.ACTIVE) {
+            throw new ConflictException(AccountErrorCode.STAFF_NOT_ACTIVE);
+        }
+        accounts.put(id, copyOf(changedAccount, id));
+    }
+
+    /** 비밀번호 저장을 그 쓰기 기록에도 남긴다 — 링크 저장소와 같은 기록을 넘기면 잠금 순서(계정 → 링크)를 볼 수 있다. */
+    void recordPasswordSavesIn(WriteLog writeLog) {
+        passwordSaveLog = writeLog;
+    }
+
+    @Override
+    public void savePassword(StaffAccount changedAccount) {
+        long id = changedAccount.id().getAsLong();
+        passwordSaveLog.record("비밀번호 저장 STAFF:" + id);
         if (accounts.get(id).status() != StaffAccountStatus.ACTIVE) {
             throw new ConflictException(AccountErrorCode.STAFF_NOT_ACTIVE);
         }
