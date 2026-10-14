@@ -1,9 +1,13 @@
 package com.ticketon.api.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.willReturn;
 
 import com.ticketon.api.error.ErrorResponse;
 import com.ticketon.api.security.LoginTestController;
+import com.ticketon.application.notification.port.out.EmailSendPort;
+import com.ticketon.domain.notification.SendResult;
 import java.net.CookieManager;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -33,6 +37,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -41,8 +46,8 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * 서버 전체를 진짜 PostgreSQL(마이그레이션 전체)로 띄우고, 실제 HTTP 요청으로 비밀번호 찾기 → 재설정 메일 → 재설정 → 로그인을 끝까지
  * 돌린다. 가입 여부·계정 상태와 상관없이 비밀번호 찾기 응답이 똑같은지, 관객 쪽 요청이 같은 이메일의 운영진 로그인 비밀번호를 바꾸지
- * 않는지, 쓴 링크·대체된 링크를 다시 쓸 수 없는지, 비밀번호를 바꾸면 그 계정의 이전 세션이 끊기는지 본다. Docker가 없는 환경에서는
- * 건너뛴다.
+ * 않는지, 쓴 링크·대체된 링크를 다시 쓸 수 없는지, 비밀번호를 바꾸면 그 계정의 이전 세션이 끊기는지, 메일을 보내지 못하면 새 링크가
+ * 되돌려지는지 본다. Docker가 없는 환경에서는 건너뛴다.
  * <p>
  * 비밀번호 찾기는 응답과 떼어 처리되므로(PasswordResetController) 메일은 응답 뒤에 나간다. 재설정 메일은 '기록만' 어댑터의 로그에 찍힐
  * 때까지 기다렸다가 링크를 꺼내 연다 — 메일을 열어 링크를 누르는 것과 같다. 브라우저 하나를 쿠키를 기억하는 HTTP 클라이언트 하나로 흉내
@@ -105,6 +110,10 @@ class PasswordResetIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    /** 평소에는 '기록만' 어댑터 그대로 보내고, 메일 발송 실패를 흉내 낼 때만 결과를 바꾼다. 테스트마다 되돌려진다. */
+    @MockitoSpyBean
+    private EmailSendPort emailSendPort;
 
     @Test
     @DisplayName("가입 여부·계정 상태와 상관없이 비밀번호 찾기 응답이 똑같다 — 있는 이메일·인증 대기·없는 이메일·다른 쪽에만 있는 이메일, 관객·주최자 쪽 모두")
@@ -261,6 +270,36 @@ class PasswordResetIntegrationTest {
         }
     }
 
+    @Test
+    @DisplayName("재설정 메일을 보내지 못해도 응답은 같은 202이고, 응답과 떼어 연 트랜잭션이 되돌려져 새 링크는 남지 않으며 이전 링크는 대체되지 않은 채 쓸 수 있다")
+    void mailFailureRollsBackNewLink(CapturedOutput output) throws Exception {
+        String email = "mail-fail@example.com";
+        try (Browser browser = new Browser()) {
+            browser.signUpAudience(email, "010-4444-0051");
+            browser.verifyAudienceEmail(email);
+            HttpResponse<String> sent = browser.post(AUDIENCE_REQUEST_PATH, Map.of("email", email), browser.csrfToken());
+            String firstToken = awaitResetTokens(output, email, AUDIENCE_SUBJECT, AUDIENCE_RESET_LINK, 1).getFirst();
+            willReturn(SendResult.failure("메일 업체 응답 없음")).given(emailSendPort).send(any());
+
+            HttpResponse<String> failed = browser.post(AUDIENCE_REQUEST_PATH, Map.of("email", email), browser.csrfToken());
+
+            assertThat(failed.statusCode()).isEqualTo(202).isEqualTo(sent.statusCode());
+            assertThat(failed.body()).isEqualTo(sent.body());
+            assertThat(headersWithoutDate(failed)).isEqualTo(headersWithoutDate(sent));
+            awaitLogContaining(output, "응답과 떼어 실행한 일이 실패했습니다: 비밀번호 찾기 — AUDIENCE");
+            assertThat(output.getOut()).contains("비밀번호 재설정 메일을 보내지 못해 새 링크를 되돌립니다");
+
+            assertThat(resetTokenCountOf(email)).isEqualTo(1);
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT used_at IS NULL AND replaced_at IS NULL FROM password_reset_token WHERE token = ?",
+                    Boolean.class, firstToken)).isTrue();
+            assertThat(browser.post(AUDIENCE_RESET_PATH, resetBody(firstToken, NEW_PASSWORD), browser.csrfToken())
+                    .statusCode()).isEqualTo(204);
+            assertThat(browser.post(AUDIENCE_LOGIN_PATH, loginBody(email, NEW_PASSWORD), browser.csrfToken()).statusCode())
+                    .isEqualTo(200);
+        }
+    }
+
     private void expectError(HttpResponse<String> response, int status, String code) {
         assertThat(response.statusCode()).isEqualTo(status);
         assertThat(jsonMapper.readValue(response.body(), ErrorResponse.class).code()).isEqualTo(code);
@@ -299,6 +338,26 @@ class PasswordResetIntegrationTest {
             tokens.add(matcher.group(1));
         }
         return tokens;
+    }
+
+    /**
+     * 로그에 그 글이 찍힐 때까지 짧게 거듭 확인한다(상한 10초). 응답과 떼어 실행한 일의 실패는 트랜잭션이 되돌려진 뒤에 찍히므로,
+     * 이 글을 본 뒤에는 DB를 확인해도 된다.
+     */
+    private static void awaitLogContaining(CapturedOutput output, String expected) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (!output.getOut().contains(expected) && System.nanoTime() < deadline) {
+            Thread.sleep(50);
+        }
+        assertThat(output.getOut()).contains(expected);
+    }
+
+    private long resetTokenCountOf(String email) {
+        Long count = jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM password_reset_token t
+                JOIN audience_account a ON a.id = t.audience_account_id
+                WHERE a.email = ?""", Long.class, email);
+        return count == null ? 0 : count;
     }
 
     private long audienceAccountIdOf(String email) {
