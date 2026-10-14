@@ -28,6 +28,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
       # GitHub 러너에는 Docker가 있어 Testcontainers 테스트가 실제로 돈다
       - run: ./gradlew build
+      # 테스트 수를 남기고, 건너뛴 테스트(예: Docker 문제로 꺼진 Testcontainers)가 있으면 실패시킨다
+      - name: 테스트 결과 확인
+        if: success() || failure()
+        run: python3 .github/scripts/check_test_results.py
 
   web:
     runs-on: ubuntu-latest
