@@ -1,0 +1,99 @@
+package com.ticketon.application.account.service;
+
+import com.ticketon.application.account.port.out.AudienceAccountRepository;
+import com.ticketon.domain.account.AccountErrorCode;
+import com.ticketon.domain.account.AudienceAccount;
+import com.ticketon.domain.account.AudienceAccountStatus;
+import com.ticketon.domain.account.EmailAddress;
+import com.ticketon.domain.account.EmailAvailability;
+import com.ticketon.domain.account.PhoneNumber;
+import com.ticketon.domain.account.PhoneNumberAvailability;
+import com.ticketon.domain.error.ConflictException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+/**
+ * 메모리 관객 계정 저장소 — 저장소 약속을 표처럼 지킨다: 탈퇴하지 않은 계정 사이에서 번호·이메일(대소문자 무시)이 하나,
+ * 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만.
+ */
+final class FakeAudienceAccountRepository implements AudienceAccountRepository {
+
+    private final Map<Long, AudienceAccount> accounts = new LinkedHashMap<>();
+    private final Set<String> blockedPhoneNumbers = new HashSet<>();
+    private boolean anotherSignupWinsNextAdd;
+    private long nextId = 1;
+
+    /** 이용 정지 후 탈퇴로 차단 목록에 남은 번호를 흉내 낸다(#83이 채운다). */
+    void block(PhoneNumber phoneNumber) {
+        blockedPhoneNumbers.add(phoneNumber.digits());
+    }
+
+    /** 다음 저장 직전에 같은 번호의 다른 가입이 먼저 저장된 것처럼 — 확인은 통과했지만 저장에서 진다. */
+    void letAnotherSignupWinNextAdd() {
+        anotherSignupWinsNextAdd = true;
+    }
+
+    List<AudienceAccount> savedAccounts() {
+        return accounts.values().stream().map(account -> copyOf(account, account.id().getAsLong())).toList();
+    }
+
+    @Override
+    public PhoneNumberAvailability phoneNumberAvailability(PhoneNumber phoneNumber) {
+        if (registeredAccounts().anyMatch(account -> account.personalInformation().phoneNumber().equals(phoneNumber))) {
+            return PhoneNumberAvailability.ALREADY_REGISTERED;
+        }
+        return blockedPhoneNumbers.contains(phoneNumber.digits()) ? PhoneNumberAvailability.BLOCKED
+                : PhoneNumberAvailability.AVAILABLE;
+    }
+
+    @Override
+    public EmailAvailability emailAvailability(EmailAddress email) {
+        return registeredAccounts().anyMatch(account -> sameEmail(account.personalInformation().email(), email))
+                ? EmailAvailability.ALREADY_REGISTERED : EmailAvailability.AVAILABLE;
+    }
+
+    @Override
+    public AudienceAccount add(AudienceAccount newAccount) {
+        if (anotherSignupWinsNextAdd) {
+            anotherSignupWinsNextAdd = false;
+            throw new ConflictException(AccountErrorCode.PHONE_NUMBER_ALREADY_REGISTERED, "동시 가입 경합(흉내)");
+        }
+        long id = nextId++;
+        accounts.put(id, copyOf(newAccount, id));
+        return copyOf(newAccount, id);
+    }
+
+    @Override
+    public Optional<AudienceAccount> findById(long id) {
+        return Optional.ofNullable(accounts.get(id)).map(account -> copyOf(account, id));
+    }
+
+    @Override
+    public void saveEmailVerification(AudienceAccount verifiedAccount) {
+        long id = verifiedAccount.id().getAsLong();
+        if (accounts.get(id).status() != AudienceAccountStatus.PENDING_VERIFICATION) {
+            throw new ConflictException(AccountErrorCode.EMAIL_ALREADY_VERIFIED);
+        }
+        accounts.put(id, copyOf(verifiedAccount, id));
+    }
+
+    private java.util.stream.Stream<AudienceAccount> registeredAccounts() {
+        return accounts.values().stream().filter(account -> account.status() != AudienceAccountStatus.WITHDRAWN);
+    }
+
+    private static boolean sameEmail(EmailAddress left, EmailAddress right) {
+        return left.value().toLowerCase(Locale.ROOT).equals(right.value().toLowerCase(Locale.ROOT));
+    }
+
+    private static AudienceAccount copyOf(AudienceAccount account, long id) {
+        return AudienceAccount.restore(id, account.personalInformation(), account.passwordHash(), account.signedUpAt(),
+                new ArrayList<>(account.consentRecords()), account.status(), account.emailVerifiedAt().orElse(null),
+                account.suspensions());
+    }
+}

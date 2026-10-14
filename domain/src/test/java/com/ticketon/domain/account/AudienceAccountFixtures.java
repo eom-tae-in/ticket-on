@@ -19,6 +19,9 @@ final class AudienceAccountFixtures {
     /** 1998-04-02생 — 가입일에 만 28세. */
     static final LocalDate ADULT_BIRTH_DATE = LocalDate.of(1998, 4, 2);
 
+    /** 비밀번호 해시 — 해시 방식은 어댑터가 정하므로 도메인 테스트에서는 아무 값이나 쓴다. */
+    static final PasswordHash PASSWORD_HASH = new PasswordHash("{test}hashed-password");
+
     private AudienceAccountFixtures() {
     }
 
@@ -36,8 +39,9 @@ final class AudienceAccountFixtures {
 
     /** 필수 셋에 동의하고 마케팅은 동의하지 않은 채 막 가입한 계정(인증 대기). */
     static AudienceAccount newlySignedUpAccount() {
-        return AudienceAccount.signUp(adultPersonalInformation(), SignupConsentChoices.agreeingToAllRequired(false),
-                PhoneNumberAvailability.AVAILABLE, SIGNUP_TIME);
+        return AudienceAccount.signUp(adultPersonalInformation(), PASSWORD_HASH,
+                SignupConsentChoices.agreeingToAllRequired(false), PhoneNumberAvailability.AVAILABLE,
+                EmailAvailability.AVAILABLE, SIGNUP_TIME);
     }
 
     /** 가입하고 이메일 인증까지 마친 계정(활동). */

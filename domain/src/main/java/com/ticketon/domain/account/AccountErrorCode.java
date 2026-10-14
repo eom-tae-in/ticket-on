@@ -14,6 +14,15 @@ public enum AccountErrorCode implements ErrorCode {
      */
     PHONE_NUMBER_ALREADY_REGISTERED("이미 가입된 번호입니다. 본인 번호가 맞다면 문의해 주세요."),
 
+    /** 같은 이메일의 관객 계정이 있다. 이메일이 로그인 아이디다(docs/01 "수집 정보 — 사용자"). */
+    AUDIENCE_EMAIL_ALREADY_REGISTERED("이미 가입된 이메일입니다."),
+
+    /** 이메일 인증 링크의 값이 발급한 적 없는 값이다(잘렸거나 잘못 옮겨 적은 링크 등). */
+    EMAIL_VERIFICATION_LINK_NOT_FOUND("인증 링크가 올바르지 않습니다."),
+
+    /** 이메일 인증 링크의 유효 시간이 지났다. */
+    EMAIL_VERIFICATION_LINK_EXPIRED("인증 링크의 유효 시간이 지났습니다."),
+
     /** 가입일의 만 나이가 14세 미만이다(docs/01 "전화번호"의 만 14세 미만 차단). */
     AUDIENCE_UNDER_MINIMUM_AGE("만 " + QuantityPolicy.MINIMUM_SIGNUP_AGE + "세 미만은 가입할 수 없습니다."),
 

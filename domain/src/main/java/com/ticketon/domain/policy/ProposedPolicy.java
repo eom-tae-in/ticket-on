@@ -20,6 +20,20 @@ public final class ProposedPolicy {
      */
     public static final Duration LOGIN_SESSION_IDLE_TIMEOUT = Duration.ofMinutes(30);
 
+    /**
+     * 확인 필요 (#11) — 이메일 인증 링크 유효 시간. 가입할 때 보낸 링크는 이만큼 지나면 열어도 인증되지 않는다.
+     * 24시간을 제안한다: 가입한 날 메일을 늦게 열어도 인증할 수 있고, 남의 메일함에 잘못 간 링크가 오래 살아 있지 않다.
+     * 문서에는 "이메일 인증"만 있고 시간이 없다(docs/01 "가입 경로 — 직접 가입"). 비밀번호 재설정 링크는 따로 정한다(#16).
+     */
+    public static final Duration EMAIL_VERIFICATION_LINK_VALIDITY = Duration.ofHours(24);
+
+    /**
+     * 확인 필요 (#11) — 비밀번호 최소 길이(글자 수). 가입할 때 이보다 짧은 비밀번호는 받지 않는다. 그 밖의 조합 규칙(숫자·기호 섞기 등)은 두지 않는다.
+     * 8자를 제안한다: 흔히 쓰는 최소 길이이고, 조합 규칙 없이 길이만 보면 가입 칸이 덜 까다롭다. 문서에는 비밀번호 규칙이 없다
+     * (docs/01 "가입 경로 — 직접 가입"). 운영진 로그인(#15)·비밀번호 재설정(#16)도 같은 값을 쓴다.
+     */
+    public static final int PASSWORD_MINIMUM_LENGTH = 8;
+
     private ProposedPolicy() {
     }
 }
