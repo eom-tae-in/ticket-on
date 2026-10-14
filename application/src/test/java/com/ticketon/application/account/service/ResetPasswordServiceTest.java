@@ -53,7 +53,8 @@ class ResetPasswordServiceTest {
 
     private final FakeAudienceAccountRepository audienceAccountRepository = new FakeAudienceAccountRepository();
     private final FakeStaffAccountRepository staffAccountRepository = new FakeStaffAccountRepository();
-    private final FakePasswordResetTokenRepository tokenRepository = new FakePasswordResetTokenRepository();
+    private final WriteLog writeLog = new WriteLog();
+    private final FakePasswordResetTokenRepository tokenRepository = new FakePasswordResetTokenRepository(writeLog);
     private final FakePasswordHashPort passwordHashPort = new FakePasswordHashPort();
     private final RecordingSessionTerminationPort sessionTerminationPort = new RecordingSessionTerminationPort();
     private final MutableClock clock = MutableClock.at(REQUEST_TIME);
@@ -130,6 +131,39 @@ class ResetPasswordServiceTest {
             AudienceAccount saved = audienceAccountRepository.findById(id).orElseThrow();
             assertThat(saved.passwordHash()).isEqualTo(FakePasswordHashPort.hashOf(NEW_PASSWORD));
             assertThat(saved.passwordHash().value()).doesNotContain(NEW_PASSWORD);
+        }
+    }
+
+    @Nested
+    @DisplayName("잠금 순서 — 계정을 먼저 잠그고 링크·계정 줄을 바꾼다 (비밀번호 찾기와 같은 순서라 교착되지 않는다)")
+    class LockOrder {
+
+        @Test
+        @DisplayName("관객 — 계정 잠금 → 링크 사용 저장 → 비밀번호 저장")
+        void audienceLocksAccountFirst() {
+            long id = audienceAccounts.active(SEOYUN_EMAIL, SEOYUN_PHONE);
+            audienceAccountRepository.recordPasswordSavesIn(writeLog);
+            requestAudienceReset(SEOYUN_EMAIL);
+            writeLog.clear();
+
+            service.resetPassword(audienceReset(FIRST_TOKEN));
+
+            assertThat(writeLog.writes()).containsExactly("계정 잠금 AUDIENCE:" + id, "링크 사용 AUDIENCE:" + id,
+                    "비밀번호 저장 AUDIENCE:" + id);
+        }
+
+        @Test
+        @DisplayName("운영진 — 계정 잠금 → 링크 사용 저장 → 비밀번호 저장")
+        void staffLocksAccountFirst() {
+            long id = staffAccounts.active(JUNGHOON_EMAIL, "조용한고래");
+            staffAccountRepository.recordPasswordSavesIn(writeLog);
+            requestService.requestReset(new RequestPasswordResetCommand(AccountKind.STAFF, EmailAddress.of(JUNGHOON_EMAIL)));
+            writeLog.clear();
+
+            service.resetPassword(staffReset(FIRST_TOKEN));
+
+            assertThat(writeLog.writes()).containsExactly("계정 잠금 STAFF:" + id, "링크 사용 STAFF:" + id,
+                    "비밀번호 저장 STAFF:" + id);
         }
     }
 

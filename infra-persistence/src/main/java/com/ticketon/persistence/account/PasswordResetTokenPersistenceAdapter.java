@@ -26,11 +26,15 @@ import org.springframework.stereotype.Component;
  * 링크 한 줄은 관객 계정(audience_account_id)이나 운영진 로그인(staff_account_id) 중 꼭 하나를 가리킨다. 어느 칸이 채워졌는지가
  * 계정 종류다({@link AccountRef#kind()}).
  *
- * <h2>쓸 수 있는 링크는 계정마다 하나 — 동시 요청</h2>
- * 새 링크는 "이전 링크 대체 → 저장" 두 단계라, 같은 계정의 비밀번호 찾기가 거의 동시에 둘 오면 서로의 새 링크를 보지 못한 채 둘 다
- * 저장될 수 있다. 그래서 {@link #replaceUnusedTokensOf}가 먼저 그 계정 줄을 {@code SELECT … FOR UPDATE}로 잠근다. 뒤에 온 요청은 앞
- * 요청의 트랜잭션이 끝날 때까지 기다렸다가, 앞 요청이 저장한 링크까지 대체한다. 표의 부분 유일 색인(계정마다 쓰지도 대체되지도 않은 줄
- * 하나)이 마지막 장치다.
+ * <h2>잠금 순서 — 계정 → 링크</h2>
+ * {@link #lockAccount}는 그 계정 줄(audience_account·staff_account)을 {@code SELECT … FOR UPDATE}로 잠근다. 비밀번호 찾기와 재설정은
+ * 둘 다 링크나 계정 줄을 바꾸기 전에 이것을 맨 먼저 부른다(포트의 "잠금 순서"). 그래서
+ * <ul>
+ *   <li>새 링크는 "이전 링크 대체 → 저장" 두 단계인데, 같은 계정의 비밀번호 찾기 둘이 서로의 새 링크를 보지 못한 채 둘 다 저장되는 일이
+ *       없다 — 뒤에 온 요청은 앞 요청이 끝날 때까지 기다렸다가 앞 요청이 저장한 링크까지 대체한다. 표의 부분 유일 색인(계정마다 쓰지도
+ *       대체되지도 않은 줄 하나)이 마지막 장치다.</li>
+ *   <li>찾기(링크 줄을 바꿈)와 재설정(링크 줄과 계정 줄을 바꿈)이 서로 반대 순서로 줄을 잠가 교착되지 않는다.</li>
+ * </ul>
  *
  * <h2>1회용 — 동시 사용</h2>
  * 같은 링크로 거의 동시에 비밀번호를 바꾸면 {@link #saveUse}의 조건부 갱신({@code WHERE used_at IS NULL AND replaced_at IS NULL})이
@@ -45,9 +49,26 @@ public class PasswordResetTokenPersistenceAdapter implements PasswordResetTokenR
         this.dsl = dsl;
     }
 
+    /** 그 계정 줄을 트랜잭션이 끝날 때까지 잠근다. 다른 트랜잭션이 잠가 두었으면 끝날 때까지 기다린다. */
+    @Override
+    public void lockAccount(AccountRef account) {
+        switch (account.kind()) {
+            case AUDIENCE -> dsl.select(AUDIENCE_ACCOUNT.ID)
+                    .from(AUDIENCE_ACCOUNT)
+                    .where(AUDIENCE_ACCOUNT.ID.eq(account.id()))
+                    .forUpdate()
+                    .execute();
+            case STAFF -> dsl.select(STAFF_ACCOUNT.ID)
+                    .from(STAFF_ACCOUNT)
+                    .where(STAFF_ACCOUNT.ID.eq(account.id()))
+                    .forUpdate()
+                    .execute();
+            case ADMIN, CHECKIN -> throw notResettable(account.kind());
+        }
+    }
+
     @Override
     public int replaceUnusedTokensOf(AccountRef account, Instant replacedAt) {
-        lockAccount(account);
         return dsl.update(PASSWORD_RESET_TOKEN)
                 .set(PASSWORD_RESET_TOKEN.REPLACED_AT, toDatabaseTime(replacedAt))
                 .where(accountColumn(account.kind()).eq(account.id()))
@@ -98,23 +119,6 @@ public class PasswordResetTokenPersistenceAdapter implements PasswordResetTokenR
         String reasonForLog = "재설정 링크 사용 경합 — " + usedToken.account().principalName();
         return replaced ? new ConflictException(AccountErrorCode.PASSWORD_RESET_LINK_REPLACED, reasonForLog)
                 : new ConflictException(AccountErrorCode.PASSWORD_RESET_LINK_ALREADY_USED, reasonForLog);
-    }
-
-    /** 그 계정 줄을 트랜잭션이 끝날 때까지 잠근다. 같은 계정의 새 링크 저장이 차례로 일어나게 한다. */
-    private void lockAccount(AccountRef account) {
-        switch (account.kind()) {
-            case AUDIENCE -> dsl.select(AUDIENCE_ACCOUNT.ID)
-                    .from(AUDIENCE_ACCOUNT)
-                    .where(AUDIENCE_ACCOUNT.ID.eq(account.id()))
-                    .forUpdate()
-                    .execute();
-            case STAFF -> dsl.select(STAFF_ACCOUNT.ID)
-                    .from(STAFF_ACCOUNT)
-                    .where(STAFF_ACCOUNT.ID.eq(account.id()))
-                    .forUpdate()
-                    .execute();
-            case ADMIN, CHECKIN -> throw notResettable(account.kind());
-        }
     }
 
     private static TableField<PasswordResetTokenRecord, Long> accountColumn(AccountKind kind) {

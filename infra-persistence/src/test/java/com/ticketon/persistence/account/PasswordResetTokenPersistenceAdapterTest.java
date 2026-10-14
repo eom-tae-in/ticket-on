@@ -29,6 +29,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -38,6 +39,7 @@ import java.util.concurrent.TimeUnit;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.flywaydb.core.Flyway;
 import org.jooq.CloseableDSLContext;
+import org.jooq.DSLContext;
 import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
 import org.junit.jupiter.api.AfterAll;
@@ -229,7 +231,7 @@ class PasswordResetTokenPersistenceAdapterTest {
         }
 
         @Test
-        @DisplayName("같은 계정의 비밀번호 찾기가 동시에 둘 오면 계정을 잠가 차례로 처리한다 — 둘 다 저장되고, 쓸 수 있는 링크는 하나다")
+        @DisplayName("같은 계정의 비밀번호 찾기가 동시에 둘 오면 계정 잠금에서 차례를 기다린다 — 둘 다 저장되고, 쓸 수 있는 링크는 하나다")
         void concurrentRequestsLeaveOneUnusedToken() throws Exception {
             CyclicBarrier bothStarted = new CyclicBarrier(2);
             ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -256,19 +258,147 @@ class PasswordResetTokenPersistenceAdapterTest {
             }
         }
 
-        /** 제 연결·트랜잭션에서, 상대도 시작할 때까지 기다렸다가 이전 링크를 대체하고 새 링크를 저장한다. */
+        /** 제 연결·트랜잭션에서, 상대도 시작할 때까지 기다렸다가 비밀번호 찾기 순서(계정 잠금 → 대체 → 저장)대로 새 링크를 저장한다. */
         private String issueInOwnTransaction(String tokenValue, CyclicBarrier bothStarted) {
-            try (CloseableDSLContext ownConnection = DSL.using(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
-                    POSTGRES.getPassword())) {
-                return ownConnection.transactionResult(transaction -> {
-                    PasswordResetTokenPersistenceAdapter transactionAdapter =
-                            new PasswordResetTokenPersistenceAdapter(transaction.dsl());
-                    bothStarted.await(10, TimeUnit.SECONDS);
-                    transactionAdapter.replaceUnusedTokensOf(seoyun, REQUESTED_AT);
-                    transactionAdapter.add(PasswordResetToken.issue(tokenValue, seoyun, REQUESTED_AT));
-                    return tokenValue;
-                });
+            return inOwnTransaction(transactionDsl -> {
+                PasswordResetTokenPersistenceAdapter transactionAdapter = new PasswordResetTokenPersistenceAdapter(transactionDsl);
+                bothStarted.await(10, TimeUnit.SECONDS);
+                transactionAdapter.lockAccount(seoyun);
+                transactionAdapter.replaceUnusedTokensOf(seoyun, REQUESTED_AT);
+                transactionAdapter.add(PasswordResetToken.issue(tokenValue, seoyun, REQUESTED_AT));
+                return tokenValue;
+            });
+        }
+    }
+
+    /**
+     * 잠금 순서(계정 → 링크) — 비밀번호 찾기와 재설정은 둘 다 링크나 계정 줄을 바꾸기 전에 계정부터 잠근다. 한쪽이 잠그고 있으면 다른 쪽은
+     * 계정 잠금에서 기다리므로, 서로 반대 순서로 줄을 쥐고 기다리는 교착(40P01)이 생기지 않는다. 각 흐름은 서비스가 부르는 순서대로
+     * 어댑터를 부른다(RequestPasswordResetService, ResetPasswordService — 순서 자체는 서비스 테스트가 본다).
+     */
+    @Nested
+    @DisplayName("잠금 순서 — 비밀번호 찾기와 재설정이 겹치면 계정 잠금에서 차례를 기다린다 (교착 없음)")
+    class LockOrder {
+
+        private static final PasswordHash NEW_PASSWORD_HASH = new PasswordHash("{test}new-password");
+
+        @Test
+        @DisplayName("비밀번호 찾기가 잠그고 있으면 재설정은 기다렸다가, 그 사이 대체된 링크라 '대체됨' 충돌로 끝난다 — 비밀번호는 그대로다")
+        void resetWaitsForRequest() throws Exception {
+            adapter.add(PasswordResetToken.issue(FIRST_TOKEN, seoyun, REQUESTED_AT));
+            CountDownLatch firstLocked = new CountDownLatch(1);
+            CountDownLatch secondWaiting = new CountDownLatch(1);
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            try {
+                Future<String> request = executor.submit(() -> requestInOwnTransaction(SECOND_TOKEN, firstLocked,
+                        secondWaiting));
+                assertThat(firstLocked.await(10, TimeUnit.SECONDS)).isTrue();
+                Future<String> reset = executor.submit(() -> resetInOwnTransaction(FIRST_TOKEN, null, null));
+                awaitLockWaiter();
+                secondWaiting.countDown();
+
+                assertThat(request.get(30, TimeUnit.SECONDS)).isEqualTo(SECOND_TOKEN);
+                assertThatThrownBy(() -> reset.get(30, TimeUnit.SECONDS))
+                        .isInstanceOf(ExecutionException.class)
+                        .cause().isInstanceOfSatisfying(ConflictException.class, conflict -> assertThat(conflict.errorCode())
+                                .isEqualTo(AccountErrorCode.PASSWORD_RESET_LINK_REPLACED));
+                assertThat(audiencePasswordHash()).isEqualTo(PASSWORD_HASH.value());
+                assertThat(adapter.findByValue(AccountKind.AUDIENCE, SECOND_TOKEN).orElseThrow().replacedAt()).isEmpty();
+            } finally {
+                executor.shutdownNow();
             }
+        }
+
+        @Test
+        @DisplayName("재설정이 잠그고 있으면 비밀번호 찾기는 기다렸다가 새 링크를 저장한다 — 둘 다 끝나고, 쓴 링크는 쓴 링크로 남는다")
+        void requestWaitsForReset() throws Exception {
+            adapter.add(PasswordResetToken.issue(FIRST_TOKEN, seoyun, REQUESTED_AT));
+            CountDownLatch firstLocked = new CountDownLatch(1);
+            CountDownLatch secondWaiting = new CountDownLatch(1);
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            try {
+                Future<String> reset = executor.submit(() -> resetInOwnTransaction(FIRST_TOKEN, firstLocked, secondWaiting));
+                assertThat(firstLocked.await(10, TimeUnit.SECONDS)).isTrue();
+                Future<String> request = executor.submit(() -> requestInOwnTransaction(SECOND_TOKEN, null, null));
+                awaitLockWaiter();
+                secondWaiting.countDown();
+
+                assertThat(reset.get(30, TimeUnit.SECONDS)).isEqualTo(FIRST_TOKEN);
+                assertThat(request.get(30, TimeUnit.SECONDS)).isEqualTo(SECOND_TOKEN);
+                assertThat(audiencePasswordHash()).isEqualTo(NEW_PASSWORD_HASH.value());
+                PasswordResetToken used = adapter.findByValue(AccountKind.AUDIENCE, FIRST_TOKEN).orElseThrow();
+                assertThat(used.usedAt()).isPresent();
+                assertThat(used.replacedAt()).isEmpty();
+                assertThat(adapter.findByValue(AccountKind.AUDIENCE, SECOND_TOKEN).orElseThrow().replacedAt()).isEmpty();
+            } finally {
+                executor.shutdownNow();
+            }
+        }
+
+        /**
+         * 비밀번호 찾기 순서(계정 잠금 → 이전 링크 대체 → 새 링크 저장)로 제 트랜잭션에서 새 링크를 저장한다.
+         *
+         * @param locked      잠근 뒤 알릴 곳. 없으면 null.
+         * @param mayContinue 잠근 뒤 이것이 열릴 때까지 기다린다. 없으면 null.
+         */
+        private String requestInOwnTransaction(String tokenValue, CountDownLatch locked, CountDownLatch mayContinue) {
+            return inOwnTransaction(transactionDsl -> {
+                PasswordResetTokenPersistenceAdapter transactionAdapter = new PasswordResetTokenPersistenceAdapter(transactionDsl);
+                transactionAdapter.lockAccount(seoyun);
+                holdLock(locked, mayContinue);
+                transactionAdapter.replaceUnusedTokensOf(seoyun, REQUESTED_AT.plusSeconds(60));
+                transactionAdapter.add(PasswordResetToken.issue(tokenValue, seoyun, REQUESTED_AT.plusSeconds(60)));
+                return tokenValue;
+            });
+        }
+
+        /**
+         * 재설정 순서(링크 찾기 → 계정 잠금 → 계정 읽기 → 링크 사용 저장 → 비밀번호 저장)로 제 트랜잭션에서 비밀번호를 바꾼다.
+         *
+         * @param locked      잠근 뒤 알릴 곳. 없으면 null.
+         * @param mayContinue 잠근 뒤 이것이 열릴 때까지 기다린다. 없으면 null.
+         */
+        private String resetInOwnTransaction(String tokenValue, CountDownLatch locked, CountDownLatch mayContinue) {
+            return inOwnTransaction(transactionDsl -> {
+                PasswordResetTokenPersistenceAdapter transactionAdapter = new PasswordResetTokenPersistenceAdapter(transactionDsl);
+                AudienceAccountPersistenceAdapter accountAdapter = new AudienceAccountPersistenceAdapter(transactionDsl);
+                PasswordResetToken opened = transactionAdapter.findByValue(AccountKind.AUDIENCE, tokenValue).orElseThrow();
+                transactionAdapter.lockAccount(seoyun);
+                holdLock(locked, mayContinue);
+                AudienceAccount account = accountAdapter.findById(seoyun.id()).orElseThrow();
+                opened.resetPassword(account, NEW_PASSWORD_HASH, REQUESTED_AT.plusSeconds(90));
+                transactionAdapter.saveUse(opened);
+                accountAdapter.savePassword(account);
+                return tokenValue;
+            });
+        }
+
+        private static void holdLock(CountDownLatch locked, CountDownLatch mayContinue) throws InterruptedException {
+            if (locked != null) {
+                locked.countDown();
+            }
+            if (mayContinue != null) {
+                assertThat(mayContinue.await(10, TimeUnit.SECONDS)).as("다른 쪽이 계정 잠금에서 기다리기 시작함").isTrue();
+            }
+        }
+
+        /** 다른 연결이 줄 잠금을 기다리기 시작할 때까지 짧게 거듭 확인한다(상한 10초). */
+        private static void awaitLockWaiter() throws InterruptedException {
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            while (lockWaiterCount() == 0 && System.nanoTime() < deadline) {
+                Thread.sleep(20);
+            }
+            assertThat(lockWaiterCount()).as("계정 잠금을 기다리는 연결").isEqualTo(1);
+        }
+
+        private static long lockWaiterCount() {
+            Object count = dsl.fetchValue(
+                    "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'");
+            return ((Number) count).longValue();
+        }
+
+        private static String audiencePasswordHash() {
+            return dsl.select(AUDIENCE_ACCOUNT.PASSWORD_HASH).from(AUDIENCE_ACCOUNT).fetchSingle().value1();
         }
     }
 
@@ -313,6 +443,21 @@ class PasswordResetTokenPersistenceAdapterTest {
                     AccountErrorCode.PASSWORD_RESET_LINK_REPLACED);
             assertThat(adapter.findByValue(AccountKind.AUDIENCE, FIRST_TOKEN).orElseThrow().usedAt()).isEmpty();
         }
+    }
+
+    /** 제 연결·트랜잭션에서 일을 하고 커밋한다. 일이 예외를 던지면 되돌리고 그 예외를 그대로 던진다. */
+    private static <T> T inOwnTransaction(TransactionWork<T> work) {
+        try (CloseableDSLContext ownConnection = DSL.using(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword())) {
+            return ownConnection.transactionResult(transaction -> work.run(transaction.dsl()));
+        }
+    }
+
+    /** 트랜잭션 안에서 할 일. */
+    @FunctionalInterface
+    private interface TransactionWork<T> {
+
+        T run(DSLContext transactionDsl) throws Exception;
     }
 
     /** 도메인 규칙으로 링크를 쓴 링크로 만든 뒤 저장한다. 비밀번호를 바꿀 계정(활동 중인 관객)은 저장소에서 읽는다. */

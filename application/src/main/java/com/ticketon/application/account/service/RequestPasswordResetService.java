@@ -79,7 +79,9 @@ public class RequestPasswordResetService implements RequestPasswordResetUseCase 
         };
     }
 
+    /** 잠금 순서는 계정 → 링크다(PasswordResetTokenRepository "잠금 순서") — 재설정과 같은 순서라 서로 교착되지 않는다. */
     private void issueAndSend(ResetMailRecipient recipient, Instant now) {
+        tokenRepository.lockAccount(recipient.account());
         tokenRepository.replaceUnusedTokensOf(recipient.account(), now);
         PasswordResetToken token = PasswordResetToken.issue(tokenGenerator.urlSafe(PasswordResetToken.LENGTH),
                 recipient.account(), now);

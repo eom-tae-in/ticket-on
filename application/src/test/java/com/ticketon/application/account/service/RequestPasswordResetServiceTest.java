@@ -43,7 +43,8 @@ class RequestPasswordResetServiceTest {
 
     private final FakeAudienceAccountRepository audienceAccountRepository = new FakeAudienceAccountRepository();
     private final FakeStaffAccountRepository staffAccountRepository = new FakeStaffAccountRepository();
-    private final FakePasswordResetTokenRepository tokenRepository = new FakePasswordResetTokenRepository();
+    private final WriteLog writeLog = new WriteLog();
+    private final FakePasswordResetTokenRepository tokenRepository = new FakePasswordResetTokenRepository(writeLog);
     private final RecordingEmailSendPort emailSendPort = new RecordingEmailSendPort();
     private final MutableClock clock = MutableClock.at(REQUEST_TIME);
     private final StoredAudienceAccounts audienceAccounts = new StoredAudienceAccounts(audienceAccountRepository);
@@ -235,6 +236,41 @@ class RequestPasswordResetServiceTest {
         private void assertNothingSent() {
             assertThat(tokenRepository.savedTokens()).isEmpty();
             assertThat(emailSendPort.sentMessages()).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("잠금 순서 — 계정을 먼저 잠그고 링크를 바꾼다 (재설정과 같은 순서라 교착되지 않는다)")
+    class LockOrder {
+
+        @Test
+        @DisplayName("관객 — 계정 잠금 → 이전 링크 대체 → 새 링크 저장")
+        void audienceLocksAccountFirst() {
+            long id = audienceAccounts.active(SEOYUN_EMAIL, SEOYUN_PHONE);
+
+            service.requestReset(audienceCommand(SEOYUN_EMAIL));
+
+            assertThat(writeLog.writes()).containsExactly("계정 잠금 AUDIENCE:" + id, "링크 대체 AUDIENCE:" + id,
+                    "링크 저장 AUDIENCE:" + id);
+        }
+
+        @Test
+        @DisplayName("운영진 — 계정 잠금 → 이전 링크 대체 → 새 링크 저장")
+        void staffLocksAccountFirst() {
+            long id = staffAccounts.active(JUNGHOON_EMAIL, "조용한고래");
+
+            service.requestReset(staffCommand(JUNGHOON_EMAIL));
+
+            assertThat(writeLog.writes()).containsExactly("계정 잠금 STAFF:" + id, "링크 대체 STAFF:" + id,
+                    "링크 저장 STAFF:" + id);
+        }
+
+        @Test
+        @DisplayName("보낼 계정이 없으면 아무것도 잠그지 않는다")
+        void locksNothingWithoutAccount() {
+            service.requestReset(audienceCommand("nobody@example.com"));
+
+            assertThat(writeLog.writes()).isEmpty();
         }
     }
 

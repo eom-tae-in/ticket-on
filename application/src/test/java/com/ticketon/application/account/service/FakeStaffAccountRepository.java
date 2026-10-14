@@ -30,6 +30,7 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
     private AccountErrorCode signupRaceLoss;
     private boolean anotherNicknameChangeWinsNextSave;
     private int takenNicknameQueries;
+    private WriteLog passwordSaveLog = new WriteLog();
     private long nextId = 1;
 
     /** 다음 저장 직전에 같은 이메일·닉네임의 다른 가입이 먼저 저장된 것처럼 — 확인은 통과했지만 저장에서 진다. */
@@ -128,9 +129,15 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
         accounts.put(id, copyOf(changedAccount, id));
     }
 
+    /** 비밀번호 저장을 그 쓰기 기록에도 남긴다 — 링크 저장소와 같은 기록을 넘기면 잠금 순서(계정 → 링크)를 볼 수 있다. */
+    void recordPasswordSavesIn(WriteLog writeLog) {
+        passwordSaveLog = writeLog;
+    }
+
     @Override
     public void savePassword(StaffAccount changedAccount) {
         long id = changedAccount.id().getAsLong();
+        passwordSaveLog.record("비밀번호 저장 STAFF:" + id);
         if (accounts.get(id).status() != StaffAccountStatus.ACTIVE) {
             throw new ConflictException(AccountErrorCode.STAFF_NOT_ACTIVE);
         }

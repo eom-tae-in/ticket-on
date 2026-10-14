@@ -28,6 +28,7 @@ final class FakeAudienceAccountRepository implements AudienceAccountRepository {
     private final Map<Long, AudienceAccount> accounts = new LinkedHashMap<>();
     private final Set<String> blockedPhoneNumbers = new HashSet<>();
     private boolean anotherSignupWinsNextAdd;
+    private WriteLog passwordSaveLog = new WriteLog();
     private long nextId = 1;
 
     /** 이용 정지 후 탈퇴로 차단 목록에 남은 번호를 흉내 낸다(#83이 채운다). */
@@ -105,9 +106,15 @@ final class FakeAudienceAccountRepository implements AudienceAccountRepository {
         accounts.put(id, copyOf(verifiedAccount, id));
     }
 
+    /** 비밀번호 저장을 그 쓰기 기록에도 남긴다 — 링크 저장소와 같은 기록을 넘기면 잠금 순서(계정 → 링크)를 볼 수 있다. */
+    void recordPasswordSavesIn(WriteLog writeLog) {
+        passwordSaveLog = writeLog;
+    }
+
     @Override
     public void savePassword(AudienceAccount changedAccount) {
         long id = changedAccount.id().getAsLong();
+        passwordSaveLog.record("비밀번호 저장 AUDIENCE:" + id);
         AudienceAccountStatus storedStatus = accounts.get(id).status();
         if (storedStatus != AudienceAccountStatus.ACTIVE && storedStatus != AudienceAccountStatus.SUSPENDED) {
             throw new ConflictException(AccountErrorCode.AUDIENCE_NOT_ACTIVE);
