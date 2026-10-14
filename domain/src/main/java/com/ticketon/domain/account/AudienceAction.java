@@ -12,6 +12,12 @@ public enum AudienceAction {
     /** 로그인 — 정지 중에도 된다. */
     LOG_IN(false),
 
+    /**
+     * 내 계정 정보 보기(마이페이지 "계정 정보", docs/13) — 정지 중에도 된다. 정지로 막히는 것은 새 예매·변경·신고뿐이고,
+     * 화면은 이 정보로 정지 여부를 알려 준다.
+     */
+    VIEW_ACCOUNT(false),
+
     /** 기존 티켓 보기 — 정지 중에도 된다. */
     VIEW_TICKETS(false),
 
