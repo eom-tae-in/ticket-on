@@ -28,4 +28,8 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     // 보안 필터를 건 MockMvc 테스트 (로그인 흉내, CSRF 토큰) — 웹 테스트처럼 Spring Boot 4부터 별도 모듈
     testImplementation("org.springframework.boot:spring-boot-starter-security-test")
+    // 세션 저장·끊기 통합 테스트를 진짜 PostgreSQL로 돌린다 (Docker가 없으면 건너뜀)
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+    testImplementation("org.testcontainers:testcontainers-postgresql")
 }
