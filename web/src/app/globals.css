@@ -1,0 +1,12 @@
+/* 디자인 토큰(색·글꼴·간격)은 Figma 변수에서 옮겨 온다. 스타일링 방식은 첫 화면을 만들 때 정한다. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}

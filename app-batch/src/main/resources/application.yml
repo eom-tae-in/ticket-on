@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: ticket-on-batch
+  main:
+    web-application-type: none
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/ticketon}
+    username: ${DB_USERNAME:ticketon}
+    password: ${DB_PASSWORD:ticketon}
+  flyway:
+    enabled: false

@@ -1,0 +1,15 @@
+# 로컬 개발용 PostgreSQL — `docker compose up -d`
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ticketon
+      POSTGRES_USER: ticketon
+      POSTGRES_PASSWORD: ticketon
+    ports:
+      - "5432:5432"
+    volumes:
+      - ticketon-pg:/var/lib/postgresql
+
+volumes:
+  ticketon-pg:
