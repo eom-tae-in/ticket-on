@@ -11,4 +11,6 @@ dependencies {
     implementation("org.springframework:spring-tx")
 
     testImplementation(libs.archunit.junit5)
+    // 서비스 테스트에서 시각·생성 값을 고정한다 (MutableClock, FixedTokenGenerator)
+    testImplementation(testFixtures(project(":common")))
 }
