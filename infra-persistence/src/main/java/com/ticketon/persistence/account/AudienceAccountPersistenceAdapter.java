@@ -44,7 +44,7 @@ import org.springframework.stereotype.Component;
  *
  * <h2>이메일 대소문자</h2>
  * email 칸은 적은 그대로 두고, 비교는 PostgreSQL lower()로 소문자로 바꾼 email_lowercase로 한다. 저장할 때도 같은 lower()로 채워
- * 두 칸이 어긋나지 않는다(표의 CHECK도 같은 식이다).
+ * 두 칸이 어긋나지 않는다(표의 CHECK도 같은 식이다). 가입할 때 겹치는지 볼 때와 로그인할 때 계정을 찾을 때 모두 이 칸을 본다.
  *
  * <h2>아직 저장하지 않는 것</h2>
  * 이용 정지 이력은 관객 이용 정지(#125)가 표와 함께 더한다. 그때까지는 정지 이력 없이 되살린다.
@@ -106,6 +106,15 @@ public class AudienceAccountPersistenceAdapter implements AudienceAccountReposit
     public Optional<AudienceAccount> findById(long id) {
         return dsl.selectFrom(AUDIENCE_ACCOUNT)
                 .where(AUDIENCE_ACCOUNT.ID.eq(id))
+                .fetchOptional()
+                .map(this::toAccount);
+    }
+
+    /** 유일 색인(탈퇴하지 않은 계정 사이에서 소문자 이메일이 하나)이 있어 많아야 한 줄이다. */
+    @Override
+    public Optional<AudienceAccount> findRegisteredByEmail(EmailAddress email) {
+        return dsl.selectFrom(AUDIENCE_ACCOUNT)
+                .where(AUDIENCE_ACCOUNT.EMAIL_LOWERCASE.eq(lowercase(email)).and(notWithdrawn()))
                 .fetchOptional()
                 .map(this::toAccount);
     }

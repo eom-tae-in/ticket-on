@@ -40,6 +40,14 @@ public interface AudienceAccountRepository {
     Optional<AudienceAccount> findById(long id);
 
     /**
+     * 그 이메일로 가입한 계정 — 로그인 아이디로 찾는다. 대소문자를 가리지 않는다. 없으면 비어 있다.
+     * <p>
+     * 탈퇴한 계정은 찾지 않는다. 탈퇴하면 이메일이 풀려 같은 이메일로 새로 가입할 수 있으므로, 가입한 계정은 이메일마다 많아야 하나다.
+     * 인증 대기 계정은 찾는다 — 로그인할 수 있는지는 계정이 판단한다({@link AudienceAccount#can}).
+     */
+    Optional<AudienceAccount> findRegisteredByEmail(EmailAddress email);
+
+    /**
      * 이메일 인증을 마친 계정의 상태와 인증 일시를 저장한다. 저장소의 계정이 아직 인증 대기일 때만 바꾼다.
      *
      * @param verifiedAccount {@link AudienceAccount#verifyEmail}로 인증을 마친 계정
