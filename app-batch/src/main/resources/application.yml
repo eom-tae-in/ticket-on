@@ -9,3 +9,8 @@ spring:
     password: ${DB_PASSWORD:ticketon}
   flyway:
     enabled: false
+
+ticketon:
+  web:
+    # 화면(웹) 기준 주소 — 메일·문자 속 링크가 이 주소로 시작한다. API 서버와 같은 값을 쓴다
+    base-url: ${WEB_BASE_URL:http://localhost:3000}

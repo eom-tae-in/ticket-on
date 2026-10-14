@@ -13,6 +13,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql")
+    // 비밀번호 해시(PBKDF2) — Spring Security의 암호 모듈만 쓴다. 보안 필터 등 나머지는 들이지 않는다
+    implementation("org.springframework.security:spring-security-crypto")
 
     // 마이그레이션 SQL 파일에서 바로 jOOQ 코드를 만든다 (DB 접속 없이)
     jooqCodegen(libs.jooq.meta.extensions)

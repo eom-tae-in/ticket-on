@@ -1,6 +1,7 @@
 package com.ticketon.domain.account;
 
 import static com.ticketon.domain.account.AudienceAccountFixtures.ADULT_BIRTH_DATE;
+import static com.ticketon.domain.account.AudienceAccountFixtures.PASSWORD_HASH;
 import static com.ticketon.domain.account.AudienceAccountFixtures.SIGNUP_TIME;
 import static com.ticketon.domain.account.AudienceAccountFixtures.adultPersonalInformation;
 import static com.ticketon.domain.account.AudienceAccountFixtures.assertRejected;
@@ -41,6 +42,7 @@ class AudienceAccountSignUpTest {
         assertThat(account.id()).isEmpty();
         assertThat(account.signedUpAt()).isEqualTo(SIGNUP_TIME);
         assertThat(account.personalInformation()).isEqualTo(adultPersonalInformation());
+        assertThat(account.passwordHash()).isEqualTo(PASSWORD_HASH);
     }
 
     @Nested
@@ -110,8 +112,8 @@ class AudienceAccountSignUpTest {
         }
 
         private AudienceAccount signUpBornOn(LocalDate birthDate, Instant now) {
-            return AudienceAccount.signUp(personalInformationBornOn(birthDate), REQUIRED_ONLY,
-                    PhoneNumberAvailability.AVAILABLE, now);
+            return AudienceAccount.signUp(personalInformationBornOn(birthDate), PASSWORD_HASH, REQUIRED_ONLY,
+                    PhoneNumberAvailability.AVAILABLE, EmailAvailability.AVAILABLE, now);
         }
     }
 
@@ -171,7 +173,7 @@ class AudienceAccountSignUpTest {
         @DisplayName("한 항목의 지금 상태는 가장 최근 기록이다 — 이전 기록은 지우지 않는다")
         void latestConsentIsMostRecentRecord() {
             Instant agreedLater = SIGNUP_TIME.plusSeconds(86_400);
-            AudienceAccount account = AudienceAccount.restore(7, adultPersonalInformation(), SIGNUP_TIME,
+            AudienceAccount account = AudienceAccount.restore(7, adultPersonalInformation(), PASSWORD_HASH, SIGNUP_TIME,
                     List.of(new ConsentRecord(MARKETING, true, agreedLater), new ConsentRecord(MARKETING, false, SIGNUP_TIME)),
                     AudienceAccountStatus.ACTIVE, SIGNUP_TIME, List.of());
 
@@ -181,8 +183,8 @@ class AudienceAccountSignUpTest {
         }
 
         private AudienceAccount signUpWith(SignupConsentChoices consentChoices) {
-            return AudienceAccount.signUp(adultPersonalInformation(), consentChoices, PhoneNumberAvailability.AVAILABLE,
-                    SIGNUP_TIME);
+            return AudienceAccount.signUp(adultPersonalInformation(), PASSWORD_HASH, consentChoices,
+                    PhoneNumberAvailability.AVAILABLE, EmailAvailability.AVAILABLE, SIGNUP_TIME);
         }
     }
 
@@ -214,7 +216,42 @@ class AudienceAccountSignUpTest {
         }
 
         private AudienceAccount signUpWhenNumberIs(PhoneNumberAvailability availability) {
-            return AudienceAccount.signUp(adultPersonalInformation(), REQUIRED_ONLY, availability, SIGNUP_TIME);
+            return AudienceAccount.signUp(adultPersonalInformation(), PASSWORD_HASH, REQUIRED_ONLY, availability,
+                    EmailAvailability.AVAILABLE, SIGNUP_TIME);
+        }
+    }
+
+    @Nested
+    @DisplayName("이메일 하나에 관객 계정 하나")
+    class OneAccountPerEmail {
+
+        @Test
+        @DisplayName("같은 이메일의 관객 계정이 있으면 가입할 수 없다")
+        void rejectsAlreadyRegisteredEmail() {
+            assertRejected(() -> signUpWhenEmailIs(EmailAvailability.ALREADY_REGISTERED),
+                    AccountErrorCode.AUDIENCE_EMAIL_ALREADY_REGISTERED);
+            assertThat(AccountErrorCode.AUDIENCE_EMAIL_ALREADY_REGISTERED.message()).isEqualTo("이미 가입된 이메일입니다.");
+        }
+
+        @Test
+        @DisplayName("번호와 이메일이 둘 다 가입돼 있으면 번호 문구로 막는다 — 번호를 먼저 본다")
+        void phoneNumberIsCheckedBeforeEmail() {
+            assertRejected(() -> AudienceAccount.signUp(adultPersonalInformation(), PASSWORD_HASH, REQUIRED_ONLY,
+                    PhoneNumberAvailability.ALREADY_REGISTERED, EmailAvailability.ALREADY_REGISTERED, SIGNUP_TIME),
+                    AccountErrorCode.PHONE_NUMBER_ALREADY_REGISTERED);
+        }
+
+        @Test
+        @DisplayName("만 14세 미만이면 이메일이 가입돼 있어도 나이 문구로 막는다 — 나이를 먼저 본다")
+        void ageIsCheckedBeforeEmail() {
+            assertRejected(() -> AudienceAccount.signUp(personalInformationBornOn(LocalDate.of(2013, 1, 1)), PASSWORD_HASH,
+                    REQUIRED_ONLY, PhoneNumberAvailability.AVAILABLE, EmailAvailability.ALREADY_REGISTERED, SIGNUP_TIME),
+                    AccountErrorCode.AUDIENCE_UNDER_MINIMUM_AGE);
+        }
+
+        private AudienceAccount signUpWhenEmailIs(EmailAvailability availability) {
+            return AudienceAccount.signUp(adultPersonalInformation(), PASSWORD_HASH, REQUIRED_ONLY,
+                    PhoneNumberAvailability.AVAILABLE, availability, SIGNUP_TIME);
         }
     }
 
@@ -248,7 +285,7 @@ class AudienceAccountSignUpTest {
         @Test
         @DisplayName("탈퇴한 계정은 인증할 수 없다")
         void withdrawnAccountCannotVerify() {
-            AudienceAccount account = AudienceAccount.restore(7, adultPersonalInformation(), SIGNUP_TIME,
+            AudienceAccount account = AudienceAccount.restore(7, adultPersonalInformation(), PASSWORD_HASH, SIGNUP_TIME,
                     REQUIRED_ONLY.recordsAt(SIGNUP_TIME), AudienceAccountStatus.WITHDRAWN, null, List.of());
 
             assertRejected(() -> account.verifyEmail(SIGNUP_TIME), AccountErrorCode.AUDIENCE_WITHDRAWN);
@@ -262,7 +299,7 @@ class AudienceAccountSignUpTest {
         @Test
         @DisplayName("저장된 값 그대로 되살린다")
         void restoresSavedValues() {
-            AudienceAccount account = AudienceAccount.restore(7, adultPersonalInformation(), SIGNUP_TIME,
+            AudienceAccount account = AudienceAccount.restore(7, adultPersonalInformation(), PASSWORD_HASH, SIGNUP_TIME,
                     REQUIRED_ONLY.recordsAt(SIGNUP_TIME), AudienceAccountStatus.ACTIVE, SIGNUP_TIME.plusSeconds(60),
                     List.of());
 
@@ -270,6 +307,15 @@ class AudienceAccountSignUpTest {
             assertThat(account.status()).isEqualTo(AudienceAccountStatus.ACTIVE);
             assertThat(account.emailVerifiedAt()).contains(SIGNUP_TIME.plusSeconds(60));
             assertThat(account.personalInformation().birthDate()).isEqualTo(ADULT_BIRTH_DATE);
+            assertThat(account.passwordHash()).isEqualTo(PASSWORD_HASH);
+        }
+
+        @Test
+        @DisplayName("비밀번호 해시가 없으면 거부한다")
+        void rejectsMissingPasswordHash() {
+            assertThatThrownBy(() -> AudienceAccount.restore(7, adultPersonalInformation(), null, SIGNUP_TIME,
+                    REQUIRED_ONLY.recordsAt(SIGNUP_TIME), AudienceAccountStatus.ACTIVE, SIGNUP_TIME, List.of()))
+                    .isInstanceOf(NullPointerException.class);
         }
 
         @Test
@@ -277,34 +323,40 @@ class AudienceAccountSignUpTest {
         void rejectsStatusVerificationMismatch() {
             List<ConsentRecord> records = REQUIRED_ONLY.recordsAt(SIGNUP_TIME);
 
-            assertThatThrownBy(() -> AudienceAccount.restore(7, adultPersonalInformation(), SIGNUP_TIME, records,
-                    AudienceAccountStatus.PENDING_VERIFICATION, SIGNUP_TIME, List.of()))
+            assertThatThrownBy(() -> AudienceAccount.restore(7, adultPersonalInformation(), PASSWORD_HASH, SIGNUP_TIME,
+                    records, AudienceAccountStatus.PENDING_VERIFICATION, SIGNUP_TIME, List.of()))
                     .isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> AudienceAccount.restore(7, adultPersonalInformation(), SIGNUP_TIME, records,
-                    AudienceAccountStatus.ACTIVE, null, List.of())).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> AudienceAccount.restore(7, adultPersonalInformation(), PASSWORD_HASH, SIGNUP_TIME,
+                    records, AudienceAccountStatus.ACTIVE, null, List.of())).isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
         @DisplayName("id는 1 이상이다")
         void idMustBePositive() {
-            assertThatThrownBy(() -> AudienceAccount.restore(0, adultPersonalInformation(), SIGNUP_TIME,
+            assertThatThrownBy(() -> AudienceAccount.restore(0, adultPersonalInformation(), PASSWORD_HASH, SIGNUP_TIME,
                     REQUIRED_ONLY.recordsAt(SIGNUP_TIME), AudienceAccountStatus.ACTIVE, SIGNUP_TIME, List.of()))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }
 
     @Test
-    @DisplayName("가입 정보·동의·번호 확인·일시가 없으면 거부한다")
+    @DisplayName("가입 정보·비밀번호 해시·동의·번호 확인·이메일 확인·일시가 없으면 거부한다")
     void rejectsMissingArguments() {
-        PhoneNumberAvailability available = PhoneNumberAvailability.AVAILABLE;
+        AudiencePersonalInformation information = adultPersonalInformation();
+        PhoneNumberAvailability phone = PhoneNumberAvailability.AVAILABLE;
+        EmailAvailability email = EmailAvailability.AVAILABLE;
 
-        assertThatThrownBy(() -> AudienceAccount.signUp(null, REQUIRED_ONLY, available, SIGNUP_TIME))
+        assertThatThrownBy(() -> AudienceAccount.signUp(null, PASSWORD_HASH, REQUIRED_ONLY, phone, email, SIGNUP_TIME))
                 .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> AudienceAccount.signUp(adultPersonalInformation(), null, available, SIGNUP_TIME))
+        assertThatThrownBy(() -> AudienceAccount.signUp(information, null, REQUIRED_ONLY, phone, email, SIGNUP_TIME))
                 .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> AudienceAccount.signUp(adultPersonalInformation(), REQUIRED_ONLY, null, SIGNUP_TIME))
+        assertThatThrownBy(() -> AudienceAccount.signUp(information, PASSWORD_HASH, null, phone, email, SIGNUP_TIME))
                 .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> AudienceAccount.signUp(adultPersonalInformation(), REQUIRED_ONLY, available, null))
+        assertThatThrownBy(() -> AudienceAccount.signUp(information, PASSWORD_HASH, REQUIRED_ONLY, null, email, SIGNUP_TIME))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> AudienceAccount.signUp(information, PASSWORD_HASH, REQUIRED_ONLY, phone, null, SIGNUP_TIME))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> AudienceAccount.signUp(information, PASSWORD_HASH, REQUIRED_ONLY, phone, email, null))
                 .isInstanceOf(NullPointerException.class);
     }
 }

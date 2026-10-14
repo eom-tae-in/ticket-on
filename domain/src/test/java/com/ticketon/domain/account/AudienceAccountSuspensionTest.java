@@ -1,5 +1,6 @@
 package com.ticketon.domain.account;
 
+import static com.ticketon.domain.account.AudienceAccountFixtures.PASSWORD_HASH;
 import static com.ticketon.domain.account.AudienceAccountFixtures.SIGNUP_TIME;
 import static com.ticketon.domain.account.AudienceAccountFixtures.activeAccount;
 import static com.ticketon.domain.account.AudienceAccountFixtures.adultPersonalInformation;
@@ -249,7 +250,7 @@ class AudienceAccountSuspensionTest {
     }
 
     private static AudienceAccount restored(AudienceAccountStatus status, List<AudienceSuspension> suspensions) {
-        return AudienceAccount.restore(7, adultPersonalInformation(), SIGNUP_TIME,
+        return AudienceAccount.restore(7, adultPersonalInformation(), PASSWORD_HASH, SIGNUP_TIME,
                 SignupConsentChoices.agreeingToAllRequired(false).recordsAt(SIGNUP_TIME), status,
                 SIGNUP_TIME.plusSeconds(300), suspensions);
     }

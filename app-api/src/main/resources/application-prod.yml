@@ -5,3 +5,8 @@ server:
       cookie:
         # 세션 쿠키를 HTTPS 연결에만 싣는다
         secure: true
+
+ticketon:
+  web:
+    # 운영에서는 기본값을 두지 않는다. WEB_BASE_URL이 없으면 서버가 뜨지 않는다(메일에 로컬 주소가 나가지 않게)
+    base-url: ${WEB_BASE_URL}
