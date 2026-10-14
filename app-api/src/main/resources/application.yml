@@ -12,6 +12,10 @@ spring:
     jdbc:
       # 세션 표는 Flyway 마이그레이션(V1)이 만든다
       initialize-schema: never
+  web:
+    # 다국어는 만들지 않는다(docs/99). 입력 검증 문구가 요청 언어(Accept-Language)에 따라 바뀌지 않게 한국어로 고정한다
+    locale: ko_KR
+    locale-resolver: fixed
 
 springdoc:
   api-docs:

@@ -1,19 +1,25 @@
 package com.ticketon.api.error;
 
+import com.ticketon.api.error.ErrorResponse.FieldError;
 import com.ticketon.domain.error.ConflictException;
 import com.ticketon.domain.error.DomainException;
 import com.ticketon.domain.error.NotFoundException;
 import com.ticketon.domain.error.PermissionDeniedException;
 import com.ticketon.domain.error.RuleViolationException;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.BindException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * 컨트롤러에서 나온 예외를 {@link ErrorResponse}와 정해진 상태 코드로 바꾼다. 상태 코드 규칙은 package-info에 있다.
@@ -43,7 +49,38 @@ public class ApiExceptionHandler {
         return rejected(exception);
     }
 
-    /** JSON이 깨졌거나 칸 타입이 맞지 않아 본문을 읽지 못했다. */
+    /** {@code @Valid} 본문·{@code @ModelAttribute} 검증 실패. MethodArgumentNotValidException도 여기로 온다. */
+    @ExceptionHandler(BindException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleInvalidInput(BindException exception) {
+        return invalidInput(ValidationErrors.of(exception.getBindingResult()));
+    }
+
+    /** 파라미터 제약({@code @RequestParam @Min(1)} 등) 검증 실패. */
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleInvalidParameters(HandlerMethodValidationException exception) {
+        return invalidInput(ValidationErrors.of(exception));
+    }
+
+    /**
+     * 파라미터 형식이 틀렸다(숫자 칸에 글자 등). 변환기가 아예 없는 경우(ConversionNotSupportedException)는 서버 설정 문제라
+     * 여기서 받지 않고 500으로 둔다.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
+        return invalidInput(ValidationErrors.invalidFormat(exception.getName()));
+    }
+
+    /** 꼭 있어야 할 파라미터가 빠졌다. */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleMissingParameter(MissingServletRequestParameterException exception) {
+        return invalidInput(ValidationErrors.missing(exception.getParameterName()));
+    }
+
+    /** JSON이 깨졌거나 칸 타입이 맞지 않아 본문을 읽지 못했다. 어느 칸인지 특정하지 않으므로 fieldErrors는 비운다. */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleUnreadableBody(HttpMessageNotReadableException exception) {
@@ -70,6 +107,11 @@ public class ApiExceptionHandler {
         }
         log.error("처리하지 못한 예외", exception);
         return ResponseEntity.internalServerError().body(ErrorResponse.of(ApiErrorCode.INTERNAL_ERROR));
+    }
+
+    private ErrorResponse invalidInput(List<FieldError> fieldErrors) {
+        log.debug("입력 검증 실패: {}", fieldErrors);
+        return ErrorResponse.of(ApiErrorCode.INVALID_INPUT, fieldErrors);
     }
 
     private ErrorResponse rejected(DomainException exception) {
