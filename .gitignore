@@ -27,3 +27,6 @@ CLAUDE.local.md
 web/node_modules/
 web/.next/
 web/out/
+
+# Kotlin (build-logic 데몬 세션)
+.kotlin/
