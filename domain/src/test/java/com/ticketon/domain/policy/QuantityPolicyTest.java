@@ -67,4 +67,10 @@ class QuantityPolicyTest {
     void compensationRate() {
         assertThat(QuantityPolicy.COMPENSATION_RATE).isEqualTo(Percent.of(10));
     }
+
+    @Test
+    @DisplayName("관객은 만 14세부터 가입할 수 있다 (docs/01, docs/99 A-3)")
+    void minimumSignupAge() {
+        assertThat(QuantityPolicy.MINIMUM_SIGNUP_AGE).isEqualTo(14);
+    }
 }

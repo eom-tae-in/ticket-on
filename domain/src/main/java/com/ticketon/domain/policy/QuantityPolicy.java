@@ -48,6 +48,12 @@ public final class QuantityPolicy {
     /** 배상률 — 입장료의 10%. 주최자 사정 취소·중단·출연자 변경일 때. 불가항력은 없음. docs/08 "법적 기준", "주최자 귀책" */
     public static final Percent COMPENSATION_RATE = Percent.of(10);
 
+    /**
+     * 관객 가입 최소 나이 — 만 14세. 가입일(한국 날짜)의 만 나이가 이보다 적으면 가입을 막고, 동의 항목에도 "만 14세 이상입니다"를 둔다.
+     * 99 C 표에는 없지만 법이 정한 값이라 확정이다(개인정보보호법 제22조의2). docs/01 "전화번호"(만 14세 미만 차단), docs/99 A-3
+     */
+    public static final int MINIMUM_SIGNUP_AGE = 14;
+
     private QuantityPolicy() {
     }
 }
