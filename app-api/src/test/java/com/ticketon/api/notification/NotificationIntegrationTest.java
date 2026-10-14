@@ -2,6 +2,7 @@ package com.ticketon.api.notification;
 
 import static com.ticketon.api.security.TestLogin.loggedInAs;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.willReturn;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -9,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ticketon.application.notification.port.in.SendNotificationCommand;
@@ -33,13 +35,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 서버 전체를 진짜 PostgreSQL(마이그레이션 전체)로 띄워, 알림 설정 API로 바꾼 설정이 알림 발송에 반영되고 발송 이력이 남는지 끝까지 본다.
+ * 서버 전체를 진짜 PostgreSQL(마이그레이션 전체)로 띄워, 알림 설정 API로 바꾼 설정이 알림 발송에 반영되고 발송 이력이 남는지,
+ * 관객에게 보낸 알림이 알림함에 쌓여 알림함 API에서 처음 조회 때만 새로 온 것으로 보이는지 끝까지 본다.
  * Docker가 없는 환경에서는 건너뛴다.
  * <p>
  * 관객은 가입·이메일 인증 API로 만들고(인증 링크 값은 DB에서 읽는다), 알림 설정 API는 그 계정으로 로그인한 요청으로 부른다. 알림은 다른
@@ -49,10 +53,12 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers(disabledWithoutDocker = true)
-@DisplayName("알림 발송과 수신 설정 (진짜 PostgreSQL)")
+@DisplayName("알림 발송·수신 설정·알림함 (진짜 PostgreSQL)")
 class NotificationIntegrationTest {
 
     private static final String SETTINGS_PATH = "/api/audience/notification-settings";
+
+    private static final String INBOX_PATH = "/api/audience/notification-inbox";
 
     private static final NotificationContent CONTENT = new NotificationContent("알림 제목", "알림 본문");
 
@@ -136,8 +142,44 @@ class NotificationIntegrationTest {
                 accountId)).isZero();
     }
 
+    @Test
+    @DisplayName("관객에게 보낸 알림이 알림함에 최신순으로 쌓이고, 처음 조회 때만 새로 온 것이다 — 문자가 실패한 알림도 남는다")
+    void inboxShowsNewOnlyOnFirstOpen() throws Exception {
+        long accountId = signUpAndVerify("inbox@example.com", "010-3333-0004");
+        send(accountId, NotificationKind.BOOKING_COMPLETED, new NotificationContent("예매가 완료되었습니다", "티켓 링크"));
+
+        openInbox(accountId)
+                .andExpect(jsonPath("$.notifications[*].title", contains("예매가 완료되었습니다", "회원가입이 완료되었습니다")))
+                .andExpect(jsonPath("$.notifications[*].isNew", contains(true, true)))
+                .andExpect(jsonPath("$.notifications[0].body").value("티켓 링크"));
+        openInbox(accountId)
+                .andExpect(jsonPath("$.notifications[*].isNew", contains(false, false)));
+
+        willReturn(SendResult.failure("없는 번호")).given(smsSendPort).send(any());
+        send(accountId, NotificationKind.SESSION_CANCELLED, new NotificationContent("회차가 취소되었습니다", "다른 회차 예매하기"));
+
+        openInbox(accountId)
+                .andExpect(jsonPath("$.notifications[*].title",
+                        contains("회차가 취소되었습니다", "예매가 완료되었습니다", "회원가입이 완료되었습니다")))
+                .andExpect(jsonPath("$.notifications[*].isNew", contains(true, false, false)));
+        assertThat(sendRecordsTo("inbox@example.com", "01033330004")).contains(
+                "SESSION_CANCELLED:SMS:01033330004:false:없는 번호");
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM audience_notification_inbox
+                WHERE audience_account_id = ? AND first_seen_at IS NULL""", Long.class, accountId)).isZero();
+    }
+
+    private ResultActions openInbox(long accountId) throws Exception {
+        return mockMvc.perform(get(INBOX_PATH).with(loggedInAs(AccountKind.AUDIENCE, accountId)))
+                .andExpect(status().isOk());
+    }
+
     private void send(long accountId, NotificationKind kind) {
-        sendNotificationUseCase.send(new SendNotificationCommand(NotificationRecipient.audience(accountId), kind, CONTENT));
+        send(accountId, kind, CONTENT);
+    }
+
+    private void send(long accountId, NotificationKind kind, NotificationContent content) {
+        sendNotificationUseCase.send(new SendNotificationCommand(NotificationRecipient.audience(accountId), kind, content));
     }
 
     /** 가입 API로 가입하고, DB에서 읽은 인증 링크 값으로 인증 API를 불러 활동 계정을 만든다. */
