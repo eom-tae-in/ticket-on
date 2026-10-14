@@ -23,4 +23,6 @@ dependencies {
 
     // 통합 테스트에서 Clock 빈을 고정·이동 가능한 시계로 바꾼다 (MutableClock)
     testImplementation(testFixtures(project(":common")))
+    // 컨트롤러 슬라이스 테스트 (@WebMvcTest, MockMvc) — Spring Boot 4부터 웹 테스트 지원이 별도 모듈
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
 }
