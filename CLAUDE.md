@@ -43,3 +43,4 @@ cd web && npm run api:types          # 서버 명세 → 화면 타입 (서버 �
 - `docs/99-decisions.md`의 "만들지 않기로 한 것"은 의도적 제외다. 임의로 추가하지 않는다.
 - 구조 규칙은 `.claude/rules/`에 있다. **구조 테스트(ArchitectureTest)가 실패하면 테스트가 아니라 코드를 고친다.**
 - 비밀값(토스 키 등)은 레포에 넣지 않는다. `.env.example` 참고.
+- 브랜치, 커밋, 이슈, PR 규칙은 `.claude/rules/git-workflow.md`
