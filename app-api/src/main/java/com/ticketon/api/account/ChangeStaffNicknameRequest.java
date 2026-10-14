@@ -13,8 +13,9 @@ import jakarta.validation.constraints.NotBlank;
  */
 @Schema(description = "운영진 닉네임 변경 요청")
 public record ChangeStaffNicknameRequest(
-        @Schema(description = "새 닉네임. [랜덤 생성]으로 받은 값을 넣어도 된다", example = "푸른바람", requiredMode = REQUIRED)
+        @Schema(description = "새 닉네임. 앞뒤 공백을 걷고 20자 이하. [랜덤 생성]으로 받은 값을 넣어도 된다", example = "푸른바람", requiredMode = REQUIRED)
         @NotBlank(message = "닉네임을 입력해 주세요.")
+        @NicknameRule
         String nickname) {
 
     ChangeStaffNicknameCommand toCommand(AccountRef account) {

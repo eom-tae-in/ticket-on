@@ -318,6 +318,26 @@ class StaffLoginControllerTest {
         }
 
         @Test
+        @DisplayName("닉네임이 20자를 넘으면 400이고 유스케이스를 부르지 않는다 (확인 필요 #15)")
+        void rejectsTooLongNickname() throws Exception {
+            mockMvc.perform(nicknameRequest("가".repeat(21)).with(loggedInAs(JUNGHOON)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.fieldErrors", hasSize(1)))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("nickname"))
+                    .andExpect(jsonPath("$.fieldErrors[0].message").value("닉네임은 20자 이하로 입력해 주세요."));
+
+            verify(changeStaffNicknameUseCase, never()).changeNickname(any());
+        }
+
+        @Test
+        @DisplayName("닉네임 20자는 받는다")
+        void acceptsNicknameOfMaximumLength() throws Exception {
+            given(changeStaffNicknameUseCase.changeNickname(any())).willReturn(new ChangeStaffNicknameResult("가".repeat(20)));
+
+            mockMvc.perform(nicknameRequest("가".repeat(20)).with(loggedInAs(JUNGHOON))).andExpect(status().isOk());
+        }
+
+        @Test
         @DisplayName("로그인하지 않았으면 401이다")
         void requiresLogin() throws Exception {
             mockMvc.perform(nicknameRequest("푸른바람"))

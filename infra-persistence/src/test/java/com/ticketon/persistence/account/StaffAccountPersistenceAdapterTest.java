@@ -191,6 +191,19 @@ class StaffAccountPersistenceAdapterTest {
         }
 
         @Test
+        @DisplayName("최대 길이 20자 닉네임이 저장된다 — 칸은 바이트가 아니라 글자 수로 센다(한글·이모지 20자)")
+        void storesNicknameOfMaximumLength() {
+            String twentyHangul = "가".repeat(20);
+            String twentyEmoji = "\uD83D\uDC33".repeat(20);
+
+            long hangulId = adapter.add(newAccount(JUNGHOON_EMAIL, twentyHangul)).id().getAsLong();
+            long emojiId = adapter.add(newAccount("dohyun@example.com", twentyEmoji)).id().getAsLong();
+
+            assertThat(adapter.findById(hangulId).orElseThrow().nickname()).isEqualTo(Nickname.of(twentyHangul));
+            assertThat(adapter.findById(emojiId).orElseThrow().nickname()).isEqualTo(Nickname.of(twentyEmoji));
+        }
+
+        @Test
         @DisplayName("여러 닉네임 가운데 이미 쓰는 것만 한 번에 골라낸다")
         void takenNicknamesAmongCandidates() {
             adapter.add(newAccount(JUNGHOON_EMAIL, WHALE));

@@ -12,7 +12,7 @@ CREATE TABLE staff_account (
     id                BIGINT       GENERATED ALWAYS AS IDENTITY,
     status            VARCHAR(30)  NOT NULL,
     name              TEXT         NOT NULL,
-    nickname          VARCHAR      NOT NULL,
+    nickname          VARCHAR(20)  NOT NULL,
     email             VARCHAR(254) NOT NULL,
     email_lowercase   VARCHAR(254) NOT NULL,
     password_hash     TEXT         NOT NULL,
@@ -35,8 +35,8 @@ CREATE UNIQUE INDEX staff_account_email_ux
 -- 닉네임은 운영진 사이에서 하나뿐이다(docs/99 C "운영진 닉네임 — 중복 불가"). 공개 프로필이라 같은 닉네임이 둘이면 구분되지 않는다.
 -- 탈퇴한 계정의 닉네임도 쥔다 — 지난 이력에 남은 이름을 다른 사람이 가져가지 않게.
 -- 값은 앞뒤 공백을 걷고 NFC로 맞춘 그대로다(도메인 Nickname). 대소문자는 가린다.
--- 길이 상한은 문서에 없어 두지 않는다 — 칸은 길이 없는 VARCHAR(PostgreSQL에서 TEXT와 같다)다. TEXT로 두면 jOOQ 코드 생성이
--- 흉내 내는 H2가 그 칸에 색인을 만들지 못한다.
+-- 길이는 20자까지다(ProposedPolicy.NICKNAME_MAXIMUM_LENGTH, 확인 필요 #15 — 문서에 없어 제안값). PostgreSQL VARCHAR(n)은 글자 수로
+-- 세므로 도메인 Nickname의 글자 수(NFC로 맞춘 뒤 code point)와 같다. 상한이 없으면 아주 긴 값이 유일 색인 한도에 걸려 저장되지 않는다.
 -- 같은 닉네임으로 동시에 가입하거나 바꿔도 이 색인이 하나만 남긴다.
 CREATE UNIQUE INDEX staff_account_nickname_ux
     ON staff_account (nickname);

@@ -133,6 +133,7 @@ class StaffSignUpControllerTest {
                 "nickname | ''                       | 닉네임을 입력해 주세요.",
                 "nickname | '   '                    | 닉네임을 입력해 주세요.",
                 "nickname | '　'                 | 닉네임을 입력해 주세요.",
+                "nickname | 가나다라마바사아자차카타파하가나다라마바사 | 닉네임은 20자 이하로 입력해 주세요.",
                 "email    | ''                       | 이메일을 입력해 주세요.",
                 "email    | junghoon                 | 이메일 주소를 확인해 주세요.",
                 "email    | jung hoon@example.com    | 이메일 주소를 확인해 주세요.",
@@ -158,6 +159,20 @@ class StaffSignUpControllerTest {
             body.remove(field);
 
             expectInvalidField(body, field, message);
+        }
+
+        @Test
+        @DisplayName("닉네임은 20자까지 받는다 (확인 필요 #15) — 앞뒤 공백은 세지 않는다")
+        void acceptsNicknameOfMaximumLength() throws Exception {
+            given(signUpStaffUseCase.signUp(any())).willReturn(new SignUpStaffResult(7, "junghoon@example.com"));
+            Map<String, Object> body = validBody();
+            body.put("nickname", "  " + "가".repeat(20) + "  ");
+
+            mockMvc.perform(signUpRequest(body)).andExpect(status().isCreated());
+
+            ArgumentCaptor<SignUpStaffCommand> command = ArgumentCaptor.forClass(SignUpStaffCommand.class);
+            verify(signUpStaffUseCase).signUp(command.capture());
+            assertThat(command.getValue().nickname()).isEqualTo(Nickname.of("가".repeat(20)));
         }
 
         private void expectInvalidField(Map<String, Object> body, String field, String message) throws Exception {

@@ -21,9 +21,10 @@ public record SignUpStaffRequest(
         @NotBlank(message = "이름을 입력해 주세요.")
         String name,
 
-        @Schema(description = "닉네임 — 공개 프로필에 실명 대신 보인다. 다른 운영진과 겹칠 수 없다. [랜덤 생성]으로 받은 값을 넣어도 된다",
+        @Schema(description = "닉네임 — 공개 프로필에 실명 대신 보인다. 앞뒤 공백을 걷고 20자 이하. 다른 운영진과 겹칠 수 없다. [랜덤 생성]으로 받은 값을 넣어도 된다",
                 example = "조용한고래", requiredMode = REQUIRED)
         @NotBlank(message = "닉네임을 입력해 주세요.")
+        @NicknameRule
         String nickname,
 
         @Schema(description = "이메일 — 운영진 로그인 아이디. 인증 링크를 이 주소로 보낸다. 같은 이메일의 관객 계정이 있어도 된다",

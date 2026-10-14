@@ -3,6 +3,7 @@ package com.ticketon.domain.account;
 import static com.ticketon.domain.account.StaffAccountFixtures.assertRejected;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ticketon.domain.policy.ProposedPolicy;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -36,6 +37,18 @@ class RandomNicknameGeneratorTest {
                 RandomNicknameGenerator.ADJECTIVES.stream().anyMatch(adjective -> candidate.value().startsWith(adjective)
                         && RandomNicknameGenerator.NATURE_WORDS.contains(candidate.value().substring(adjective.length()))))
                 .isTrue());
+    }
+
+    @Test
+    @DisplayName("모든 조합이 닉네임 최대 길이(20자, 확인 필요 #15) 안이다 — 가장 긴 조합은 9자다")
+    void everyCandidateFitsMaximumLength() {
+        assertThat(RandomNicknameGenerator.candidates()).allSatisfy(candidate -> assertThat(
+                candidate.value().codePointCount(0, candidate.value().length()))
+                .isLessThanOrEqualTo(ProposedPolicy.NICKNAME_MAXIMUM_LENGTH));
+        assertThat(RandomNicknameGenerator.candidates())
+                .extracting(candidate -> candidate.value().codePointCount(0, candidate.value().length()))
+                .contains(9)
+                .allSatisfy(length -> assertThat(length).isLessThanOrEqualTo(9));
     }
 
     @Test
