@@ -15,6 +15,9 @@ import com.ticketon.domain.account.AudienceAccountStatus;
 import com.ticketon.domain.error.DomainException;
 import com.ticketon.domain.error.NotFoundException;
 import com.ticketon.domain.error.RuleViolationException;
+import com.ticketon.domain.notification.NotificationContent;
+import com.ticketon.domain.notification.NotificationKind;
+import com.ticketon.domain.notification.NotificationRecipient;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.regex.Matcher;
@@ -33,10 +36,11 @@ class VerifyAudienceEmailServiceTest {
     private final FakeAudienceAccountRepository accountRepository = new FakeAudienceAccountRepository();
     private final FakeEmailVerificationTokenRepository tokenRepository = new FakeEmailVerificationTokenRepository();
     private final RecordingEmailSendPort emailSendPort = new RecordingEmailSendPort();
+    private final RecordingSendNotificationUseCase sendNotificationUseCase = new RecordingSendNotificationUseCase();
     private final MutableClock clock = MutableClock.at(SIGNUP_TIME);
 
     private final VerifyAudienceEmailService service = new VerifyAudienceEmailService(tokenRepository, accountRepository,
-            clock);
+            sendNotificationUseCase, clock);
 
     private long accountId;
 
@@ -69,6 +73,21 @@ class VerifyAudienceEmailServiceTest {
     }
 
     @Test
+    @DisplayName("인증을 마치면 그 계정에 '회원가입 완료' 알림을 한 번 보낸다")
+    void sendsSignUpCompletedNotification() {
+        service.verifyEmail(new VerifyAudienceEmailCommand(tokenInMail));
+
+        assertThat(sendNotificationUseCase.sentCommands()).singleElement().satisfies(command -> {
+            assertThat(command.recipient()).isEqualTo(NotificationRecipient.audience(accountId));
+            assertThat(command.kind()).isEqualTo(NotificationKind.SIGNUP_COMPLETED);
+            assertThat(command.content()).isEqualTo(new NotificationContent("회원가입이 완료되었습니다", """
+                    이메일 인증을 마쳐 가입이 끝났습니다.
+                    이제 로그인해 원하는 자리를 골라 예매할 수 있습니다.
+                    """));
+        });
+    }
+
+    @Test
     @DisplayName("가입하고 24시간에서 1분 모자랄 때 열어도 인증된다")
     void verifiesJustBeforeExpiry() {
         clock.advance(Duration.ofHours(24).minusMinutes(1));
@@ -89,10 +108,11 @@ class VerifyAudienceEmailServiceTest {
                 .isEqualTo(AccountErrorCode.EMAIL_VERIFICATION_LINK_EXPIRED);
         assertThat(accountRepository.findById(accountId).orElseThrow().status())
                 .isEqualTo(AudienceAccountStatus.PENDING_VERIFICATION);
+        assertThat(sendNotificationUseCase.sentCommands()).isEmpty();
     }
 
     @Test
-    @DisplayName("같은 링크를 다시 열면 '이미 이메일 인증을 마친 계정입니다'")
+    @DisplayName("같은 링크를 다시 열면 '이미 이메일 인증을 마친 계정입니다'이고, 회원가입 완료 알림은 처음 한 번뿐이다")
     void secondOpenSaysAlreadyVerified() {
         service.verifyEmail(new VerifyAudienceEmailCommand(tokenInMail));
 
@@ -100,6 +120,7 @@ class VerifyAudienceEmailServiceTest {
                 .isThrownBy(() -> service.verifyEmail(new VerifyAudienceEmailCommand(tokenInMail)))
                 .extracting(DomainException::errorCode)
                 .isEqualTo(AccountErrorCode.EMAIL_ALREADY_VERIFIED);
+        assertThat(sendNotificationUseCase.sentCommands()).hasSize(1);
     }
 
     @Test
@@ -110,5 +131,6 @@ class VerifyAudienceEmailServiceTest {
                 .extracting(DomainException::errorCode)
                 .isEqualTo(AccountErrorCode.EMAIL_VERIFICATION_LINK_NOT_FOUND);
         assertThat(AccountErrorCode.EMAIL_VERIFICATION_LINK_NOT_FOUND.message()).isEqualTo("인증 링크가 올바르지 않습니다.");
+        assertThat(sendNotificationUseCase.sentCommands()).isEmpty();
     }
 }

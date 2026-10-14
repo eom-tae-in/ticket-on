@@ -51,7 +51,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 서버 전체를 진짜 PostgreSQL(마이그레이션 V2)로 띄워 관객 직접 가입 → 인증 메일 → 인증까지 끝까지 돌린다.
+ * 서버 전체를 진짜 PostgreSQL(마이그레이션 전체)로 띄워 관객 직접 가입 → 인증 메일 → 인증 → 회원가입 완료 알림까지 끝까지 돌린다.
  * Docker가 없는 환경에서는 건너뛴다.
  * <p>
  * 인증 메일은 '기록만' 어댑터가 로그로 남긴다. 그 로그에서 링크를 꺼내 인증한다 — 관객이 메일을 열어 링크를 누르는 것과 같다.
@@ -122,6 +122,20 @@ class AudienceSignUpIntegrationTest {
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT email_verified_at IS NOT NULL FROM audience_account WHERE email = ?", Boolean.class,
                 "seoyun@example.com")).isTrue();
+    }
+
+    @Test
+    @DisplayName("인증을 마치면 '회원가입 완료' 메일이 '기록만' 어댑터 로그에 남고, 발송 이력에 이메일 한 줄이 남는다")
+    void verificationSendsSignUpCompletedMail(CapturedOutput output) throws Exception {
+        mockMvc.perform(signUp(body("welcome@example.com", "010-1111-0014", "1998-04-02"))).andExpect(status().isCreated());
+        String token = tokenInMailTo("welcome@example.com", output);
+        assertThat(sendRecordsTo("welcome@example.com")).isEmpty();
+
+        mockMvc.perform(verify(token)).andExpect(status().isNoContent());
+
+        assertThat(output.getOut())
+                .contains("[기록만] 이메일 — 받는 곳: welcome@example.com, 제목: 회원가입이 완료되었습니다,");
+        assertThat(sendRecordsTo("welcome@example.com")).containsExactly("SIGNUP_COMPLETED:EMAIL:true");
     }
 
     @Test
@@ -289,6 +303,13 @@ class AudienceSignUpIntegrationTest {
         Matcher link = VERIFICATION_LINK.matcher(output.getOut().substring(mailStart));
         assertThat(link.find()).as("메일 본문의 인증 링크").isTrue();
         return link.group(1);
+    }
+
+    /** 그 받는 곳으로 남은 발송 이력 — "종류:수단:성공 여부", 남긴 순서대로. */
+    private List<String> sendRecordsTo(String recipientAddress) {
+        return jdbcTemplate.queryForList("""
+                SELECT kind || ':' || channel || ':' || succeeded FROM notification_send_record
+                WHERE recipient_address = ? ORDER BY id""", String.class, recipientAddress);
     }
 
     private String statusOf(String email) {
