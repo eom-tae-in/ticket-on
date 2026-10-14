@@ -427,6 +427,38 @@ class StaffAccountPersistenceAdapterTest {
         }
     }
 
+    @Nested
+    @DisplayName("비밀번호 저장 — 비밀번호 찾기")
+    class PasswordSave {
+
+        @Test
+        @DisplayName("새로 정한 비밀번호 해시를 저장한다 — 같은 이메일의 관객 계정 비밀번호는 그대로다")
+        void savesNewPasswordHash() {
+            addAudienceAccount(JUNGHOON_EMAIL);
+            long id = activeAccount(JUNGHOON_EMAIL, WHALE);
+            StaffAccount account = adapter.findById(id).orElseThrow();
+            account.resetPassword(new PasswordHash("{test}new-password"));
+
+            adapter.savePassword(account);
+
+            assertThat(adapter.findById(id).orElseThrow().passwordHash()).isEqualTo(new PasswordHash("{test}new-password"));
+            assertThat(dsl.select(AUDIENCE_ACCOUNT.PASSWORD_HASH).from(AUDIENCE_ACCOUNT).fetchSingle().value1())
+                    .isEqualTo(PASSWORD_HASH.value());
+        }
+
+        @Test
+        @DisplayName("그 사이 계정이 활동 중이 아니게 됐으면 저장하지 않는다")
+        void conflictsWhenNoLongerActive() {
+            long id = activeAccount(JUNGHOON_EMAIL, WHALE);
+            StaffAccount account = adapter.findById(id).orElseThrow();
+            account.resetPassword(new PasswordHash("{test}new-password"));
+            markWithdrawn(id);
+
+            assertConflict(() -> adapter.savePassword(account), AccountErrorCode.STAFF_NOT_ACTIVE);
+            assertThat(adapter.findById(id).orElseThrow().passwordHash()).isEqualTo(PASSWORD_HASH);
+        }
+    }
+
     private StaffAccount newAccount(String email, String nickname) {
         return StaffAccount.signUp(StaffPersonalInformation.of("박정훈", email), Nickname.of(nickname), PASSWORD_HASH,
                 EmailAvailability.AVAILABLE, NicknameAvailability.AVAILABLE, SIGNUP_TIME);

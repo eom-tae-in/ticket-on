@@ -54,4 +54,12 @@ public interface AudienceAccountRepository {
      * @throws ConflictException 그 사이 다른 요청이 먼저 인증을 마쳤으면({@code EMAIL_ALREADY_VERIFIED})
      */
     void saveEmailVerification(AudienceAccount verifiedAccount);
+
+    /**
+     * 비밀번호 찾기로 새로 정한 비밀번호 해시를 저장한다. 저장소의 계정이 비밀번호를 바꿀 수 있는 상태(활동·이용 정지)일 때만 바꾼다.
+     *
+     * @param changedAccount {@link AudienceAccount#resetPassword}로 비밀번호를 바꾼 계정
+     * @throws ConflictException 그 사이 계정이 탈퇴했으면({@code AUDIENCE_NOT_ACTIVE})
+     */
+    void savePassword(AudienceAccount changedAccount);
 }

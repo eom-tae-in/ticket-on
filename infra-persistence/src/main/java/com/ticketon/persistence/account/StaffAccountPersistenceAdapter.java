@@ -149,6 +149,19 @@ public class StaffAccountPersistenceAdapter implements StaffAccountRepository {
         }
     }
 
+    @Override
+    public void savePassword(StaffAccount changedAccount) {
+        long id = changedAccount.id().orElseThrow(() -> new IllegalArgumentException("저장하지 않은 계정입니다"));
+        int updatedRows = dsl.update(STAFF_ACCOUNT)
+                .set(STAFF_ACCOUNT.PASSWORD_HASH, changedAccount.passwordHash().value())
+                .where(STAFF_ACCOUNT.ID.eq(id))
+                .and(STAFF_ACCOUNT.STATUS.eq(StaffAccountStatus.ACTIVE.name()))
+                .execute();
+        if (updatedRows == 0) {
+            throw new ConflictException(AccountErrorCode.STAFF_NOT_ACTIVE, "활동 중이 아니게 된 운영진 계정: " + id);
+        }
+    }
+
     /** 유일 색인에 막히면 닉네임 충돌로 바꾼다. 그 밖의 오류는 그대로 내보낸다. */
     private int updateNickname(long id, Nickname nickname) {
         try {

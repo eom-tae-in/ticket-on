@@ -21,7 +21,7 @@ import java.util.stream.Stream;
 
 /**
  * 메모리 운영진 계정 저장소 — 저장소 약속을 표처럼 지킨다: 탈퇴하지 않은 계정 사이에서 이메일(대소문자 무시)이 하나, 모든 계정 사이에서
- * 닉네임이 하나, 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만, 닉네임 저장은 활동 중일 때만,
+ * 닉네임이 하나, 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만, 닉네임·비밀번호 저장은 활동 중일 때만,
  * 이메일로 찾을 때 탈퇴한 계정은 빼고. 저장소에 물은 횟수를 센다.
  */
 final class FakeStaffAccountRepository implements StaffAccountRepository {
@@ -122,6 +122,15 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
             anotherNicknameChangeWinsNextSave = false;
             throw new ConflictException(AccountErrorCode.STAFF_NICKNAME_ALREADY_TAKEN, "닉네임 변경 경합(흉내)");
         }
+        if (accounts.get(id).status() != StaffAccountStatus.ACTIVE) {
+            throw new ConflictException(AccountErrorCode.STAFF_NOT_ACTIVE);
+        }
+        accounts.put(id, copyOf(changedAccount, id));
+    }
+
+    @Override
+    public void savePassword(StaffAccount changedAccount) {
+        long id = changedAccount.id().getAsLong();
         if (accounts.get(id).status() != StaffAccountStatus.ACTIVE) {
             throw new ConflictException(AccountErrorCode.STAFF_NOT_ACTIVE);
         }

@@ -20,7 +20,8 @@ import java.util.Set;
 
 /**
  * 메모리 관객 계정 저장소 — 저장소 약속을 표처럼 지킨다: 탈퇴하지 않은 계정 사이에서 번호·이메일(대소문자 무시)이 하나,
- * 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만, 이메일로 찾을 때 탈퇴한 계정은 빼고.
+ * 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만, 비밀번호 저장은 활동·이용 정지일 때만,
+ * 이메일로 찾을 때 탈퇴한 계정은 빼고.
  */
 final class FakeAudienceAccountRepository implements AudienceAccountRepository {
 
@@ -102,6 +103,16 @@ final class FakeAudienceAccountRepository implements AudienceAccountRepository {
             throw new ConflictException(AccountErrorCode.EMAIL_ALREADY_VERIFIED);
         }
         accounts.put(id, copyOf(verifiedAccount, id));
+    }
+
+    @Override
+    public void savePassword(AudienceAccount changedAccount) {
+        long id = changedAccount.id().getAsLong();
+        AudienceAccountStatus storedStatus = accounts.get(id).status();
+        if (storedStatus != AudienceAccountStatus.ACTIVE && storedStatus != AudienceAccountStatus.SUSPENDED) {
+            throw new ConflictException(AccountErrorCode.AUDIENCE_NOT_ACTIVE);
+        }
+        accounts.put(id, copyOf(changedAccount, id));
     }
 
     private java.util.stream.Stream<AudienceAccount> registeredAccounts() {
