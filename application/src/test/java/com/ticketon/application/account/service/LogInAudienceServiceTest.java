@@ -1,5 +1,7 @@
 package com.ticketon.application.account.service;
 
+import static com.ticketon.application.account.service.FakePasswordHashPort.Comparison.MATCHES;
+import static com.ticketon.application.account.service.FakePasswordHashPort.Comparison.SIMULATED_MATCHING;
 import static com.ticketon.application.account.service.StoredAudienceAccounts.RAW_PASSWORD;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -81,12 +83,11 @@ class LogInAudienceServiceTest {
     class Fails {
 
         @Test
-        @DisplayName("가입한 적 없는 이메일 — 비교할 해시가 없어도 비교하는 만큼 시간을 들인다")
+        @DisplayName("가입한 적 없는 이메일")
         void unknownEmail() {
             accounts.active(SEOYUN_EMAIL, SEOYUN_PHONE);
 
             assertLoginFailed(() -> service.logIn(command("other@example.com", RAW_PASSWORD)));
-            assertThat(passwordHashPort.simulatedMatchingCount()).isEqualTo(1);
         }
 
         @Test
@@ -95,7 +96,6 @@ class LogInAudienceServiceTest {
             accounts.active(SEOYUN_EMAIL, SEOYUN_PHONE);
 
             assertLoginFailed(() -> service.logIn(command(SEOYUN_EMAIL, "seoyun12345")));
-            assertThat(passwordHashPort.simulatedMatchingCount()).isZero();
         }
 
         @Test
@@ -120,7 +120,6 @@ class LogInAudienceServiceTest {
             accounts.withdrawn(SEOYUN_EMAIL, SEOYUN_PHONE);
 
             assertLoginFailed(() -> service.logIn(command(SEOYUN_EMAIL, RAW_PASSWORD)));
-            assertThat(passwordHashPort.simulatedMatchingCount()).isEqualTo(1);
         }
 
         private void assertLoginFailed(ThrowingCallable logIn) {
@@ -131,6 +130,78 @@ class LogInAudienceServiceTest {
                         assertThat(exception.errorCode().message())
                                 .isEqualTo("이메일 또는 비밀번호가 올바르지 않거나, 이메일 인증을 마치지 않은 계정입니다.");
                     });
+        }
+    }
+
+    @Nested
+    @DisplayName("응답 시간을 같게 — 어느 경우에나 해시 비교를 꼭 한 번, 상태 판단보다 먼저 한다 (가입 여부가 시간으로 드러나지 않게)")
+    class EqualComparisonCost {
+
+        @Test
+        @DisplayName("인증 대기 계정은 비밀번호가 맞아도 막히지만, 상태를 보기 전에 비밀번호부터 저장된 해시와 비교한다")
+        void pendingAccountComparesPasswordBeforeStatus() {
+            accounts.pending(SEOYUN_EMAIL, SEOYUN_PHONE);
+
+            attemptLogIn(SEOYUN_EMAIL, RAW_PASSWORD);
+
+            assertThat(passwordHashPort.comparisons()).containsExactly(MATCHES);
+        }
+
+        @Test
+        @DisplayName("인증 대기 계정에 틀린 비밀번호를 적어도 비교는 한 번이다")
+        void pendingAccountWithWrongPasswordComparesOnce() {
+            accounts.pending(SEOYUN_EMAIL, SEOYUN_PHONE);
+
+            attemptLogIn(SEOYUN_EMAIL, "seoyun12345");
+
+            assertThat(passwordHashPort.comparisons()).containsExactly(MATCHES);
+        }
+
+        @Test
+        @DisplayName("활동 중인 계정 — 맞는 비밀번호도 틀린 비밀번호도 비교는 한 번이다")
+        void activeAccountComparesOnce() {
+            accounts.active(SEOYUN_EMAIL, SEOYUN_PHONE);
+
+            service.logIn(command(SEOYUN_EMAIL, RAW_PASSWORD));
+            attemptLogIn(SEOYUN_EMAIL, "seoyun12345");
+
+            assertThat(passwordHashPort.comparisons()).containsExactly(MATCHES, MATCHES);
+        }
+
+        @Test
+        @DisplayName("이용 정지 계정도 비밀번호를 한 번 비교하고 로그인된다")
+        void suspendedAccountComparesOnce() {
+            accounts.suspended(SEOYUN_EMAIL, SEOYUN_PHONE);
+
+            service.logIn(command(SEOYUN_EMAIL, RAW_PASSWORD));
+
+            assertThat(passwordHashPort.comparisons()).containsExactly(MATCHES);
+        }
+
+        @Test
+        @DisplayName("가입한 적 없는 이메일은 비교할 해시가 없어도 같은 만큼 시간을 들이는 비교를 꼭 한 번 한다")
+        void unknownEmailSimulatesComparisonOnce() {
+            accounts.active(SEOYUN_EMAIL, SEOYUN_PHONE);
+
+            attemptLogIn("other@example.com", RAW_PASSWORD);
+
+            assertThat(passwordHashPort.comparisons()).containsExactly(SIMULATED_MATCHING);
+        }
+
+        @Test
+        @DisplayName("탈퇴한 계정은 없는 이메일과 같다 — 저장된 해시와 비교하지 않고 같은 만큼 시간을 들이는 비교를 한 번 한다")
+        void withdrawnAccountSimulatesComparisonOnce() {
+            accounts.withdrawn(SEOYUN_EMAIL, SEOYUN_PHONE);
+
+            attemptLogIn(SEOYUN_EMAIL, RAW_PASSWORD);
+
+            assertThat(passwordHashPort.comparisons()).containsExactly(SIMULATED_MATCHING);
+        }
+
+        /** 로그인을 시도한다. 막혔는지는 위 Fails가 보므로 여기서는 해시 비교만 본다. */
+        private void attemptLogIn(String email, String rawPassword) {
+            assertThatExceptionOfType(RuleViolationException.class)
+                    .isThrownBy(() -> service.logIn(command(email, rawPassword)));
         }
     }
 

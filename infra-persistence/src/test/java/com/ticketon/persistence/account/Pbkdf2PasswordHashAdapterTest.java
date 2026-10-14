@@ -1,15 +1,12 @@
 package com.ticketon.persistence.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.ticketon.domain.account.EnteredPassword;
 import com.ticketon.domain.account.NewPassword;
 import com.ticketon.domain.account.PasswordHash;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -56,11 +53,32 @@ class Pbkdf2PasswordHashAdapterTest {
         assertThat(adapter.matches(new EnteredPassword(" seoyun1234"), hash)).isFalse();
     }
 
-    @ParameterizedTest(name = "\"{0}\"")
-    @ValueSource(strings = {"seoyun1234", "no-account-to-compare", "a"})
-    @DisplayName("확인할 계정이 없을 때의 비교는 어떤 원문이든 오류 없이 끝난다 — 결과를 돌려주지 않는다")
-    void simulateMatchingAcceptsAnyPassword(String rawPassword) {
-        assertThatCode(() -> adapter.simulateMatching(new EnteredPassword(rawPassword))).doesNotThrowAnyException();
+    @Test
+    @DisplayName("확인할 계정이 없을 때는 같은 인코더로 미리 만든 PBKDF2 해시와 실제로 한 번 비교한다 — 있는 계정의 비밀번호 확인과 같은 비용")
+    void simulateMatchingComparesWithPreparedHash() {
+        RecordingPasswordEncoder encoder = new RecordingPasswordEncoder(Pbkdf2PasswordHashAdapter.defaultPasswordEncoder());
+        Pbkdf2PasswordHashAdapter recordedAdapter = new Pbkdf2PasswordHashAdapter(encoder);
+        assertThat(encoder.encodedPasswords()).singleElement()
+                .satisfies(preparedHash -> assertThat(preparedHash).startsWith("{pbkdf2@SpringSecurity_v5_8}"));
+        String preparedHash = encoder.encodedPasswords().getFirst();
+
+        recordedAdapter.simulateMatching(new EnteredPassword("seoyun1234"));
+
+        assertThat(encoder.comparisons()).containsExactly(
+                new RecordingPasswordEncoder.Comparison("seoyun1234", preparedHash, false));
+    }
+
+    @Test
+    @DisplayName("있는 계정의 비밀번호 확인도 저장된 해시와 한 번 비교한다")
+    void matchesComparesWithStoredHashOnce() {
+        RecordingPasswordEncoder encoder = new RecordingPasswordEncoder(Pbkdf2PasswordHashAdapter.defaultPasswordEncoder());
+        Pbkdf2PasswordHashAdapter recordedAdapter = new Pbkdf2PasswordHashAdapter(encoder);
+        PasswordHash storedHash = recordedAdapter.hash(new NewPassword("seoyun1234"));
+
+        assertThat(recordedAdapter.matches(new EnteredPassword("seoyun1234"), storedHash)).isTrue();
+
+        assertThat(encoder.comparisons()).containsExactly(
+                new RecordingPasswordEncoder.Comparison("seoyun1234", storedHash.value(), true));
     }
 
     @Test

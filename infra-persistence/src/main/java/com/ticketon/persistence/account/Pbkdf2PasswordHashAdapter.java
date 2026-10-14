@@ -30,11 +30,28 @@ public class Pbkdf2PasswordHashAdapter implements PasswordHashPort {
 
     static final String ENCODING_ID = "pbkdf2@SpringSecurity_v5_8";
 
-    private final PasswordEncoder passwordEncoder = new DelegatingPasswordEncoder(ENCODING_ID,
-            Map.of(ENCODING_ID, Pbkdf2PasswordEncoder.defaultsForSpringSecurity_v5_8()));
+    /** 확인할 계정이 없을 때 비교하는 해시의 원문. 무엇과 맞는지는 쓰지 않으므로 아무 값이나 된다. */
+    static final String MISSING_ACCOUNT_PASSWORD = "no-account-to-compare";
 
-    /** 확인할 계정이 없을 때 비교하는 해시. 무엇과 맞는지는 쓰지 않으므로 원문은 아무 값이나 된다. */
-    private final String hashForMissingAccount = passwordEncoder.encode("no-account-to-compare");
+    private final PasswordEncoder passwordEncoder;
+
+    /** 확인할 계정이 없을 때 비교하는 해시 — 저장하는 해시와 같은 방식으로 만들어 비교 비용이 같다. */
+    private final String hashForMissingAccount;
+
+    public Pbkdf2PasswordHashAdapter() {
+        this(defaultPasswordEncoder());
+    }
+
+    /** 테스트가 해시 비교를 들여다볼 수 있게 인코더를 받는다. 서버는 기본 생성자를 쓴다. */
+    Pbkdf2PasswordHashAdapter(PasswordEncoder passwordEncoder) {
+        this.passwordEncoder = passwordEncoder;
+        this.hashForMissingAccount = passwordEncoder.encode(MISSING_ACCOUNT_PASSWORD);
+    }
+
+    static PasswordEncoder defaultPasswordEncoder() {
+        return new DelegatingPasswordEncoder(ENCODING_ID,
+                Map.of(ENCODING_ID, Pbkdf2PasswordEncoder.defaultsForSpringSecurity_v5_8()));
+    }
 
     @Override
     public PasswordHash hash(NewPassword password) {
