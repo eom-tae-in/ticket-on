@@ -9,6 +9,7 @@ import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.account.AdminGrade;
 import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.organizer.OrganizerName;
+import com.ticketon.domain.organizer.OrganizerNameChange;
 import com.ticketon.domain.organizer.RejectionReason;
 import com.ticketon.domain.organizer.RejectionReasonTemplate;
 import java.time.Instant;
@@ -113,6 +114,29 @@ class AdminOperationRecordTest {
             assertThat(record.targetKind()).isEqualTo(AdminOperationTargetKind.OWNERSHIP_CHANGE);
             assertThat(record.targetId()).isEqualTo(9);
             assertThat(record.summary()).isEqualTo("소유자 변경 확인 — 극단 열두달");
+            assertThat(record.reason()).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("주최자명 변경 확인 기록")
+    class OrganizerNameChangeConfirmed {
+
+        @Test
+        @DisplayName("누가(확인한 관리자) · 언제 · 무엇을(주최자명 변경 확인) · 대상(주최자명 변경 이력 id) · 요약(바꾸기 전 → 바꾼 이름)을 남기고, 사유는 없다")
+        void recordsConfirmation() {
+            AccountRef admin = AccountRef.of(AccountKind.ADMIN, 2);
+            OrganizerNameChange change = new OrganizerNameChange(OrganizerName.of("극단 열두달"),
+                    OrganizerName.of("열두달 프로젝트"), 1, OPERATED_AT.minusSeconds(3_600));
+
+            AdminOperationRecord record = AdminOperationRecord.organizerNameChangeConfirmed(admin, 5, change, OPERATED_AT);
+
+            assertThat(record.operator()).isEqualTo(admin);
+            assertThat(record.operatedAt()).isEqualTo(OPERATED_AT);
+            assertThat(record.kind()).isEqualTo(AdminOperationKind.CONFIRM_ORGANIZER_NAME_CHANGE);
+            assertThat(record.targetKind()).isEqualTo(AdminOperationTargetKind.ORGANIZER_NAME_CHANGE);
+            assertThat(record.targetId()).isEqualTo(5);
+            assertThat(record.summary()).isEqualTo("주최자명 변경 확인 — 극단 열두달 → 열두달 프로젝트");
             assertThat(record.reason()).isEmpty();
         }
     }

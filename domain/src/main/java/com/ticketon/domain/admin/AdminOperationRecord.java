@@ -5,6 +5,7 @@ import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.account.AdminGrade;
 import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.organizer.OrganizerName;
+import com.ticketon.domain.organizer.OrganizerNameChange;
 import com.ticketon.domain.organizer.RejectionReason;
 import java.time.Instant;
 import java.util.Objects;
@@ -19,7 +20,7 @@ import java.util.Optional;
  * 요약은 사람이 목록에서 읽는 한 줄이다(운영진 쪽 예: "초대권 10장 발권 · 운영자 김○○", docs/01). 조작마다 만드는 방법을 이 클래스의
  * 정적 메서드로 둔다({@link #adminAccountIssued}, {@link #organizerApplicationApproved},
  * {@link #organizerApplicationRejected}, {@link #ownershipChangeConfirmed}, {@link #ownershipClaimApproved},
- * {@link #ownershipClaimRejected}).
+ * {@link #ownershipClaimRejected}, {@link #organizerNameChangeConfirmed}).
  * 사유는 관리자가 적은 사유가 있는 조작(정지 사유, 반려 사유 등)만 남기고, 없으면 비어 있다.
  * <p>
  * 보관 기간은 문서에 정해져 있지 않아 지우지 않는다(docs/11 "데이터 보관"에 없음 — 정해지면 파기 작업을 더한다).
@@ -163,6 +164,22 @@ public final class AdminOperationRecord {
         Objects.requireNonNull(reason, "reason");
         return of(admin, AdminOperationKind.REJECT_OWNERSHIP_CLAIM, ownershipClaimId,
                 "소유자 이전 신청 반려 — " + organizerName.value(), reason.text(), rejectedAt);
+    }
+
+    /**
+     * 주최자명 변경 사후 확인 기록 — 대상은 확인한 주최자명 변경 이력이고, 요약은 "주최자명 변경 확인 — 바꾸기 전 이름 → 바꾼 이름"이다. 사유는
+     * 없다. 주최자가 그 뒤 이름을 또 바꿔도 확인한 그 한 건을 읽을 수 있게 그때의 두 이름을 적는다.
+     *
+     * @param admin                 확인한 관리자
+     * @param organizerNameChangeId 확인한 주최자명 변경 이력 id
+     * @param change                확인한 주최자명 변경 한 건
+     */
+    public static AdminOperationRecord organizerNameChangeConfirmed(AccountRef admin, long organizerNameChangeId,
+            OrganizerNameChange change, Instant confirmedAt) {
+        Objects.requireNonNull(change, "change");
+        return of(admin, AdminOperationKind.CONFIRM_ORGANIZER_NAME_CHANGE, organizerNameChangeId,
+                "주최자명 변경 확인 — " + change.previousName().value() + " → " + change.newName().value(), null,
+                confirmedAt);
     }
 
     /** 조작한 관리자. */

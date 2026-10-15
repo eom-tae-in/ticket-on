@@ -91,7 +91,14 @@ public enum AdminAction {
      * 소유자 변경 사후 확인 — 소유자가 바뀌면 관리자에게도 알리고(docs/12 "소유자가 바뀌면 관리자에게도 알립니다"), 관리자는 알림 대신 처리
      * 목록으로 받는다(docs/12 "관리자 대상"). 관리자를 거치지 않고 이미 바뀐 일이라 승인이 아니라 확인이고, 확인하면 처리 목록에서 빠진다.
      */
-    CONFIRM_OWNERSHIP_CHANGE(false);
+    CONFIRM_OWNERSHIP_CHANGE(false),
+
+    /**
+     * 주최자명 변경 사후 확인 — 소유자가 주최자명을 바꾸면 관리자에게 알리고(docs/01 "공개 페이지 — 주최자명 변경"), 관리자는 알림 대신 처리
+     * 목록으로 받는다(docs/12 "관리자 대상 — 주최자명 변경 (사후 확인용)", docs/13 "처리 목록 — 주최자명 변경 (사후 확인)"). 소유자가 바로
+     * 바꾼 일이라 승인이 아니라 확인이고, 확인하면 처리 목록에서 빠진다. 사칭이면 신고·정지로 처리한다.
+     */
+    CONFIRM_ORGANIZER_NAME_CHANGE(false);
 
     private final boolean superAdminOnly;
 

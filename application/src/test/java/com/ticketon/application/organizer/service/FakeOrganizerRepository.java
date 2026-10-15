@@ -14,6 +14,7 @@ final class FakeOrganizerRepository implements OrganizerRepository {
 
     private final List<Organizer> organizers = new ArrayList<>();
     private int publicProfileSaves;
+    private int nameSaves;
     private boolean failingPublicProfileSaves;
 
     @Override
@@ -64,6 +65,20 @@ final class FakeOrganizerRepository implements OrganizerRepository {
         organizers.set(organizers.indexOf(stored), Organizer.restore(id, organizer.name(), stored.status(),
                 organizer.publicProfile()));
         publicProfileSaves++;
+    }
+
+    @Override
+    public void saveName(Organizer renamedOrganizer) {
+        long id = renamedOrganizer.id().orElseThrow(() -> new IllegalArgumentException("저장 전 주최자입니다"));
+        Organizer stored = findById(id).orElseThrow(() -> new IllegalArgumentException("없는 주최자입니다: " + id));
+        organizers.set(organizers.indexOf(stored), Organizer.restore(id, renamedOrganizer.name(), stored.status(),
+                stored.publicProfile()));
+        nameSaves++;
+    }
+
+    /** 주최자명을 저장한 횟수. */
+    int nameSaves() {
+        return nameSaves;
     }
 
     /** 이제부터 공개 정보 저장이 실패한다 — 저장 단계에서 트랜잭션이 되돌려지는 경우를 본다. */

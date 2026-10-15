@@ -10,6 +10,7 @@ import com.ticketon.api.security.SecurityConfiguration;
 import com.ticketon.application.account.port.in.LogInAdminUseCase;
 import com.ticketon.application.admin.port.in.ApproveOrganizerApplicationUseCase;
 import com.ticketon.application.admin.port.in.ApproveOwnershipClaimUseCase;
+import com.ticketon.application.admin.port.in.ConfirmOrganizerNameChangeUseCase;
 import com.ticketon.application.admin.port.in.ConfirmOwnershipChangeUseCase;
 import com.ticketon.application.admin.port.in.GetAdminWorkQueueUseCase;
 import com.ticketon.application.admin.port.in.GetOrganizerApplicationReviewUseCase;
@@ -30,15 +31,15 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * 화면 타입은 /v3/api-docs에서 생성된다(npm run api:types). 관리자 로그인·로그아웃, 관리자 계정 발급, 처리 목록, 주최자 심사의 요청·응답
- * 모양이 명세에 그대로 실리는지 본다. DB 없이 돈다.
+ * 화면 타입은 /v3/api-docs에서 생성된다(npm run api:types). 관리자 로그인·로그아웃, 관리자 계정 발급, 처리 목록, 주최자 심사, 사후 확인의
+ * 요청·응답 모양이 명세에 그대로 실리는지 본다. DB 없이 돈다.
  */
 @WebMvcTest(controllers = {AdminLoginController.class, AdminAccountController.class, AdminWorkQueueController.class,
         OrganizerApplicationReviewController.class, OwnershipChangeController.class,
-        OwnershipClaimReviewController.class})
+        OwnershipClaimReviewController.class, OrganizerNameChangeController.class})
 @Import(SecurityConfiguration.class)
 @ImportAutoConfiguration({SpringDocConfiguration.class, SpringDocConfigProperties.class, SpringDocWebMvcConfiguration.class})
-@DisplayName("관리자 로그인·관리자 계정 발급·처리 목록·주최자 심사·소유자 변경 확인·소유자 이전 신청 심사 API 명세")
+@DisplayName("관리자 로그인·관리자 계정 발급·처리 목록·주최자 심사·소유자 변경 확인·소유자 이전 신청 심사·주최자명 변경 확인 API 명세")
 class AdminApiDocsTest {
 
     @Autowired
@@ -73,6 +74,9 @@ class AdminApiDocsTest {
 
     @MockitoBean
     private RejectOwnershipClaimUseCase rejectOwnershipClaimUseCase;
+
+    @MockitoBean
+    private ConfirmOrganizerNameChangeUseCase confirmOrganizerNameChangeUseCase;
 
     @Test
     @DisplayName("소유자 이전 신청 심사 화면은 신청 id 경로에서 OwnershipClaimReviewResponse를 돌려준다 — 처리 일시·반려 사유·지금 소유자·연락처만 비어 있을 수 있다")
@@ -115,6 +119,18 @@ class AdminApiDocsTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(confirmationPath + ".post.parameters[*].name",
                         containsInAnyOrder("ownershipChangeId")))
+                .andExpect(jsonPath(confirmationPath + ".post.responses['204']").exists())
+                .andExpect(jsonPath(confirmationPath + ".post.requestBody").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("주최자명 변경 사후 확인은 경로의 organizerNameChangeId만 받고 본문 없이 204다")
+    void organizerNameChangeConfirmationOperation() throws Exception {
+        String confirmationPath = "$.paths['/api/admin/organizer-name-changes/{organizerNameChangeId}/confirmation']";
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(confirmationPath + ".post.parameters[*].name",
+                        containsInAnyOrder("organizerNameChangeId")))
                 .andExpect(jsonPath(confirmationPath + ".post.responses['204']").exists())
                 .andExpect(jsonPath(confirmationPath + ".post.requestBody").doesNotExist());
     }
@@ -169,7 +185,8 @@ class AdminApiDocsTest {
                 .andExpect(jsonPath("$.components.schemas.AdminWorkItem.required",
                         containsInAnyOrder("kind", "targetId", "title", "receivedAt", "highlighted")))
                 .andExpect(jsonPath("$.components.schemas.AdminWorkItem.properties.kind.enum",
-                        containsInAnyOrder("ORGANIZER_APPLICATION", "OWNERSHIP_CHANGE", "OWNERSHIP_CLAIM")));
+                        containsInAnyOrder("ORGANIZER_APPLICATION", "OWNERSHIP_CHANGE", "OWNERSHIP_CLAIM",
+                                "ORGANIZER_NAME_CHANGE")));
     }
 
     @Test

@@ -87,6 +87,17 @@ class GetAdminWorkQueueServiceTest {
                 AdminWorkKind.OWNERSHIP_CLAIM, 4, "극단 열두달 · 푸른바람", submittedAt, false));
     }
 
+    @Test
+    @DisplayName("주최자명 변경은 이미 바뀐 일을 사후 확인하는 것이라 기한이 없어 오래돼도 강조하지 않는다")
+    void organizerNameChangeIsNotHighlighted() {
+        Instant changedAt = KoreanTime.toInstant(LocalDateTime.of(2026, 10, 1, 10, 0));
+        queryPort.add(new PendingAdminWork(AdminWorkKind.ORGANIZER_NAME_CHANGE, 5, "극단 열두달 → 열두달 프로젝트",
+                changedAt));
+
+        assertThat(service.getWorkQueue().items()).containsExactly(new AdminWorkQueueResult.Item(
+                AdminWorkKind.ORGANIZER_NAME_CHANGE, 5, "극단 열두달 → 열두달 프로젝트", changedAt, false));
+    }
+
     private static PendingAdminWork application(long applicationId, String name, LocalDateTime submittedAtKorea) {
         return new PendingAdminWork(AdminWorkKind.ORGANIZER_APPLICATION, applicationId, name,
                 KoreanTime.toInstant(submittedAtKorea));

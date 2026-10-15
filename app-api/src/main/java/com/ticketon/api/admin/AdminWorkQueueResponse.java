@@ -27,33 +27,38 @@ public record AdminWorkQueueResponse(
 
     /**
      * @param kind        종류
-     * @param targetId    대상 id — 주최자 신청이면 신청서 id, 소유자 변경이면 소유자 변경 이력 id
+     * @param targetId    대상 id — 주최자 신청이면 신청서 id, 소유자 변경이면 소유자 변경 이력 id, 소유자 이전 신청이면 신청 id, 주최자명
+     *                    변경이면 주최자명 변경 이력 id
      * @param title       제목
      * @param receivedAt  접수 일시 — 한국 시각
      * @param highlighted 강조할지
      */
     @Schema(description = "처리 목록의 요청 하나")
     public record AdminWorkItem(
-            @Schema(description = "종류 — 누르면 종류에 맞는 처리 화면으로 간다(주최자 신청 → 주최자 심사, 소유자 변경 → 사후 확인)",
-                    requiredMode = REQUIRED)
+            @Schema(description = "종류 — 누르면 종류에 맞는 처리 화면으로 간다(주최자 신청 → 주최자 심사, 소유자 변경 → 사후 확인, 소유자 "
+                    + "이전 신청 → 소유자 이전 신청 심사, 주최자명 변경 → 사후 확인)", requiredMode = REQUIRED)
             AdminWorkKindCode kind,
 
-            @Schema(description = "대상 id — 종류마다 가리키는 것이 다르다. 주최자 신청이면 신청서 id, 소유자 변경이면 소유자 변경 이력 id",
+            @Schema(description = "대상 id — 종류마다 가리키는 것이 다르다. 주최자 신청이면 신청서 id, 소유자 변경이면 소유자 변경 이력 id, "
+                    + "소유자 이전 신청이면 신청 id, 주최자명 변경이면 주최자명 변경 이력 id",
                     example = "3",
                     requiredMode = REQUIRED)
             long targetId,
 
             @Schema(description = "제목 — 주최자 신청이면 신청한 이름 또는 단체명, 소유자 변경이면 \"주최자명 · 넘긴 사람 → 받은 사람\" "
-                    + "닉네임", example = "극단 열두달", requiredMode = REQUIRED)
+                    + "닉네임, 소유자 이전 신청이면 \"주최자명 · 신청한 사람\" 닉네임, 주최자명 변경이면 \"바꾸기 전 이름 → 바꾼 이름\"",
+                    example = "극단 열두달", requiredMode = REQUIRED)
             String title,
 
-            @Schema(description = "접수 일시 — 한국 시각(+09:00). 주최자 신청이면 제출 일시, 소유자 변경이면 넘긴 일시",
+            @Schema(description = "접수 일시 — 한국 시각(+09:00). 주최자 신청이면 제출 일시, 소유자 변경이면 넘긴 일시, 소유자 이전 신청이면 "
+                    + "신청 일시, 주최자명 변경이면 바꾼 일시",
                     example = "2026-10-15T10:00:00+09:00",
                     requiredMode = REQUIRED)
             OffsetDateTime receivedAt,
 
             @Schema(description = "강조할지 — 기한이 다가왔다. 주최자 신청이면 심사 목표일(제출일부터 영업일 3일)까지 남은 영업일이 "
-                    + "1일 이하이거나 지났다. 소유자 변경은 기한이 없어 강조하지 않는다", requiredMode = REQUIRED)
+                    + "1일 이하이거나 지났다. 소유자 변경 · 소유자 이전 신청 · 주최자명 변경은 기한이 없어 강조하지 않는다",
+                    requiredMode = REQUIRED)
             boolean highlighted) {
     }
 }

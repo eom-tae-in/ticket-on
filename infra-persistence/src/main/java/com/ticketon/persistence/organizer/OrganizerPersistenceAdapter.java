@@ -28,8 +28,8 @@ import org.springframework.stereotype.Component;
  * ({@link Organizer#underReview}) 공개 정보가 비어 있다.
  * <p>
  * 승인 저장은 {@code UPDATE … WHERE status = 'UNDER_REVIEW'}로 한다. 바뀐 줄이 없으면 읽은 뒤 다른 처리가 먼저 상태를 바꾼 것이라 충돌이다.
- * 공개 정보 편집은 {@link #findByIdForUpdate}({@code SELECT … FOR UPDATE})로 줄을 잠그고 읽은 뒤 저장하므로, 저장은 조건 없이 그 주최자의
- * 공개 정보 칸만 바꾼다.
+ * 공개 정보 편집과 주최자명 변경은 {@link #findByIdForUpdate}({@code SELECT … FOR UPDATE})로 줄을 잠그고 읽은 뒤 저장하므로, 저장은 조건
+ * 없이 그 주최자의 공개 정보 칸 · 이름 칸만 바꾼다.
  */
 @Component
 public class OrganizerPersistenceAdapter implements OrganizerRepository {
@@ -101,6 +101,19 @@ public class OrganizerPersistenceAdapter implements OrganizerRepository {
         }
         dsl.deleteFrom(ORGANIZER_SNS_LINK).where(ORGANIZER_SNS_LINK.ORGANIZER_ID.eq(id)).execute();
         insertSnsLinks(id, profile.snsLinks());
+    }
+
+    @Override
+    public void saveName(Organizer renamedOrganizer) {
+        long id = renamedOrganizer.id()
+                .orElseThrow(() -> new IllegalArgumentException("저장 전 주최자는 이름을 저장할 수 없습니다"));
+        int updated = dsl.update(ORGANIZER)
+                .set(ORGANIZER.NAME, renamedOrganizer.name().value())
+                .where(ORGANIZER.ID.eq(id))
+                .execute();
+        if (updated == 0) {
+            throw new IllegalArgumentException("표에 없는 주최자의 이름을 저장하려 했습니다: " + id);
+        }
     }
 
     private static String logoFileKeyOf(OrganizerPublicProfile profile) {

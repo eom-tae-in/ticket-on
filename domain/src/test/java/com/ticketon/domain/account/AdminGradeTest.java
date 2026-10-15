@@ -42,7 +42,8 @@ class AdminGradeTest {
             Map.entry(AdminAction.PERMANENTLY_SUSPEND_ORGANIZER, false),
             Map.entry(AdminAction.ISSUE_ADMIN_ACCOUNT, false),
             // 표 밖에서 다른 문서가 관리자에게 맡긴 일 — 두 등급 모두
-            Map.entry(AdminAction.CONFIRM_OWNERSHIP_CHANGE, true));
+            Map.entry(AdminAction.CONFIRM_OWNERSHIP_CHANGE, true),
+            Map.entry(AdminAction.CONFIRM_ORGANIZER_NAME_CHANGE, true));
 
     static Stream<Arguments> permissionTable() {
         return ADMIN_CAN.entrySet().stream().map(entry -> Arguments.of(entry.getKey(), entry.getValue()));
