@@ -14,6 +14,8 @@
  *   <li>로그아웃은 같은 컨트롤러가 {@link com.ticketon.api.security.SessionLogin#logOut}으로 지금 세션 하나만 끊는다.
  *       같은 주체가 다른 기기에서 로그인한 세션은 남는다. 정지·탈퇴처럼 모두 끊을 때는 SessionTerminationPort를 쓴다.</li>
  *   <li>컨트롤러는 {@link com.ticketon.api.security.CurrentAccount @CurrentAccount}로 주체를 받아 Command에 담는다.</li>
+ *   <li>주최자 하나의 일을 하는 주최 관리 컨트롤러는 {@link com.ticketon.api.security.CurrentStaff @CurrentStaff}로 로그인한 운영진과
+ *       경로의 주최자 id를 함께 받아(ActingStaff) Command에 담는다. 권한(소속 · 역할 · 주최자 상태)은 유스케이스가 확인한다.</li>
  *   <li>관객 카카오·구글 로그인의 시작·콜백 두 주소({@code /api/auth/audience/oauth2/authorization/*}, {@code …/callback/*})는 이 기본
  *       필터 묶음보다 먼저 걸리는 별도 묶음이 맡는다(api/account AudienceOAuthSecurityConfiguration). 제공자 인증 정보는 세션 주체로
  *       저장하지 않고, 로그인할 관객 계정이 정해지면 같은 {@link com.ticketon.api.security.SessionLogin}으로 세션을 연다.</li>
@@ -32,7 +34,10 @@
  *   <tr><td>{@code /api/audience/**}</td><td>관객(AUDIENCE)</td>
  *       <td>예매, 마이페이지, 알림함, 알림 받기, 신고. 주최자 쪽 로그인으로는 예매할 수 없다(docs/01 "같은 이메일로 양쪽 가입").</td></tr>
  *   <tr><td>{@code /api/organizer/**}</td><td>운영진(STAFF)</td>
- *       <td>주최 관리. 소유자·운영자 권한은 주최자마다 다르므로 여기서 나누지 않고 유스케이스가 확인한다(docs/01 "권한 두 가지").</td></tr>
+ *       <td>주최 관리. 소유자·운영자 권한은 주최자마다 다르므로 여기서 나누지 않고 유스케이스가 확인한다(docs/01 "권한 두 가지",
+ *           운영진 권한 확인 CheckStaffPermissionUseCase). 주최자 하나의 일은 {@code /api/organizer/organizers/{organizerId}/**}
+ *           아래에 둔다 — 한 사람이 여러 주최자에 소속될 수 있어 화면이 주최자 전환으로 고른 주최자의 id를 경로에 담는다.
+ *           주최자 신청·내 주최 홈·내 계정처럼 주최자를 고르기 전의 일은 그 밖에 둔다.</td></tr>
  *   <tr><td>{@code /api/admin/super/**}</td><td>최고 관리자(ADMIN 중 등급 SUPER_ADMIN)</td>
  *       <td>최고 관리자만 하는 일 — 관리자 계정 발급, 영구 정지(docs/01 "관리자 2등급", docs/13 "※ 최고 관리자만").
  *           관리자 로그인이 세션에 등급을 담는다({@link com.ticketon.api.security.SessionLogin#logInAdmin}).
