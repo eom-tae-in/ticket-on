@@ -31,19 +31,31 @@ final class StoredAudienceAccounts {
         this.repository = repository;
     }
 
-    /** 가입만 하고 이메일 인증을 마치지 않은 계정. */
+    /** 가입만 하고 이메일 인증을 마치지 않은 계정. 마케팅 수신에는 동의하지 않았다. */
     long pending(String email, String phoneNumber) {
+        return pending(email, phoneNumber, false);
+    }
+
+    /** 이메일 인증까지 마친 계정. 마케팅 수신에는 동의하지 않았다. */
+    long active(String email, String phoneNumber) {
+        return verified(pending(email, phoneNumber, false));
+    }
+
+    /** 가입 때 마케팅 수신에도 동의하고 이메일 인증까지 마친 계정. */
+    long activeAgreeingToMarketing(String email, String phoneNumber) {
+        return verified(pending(email, phoneNumber, true));
+    }
+
+    private long pending(String email, String phoneNumber, boolean marketingAgreed) {
         AudiencePersonalInformation personalInformation = AudiencePersonalInformation.of("한서윤",
                 LocalDate.of(1998, 4, 2), email, phoneNumber);
         AudienceAccount newAccount = AudienceAccount.signUp(personalInformation, FakePasswordHashPort.hashOf(RAW_PASSWORD),
-                SignupConsentChoices.agreeingToAllRequired(false), PhoneNumberAvailability.AVAILABLE,
+                SignupConsentChoices.agreeingToAllRequired(marketingAgreed), PhoneNumberAvailability.AVAILABLE,
                 EmailAvailability.AVAILABLE, SIGNUP_TIME);
         return repository.add(newAccount).id().getAsLong();
     }
 
-    /** 이메일 인증까지 마친 계정. */
-    long active(String email, String phoneNumber) {
-        long id = pending(email, phoneNumber);
+    private long verified(long id) {
         AudienceAccount account = repository.findById(id).orElseThrow();
         account.verifyEmail(SIGNUP_TIME.plus(Duration.ofMinutes(5)));
         repository.saveEmailVerification(account);
