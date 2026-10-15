@@ -35,6 +35,13 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
                 new PasswordHash("{test}hashed-password"), SIGNED_UP_AT, StaffAccountStatus.ACTIVE, SIGNED_UP_AT));
     }
 
+    /** 그 운영진 로그인을 탈퇴한 것으로 바꾼다 — 개인정보는 없고 닉네임만 남는다. */
+    void markWithdrawn(long id) {
+        StaffAccount account = accounts.get(id);
+        accounts.put(id, StaffAccount.restoreWithdrawn(id, account.nickname(), account.signedUpAt(),
+                account.signedUpAt().plusSeconds(86_400)));
+    }
+
     @Override
     public Optional<StaffAccount> findById(long id) {
         return Optional.ofNullable(accounts.get(id));

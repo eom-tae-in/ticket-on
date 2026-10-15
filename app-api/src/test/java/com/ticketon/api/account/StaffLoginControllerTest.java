@@ -6,8 +6,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -23,12 +25,15 @@ import com.ticketon.application.account.port.in.ChangeStaffNicknameUseCase;
 import com.ticketon.application.account.port.in.LogInStaffCommand;
 import com.ticketon.application.account.port.in.LogInStaffResult;
 import com.ticketon.application.account.port.in.LogInStaffUseCase;
+import com.ticketon.application.account.port.in.WithdrawStaffAccountCommand;
+import com.ticketon.application.account.port.in.WithdrawStaffAccountUseCase;
 import com.ticketon.domain.account.AccountErrorCode;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.account.Nickname;
 import com.ticketon.domain.error.RuleViolationException;
+import com.ticketon.domain.organizer.OrganizerErrorCode;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -65,6 +70,8 @@ class StaffLoginControllerTest {
 
     private static final String NICKNAME_PATH = "/api/organizer/account/nickname";
 
+    private static final String WITHDRAWAL_PATH = "/api/organizer/account/withdrawal";
+
     private static final String LOGIN_FAILED_MESSAGE = "이메일 또는 비밀번호가 올바르지 않거나, 이메일 인증을 마치지 않은 계정입니다.";
 
     private static final AccountRef JUNGHOON = AccountRef.of(AccountKind.STAFF, 7);
@@ -80,6 +87,9 @@ class StaffLoginControllerTest {
 
     @MockitoBean
     private ChangeStaffNicknameUseCase changeStaffNicknameUseCase;
+
+    @MockitoBean
+    private WithdrawStaffAccountUseCase withdrawStaffAccountUseCase;
 
     @Nested
     @DisplayName("로그인")
@@ -271,6 +281,56 @@ class StaffLoginControllerTest {
         @DisplayName("로그인하지 않았어도 204다")
         void logOutWithoutLogin() throws Exception {
             mockMvc.perform(post(LOGOUT_PATH).with(csrf())).andExpect(status().isNoContent());
+        }
+    }
+
+    @Nested
+    @DisplayName("운영진 로그인 탈퇴")
+    class Withdraw {
+
+        @Test
+        @DisplayName("탈퇴하면 204이고 유스케이스는 세션의 주체(STAFF:7)를 받으며, 그 세션으로는 운영진 영역이 401이다")
+        void withdrawEndsSession() throws Exception {
+            given(logInStaffUseCase.logIn(any())).willReturn(new LogInStaffResult(JUNGHOON));
+            MockHttpSession session = new MockHttpSession();
+            mockMvc.perform(loginRequest(loginBody("junghoon@example.com", "junghoon1234")).session(session))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(post(WITHDRAWAL_PATH).session(session).with(csrf())).andExpect(status().isNoContent());
+
+            verify(withdrawStaffAccountUseCase).withdraw(new WithdrawStaffAccountCommand(JUNGHOON));
+            mockMvc.perform(nicknameRequest("푸른바람").session(session))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(errorBody("UNAUTHENTICATED", "로그인이 필요합니다."));
+        }
+
+        @Test
+        @DisplayName("소유자로 남은 주최자가 있어 거절되면 409 OWNER_MUST_HAND_OVER_FIRST이고 세션은 그대로다")
+        void ownerIsRejectedAndStaysLoggedIn() throws Exception {
+            given(logInStaffUseCase.logIn(any())).willReturn(new LogInStaffResult(JUNGHOON));
+            given(changeStaffNicknameUseCase.changeNickname(any())).willReturn(new ChangeStaffNicknameResult("푸른바람"));
+            willThrow(new RuleViolationException(OrganizerErrorCode.OWNER_MUST_HAND_OVER_FIRST))
+                    .given(withdrawStaffAccountUseCase).withdraw(new WithdrawStaffAccountCommand(JUNGHOON));
+            MockHttpSession session = new MockHttpSession();
+            mockMvc.perform(loginRequest(loginBody("junghoon@example.com", "junghoon1234")).session(session))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(post(WITHDRAWAL_PATH).session(session).with(csrf()))
+                    .andExpect(status().isConflict())
+                    .andExpect(errorBody("OWNER_MUST_HAND_OVER_FIRST", "먼저 소유자를 넘기거나 주최자를 닫아야 합니다."));
+
+            mockMvc.perform(nicknameRequest("푸른바람").session(session)).andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("로그인하지 않았으면 401이고, 운영진이 아닌 계정이면 403이며 유스케이스를 부르지 않는다")
+        void staffOnly() throws Exception {
+            mockMvc.perform(post(WITHDRAWAL_PATH).with(csrf()))
+                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(post(WITHDRAWAL_PATH).with(csrf()).with(loggedInAs(AccountKind.AUDIENCE, 7)))
+                    .andExpect(status().isForbidden());
+
+            verifyNoInteractions(withdrawStaffAccountUseCase);
         }
     }
 

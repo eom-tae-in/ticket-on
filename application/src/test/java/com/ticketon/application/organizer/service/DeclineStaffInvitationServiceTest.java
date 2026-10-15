@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import com.ticketon.application.organizer.port.in.InviteOperatorCommand;
+import com.ticketon.domain.account.AccountErrorCode;
 import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.error.DomainException;
 import com.ticketon.domain.error.NotFoundException;
@@ -76,6 +77,18 @@ class DeclineStaffInvitationServiceTest {
 
         assertThat(newInvitationId).isNotEqualTo(invitationId);
         assertThat(scene.invitationRepository.savedInvitations()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("탈퇴한 운영진 로그인(탈퇴 직전에 들어온 요청)은 답하지 못한다 (STAFF_WITHDRAWN) — 초대는 그대로다")
+    void withdrawnStaffCannotAnswer() {
+        scene.staffAccountRepository.markWithdrawn(DOHYUN);
+
+        assertThatExceptionOfType(RuleViolationException.class)
+                .isThrownBy(() -> service.decline(answer(DOHYUN, invitationId)))
+                .satisfies(exception -> assertThat(exception.errorCode()).isEqualTo(AccountErrorCode.STAFF_WITHDRAWN));
+        assertThat(scene.invitationRepository.findById(invitationId).orElseThrow().status())
+                .isEqualTo(StaffInvitationStatus.PENDING);
     }
 
     @Test
