@@ -131,6 +131,21 @@ class RenameOrganizerServiceTest {
     }
 
     @Test
+    @DisplayName("계정 줄을 기다리는 사이 소유자를 넘겼으면 잠근 뒤 다시 확인해 막는다 (OWNER_ONLY_ACTION) — 이름 · 이력 · 기록 · 메일 모두 그대로다")
+    void ownerTransferredWhileWaitingForLock() {
+        scene.staffAccountRepository.runOnNextLock(() -> scene.staffRepository.saveOwnershipTransfer(
+                scene.staffRepository.findByOrganizerId(scene.twelveMonths).transferOwnership(JUNGHOON, PLANNER, NOW)));
+
+        assertThatExceptionOfType(PermissionDeniedException.class)
+                .isThrownBy(() -> rename(JUNGHOON, "열두달 프로젝트"))
+                .satisfies(denied -> assertThat(denied.errorCode()).isEqualTo(OrganizerErrorCode.OWNER_ONLY_ACTION));
+
+        assertNothingChanged();
+        assertThat(scene.rowLockLog.locks()).containsExactly("계정 " + JUNGHOON + " FOR KEY SHARE",
+                "주최자 " + scene.twelveMonths + " FOR UPDATE");
+    }
+
+    @Test
     @DisplayName("운영자는 바꾸지 못한다 (OWNER_ONLY_ACTION) — 이름 · 이력 · 기록 · 메일 모두 그대로다")
     void operatorCannotRename() {
         assertThatExceptionOfType(PermissionDeniedException.class)

@@ -25,7 +25,8 @@ import java.util.stream.LongStream;
  *           탈퇴</td></tr>
  *   <tr><td>① 운영진 계정 줄 — FOR KEY SHARE</td>
  *       <td>주최자 줄을 잠그기 전에, 그 트랜잭션이 넣을 줄(이력 · 조작 기록)이 가리킬 사람을 id가 작은 쪽부터
- *           ({@link #lockForReferenceInIdOrder}). 조작하는 사람도 든다.</td>
+ *           ({@link #lockForReferenceInIdOrder}). 조작하는 사람도 든다. 계정 줄 · 주최자 줄을 잡은 뒤 명단을 다시 읽어 권한을 다시
+ *           확인한다({@link LockedOrganizer}).</td>
  *       <td>공개 정보 편집, 로고 올리기 · 지우기, 주최자명 변경</td></tr>
  *   <tr><td>② 주최자 줄 — FOR UPDATE</td>
  *       <td>그 주최자 한 줄({@code OrganizerRepository#findByIdForUpdate}). 로고를 바꾸는 저장도 유일 칸(로고 열쇠)을 고쳐 같은 세기로

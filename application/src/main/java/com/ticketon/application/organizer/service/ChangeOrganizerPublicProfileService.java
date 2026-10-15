@@ -23,12 +23,13 @@ import org.springframework.transaction.annotation.Transactional;
  * 주최자 공개 정보(소개 · SNS 링크) 편집 — 바꾸는 규칙(활동 중인 주최자만, 비우면 없는 것)은 {@link Organizer#changeIntroductionAndSnsLinks}가
  * 보고, 여기서는 권한을 확인하고 주최자를 잠가 읽어 넘긴 뒤 바뀌었으면 저장하고 조작 기록을 남긴다.
  * <p>
- * <b>한 트랜잭션이다.</b> 권한 확인 → 고치는 사람의 계정 줄 잡기 → 주최자 잠가 읽기 → 바꾸기 → 저장 → 조작 기록 순서. 지금과 같은 값이면
- * 저장도 기록도 하지 않는다.
+ * <b>한 트랜잭션이다.</b> 권한 확인 → 고치는 사람의 계정 줄 잡기 → 주최자 잠가 읽기 → 권한 다시 확인 → 바꾸기 → 저장 → 조작 기록
+ * 순서. 지금과 같은 값이면 저장도 기록도 하지 않는다.
  * <p>
  * <b>잠금 순서는 계정 줄 → 주최자 줄이다</b>({@link StaffAccountLocks}). 조작 기록이 가리킬 고치는 사람의 계정 줄에 외래 키 확인 잠금을 주최자
  * 줄보다 먼저 건다 — 그 계정 줄을 먼저 잠그고 소속 · 이력 · 조작 기록을 넣으며 주최자 줄에 외래 키 확인 잠금을 거는 흐름(소유자 넘기기, 내보내기,
- * 나가기, 소유자 이전 신청과 그 승인)과 거꾸로 맞물려 교착하지 않게(#195). 엇갈리면 늦은 쪽이 계정 줄에서 차례를 기다린다.
+ * 나가기, 소유자 이전 신청과 그 승인)과 거꾸로 맞물려 교착하지 않게(#195). 엇갈리면 늦은 쪽이 계정 줄에서 차례를 기다린다. 기다린 뒤에는 명단을 다시 읽어 권한을 다시 확인한다
+ * ({@link LockedOrganizer}) — 그 사이 내보내졌거나 나갔으면 403 NOT_ORGANIZER_STAFF로 막아, 소속이 끝난 뒤의 조작이 처리 · 기록되지 않는다.
  */
 @Service
 public class ChangeOrganizerPublicProfileService implements ChangeOrganizerPublicProfileUseCase {
@@ -57,12 +58,11 @@ public class ChangeOrganizerPublicProfileService implements ChangeOrganizerPubli
     @Transactional
     public OrganizerPublicProfileResult change(ChangeOrganizerPublicProfileCommand command) {
         Instant now = clock.instant();
-        StaffPermissionResult permission = checkStaffPermissionUseCase.check(
-                new CheckStaffPermissionQuery(command.actingStaff(), StaffAction.EDIT_PUBLIC_PROFILE));
+        LockedOrganizer locked = LockedOrganizer.lock(checkStaffPermissionUseCase, staffAccountRepository,
+                organizerRepository, new CheckStaffPermissionQuery(command.actingStaff(), StaffAction.EDIT_PUBLIC_PROFILE));
+        StaffPermissionResult permission = locked.permission();
+        Organizer organizer = locked.organizer();
         long organizerId = permission.organizerId();
-        StaffAccountLocks.lockForReferenceInIdOrder(staffAccountRepository, permission.staffAccountId());
-        Organizer organizer = organizerRepository.findByIdForUpdate(organizerId)
-                .orElseThrow(() -> new IllegalStateException("권한을 확인한 주최자가 없습니다: " + organizerId));
 
         if (organizer.changeIntroductionAndSnsLinks(command.introduction(), command.snsLinks())) {
             organizerRepository.savePublicProfile(organizer);

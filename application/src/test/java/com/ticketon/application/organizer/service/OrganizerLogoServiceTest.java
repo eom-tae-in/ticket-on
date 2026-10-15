@@ -91,6 +91,21 @@ class OrganizerLogoServiceTest {
         }
 
         @Test
+        @DisplayName("계정 줄을 기다리는 사이 내보내졌으면 잠근 뒤 다시 확인해 막는다 (NOT_ORGANIZER_STAFF) — 파일 · 로고 · 기록이 남지 않는다")
+        void removedWhileWaitingForLock() {
+            scene.staffAccountRepository.runOnNextLock(() -> scene.staffRepository.saveEnded(
+                    scene.staffRepository.findByOrganizerId(scene.twelveMonths).removeOperator(JUNGHOON, PLANNER, NOW)));
+
+            assertThatExceptionOfType(PermissionDeniedException.class)
+                    .isThrownBy(() -> upload(PLANNER, squarePng()))
+                    .satisfies(denied -> assertThat(denied.errorCode()).isEqualTo(OrganizerErrorCode.NOT_ORGANIZER_STAFF));
+            assertThat(scene.logoStorage.storedKeys()).isEmpty();
+            assertThat(scene.organizerRepository.findById(scene.twelveMonths).orElseThrow().publicProfile().hasLogo())
+                    .isFalse();
+            assertThat(scene.recordRepository.records()).isEmpty();
+        }
+
+        @Test
         @DisplayName("JPEG는 jpg 확장자로 저장한다")
         void jpegKeepsJpgExtension() {
             OrganizerPublicProfileResult result = upload(JUNGHOON,
@@ -185,6 +200,22 @@ class OrganizerLogoServiceTest {
                     "계정 " + JUNGHOON + " FOR KEY SHARE", "주최자 " + scene.twelveMonths + " FOR UPDATE",
                     "계정 " + PLANNER + " FOR KEY SHARE", "주최자 " + scene.twelveMonths + " FOR UPDATE");
             assertThat(scene.staffAccountRepository.lockedAccountIds()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("계정 줄을 기다리는 사이 내보내졌으면 잠근 뒤 다시 확인해 막는다 (NOT_ORGANIZER_STAFF) — 로고와 그 파일은 그대로다")
+        void removedWhileWaitingForLock() {
+            upload(JUNGHOON, squarePng());
+            scene.staffAccountRepository.runOnNextLock(() -> scene.staffRepository.saveEnded(
+                    scene.staffRepository.findByOrganizerId(scene.twelveMonths).removeOperator(JUNGHOON, PLANNER, NOW)));
+
+            assertThatExceptionOfType(PermissionDeniedException.class)
+                    .isThrownBy(() -> remove(PLANNER))
+                    .satisfies(denied -> assertThat(denied.errorCode()).isEqualTo(OrganizerErrorCode.NOT_ORGANIZER_STAFF));
+            assertThat(scene.logoStorage.storedKeys()).containsExactly(FIRST_TOKEN + ".png");
+            assertThat(scene.organizerRepository.findById(scene.twelveMonths).orElseThrow().publicProfile().logo())
+                    .isEqualTo(new OrganizerLogo(FIRST_TOKEN + ".png"));
+            assertThat(scene.recordRepository.records()).hasSize(1);
         }
 
         @Test
