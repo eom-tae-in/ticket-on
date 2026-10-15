@@ -66,6 +66,21 @@ public enum OrganizerErrorCode implements ErrorCode {
      */
     OWNERSHIP_RECEIVER_NOT_OPERATOR("소유자는 이 주최자의 운영자에게만 넘길 수 있습니다. 바깥 사람이면 먼저 운영자로 초대해 주세요."),
 
+    /**
+     * 소유자를 넘기려 했는데 그 사이 넘기는 사람의 소유자 소속이 먼저 끝났다 — 같은 소유자가 거의 동시에 두 번 넘겨 한쪽이 먼저 저장된 경우다.
+     * 소유자는 언제나 1명이라(docs/01 "소유자는 1명입니다") 두 넘기기 가운데 하나만 남는다. 소유자 넘기기 저장이 진 쪽이 받는다.
+     */
+    OWNERSHIP_ALREADY_TRANSFERRED("이미 소유자가 바뀌었습니다."),
+
+    /** 없는 소유자 변경 이력을 관리자가 확인하려 했다. */
+    OWNERSHIP_CHANGE_NOT_FOUND("소유자 변경 기록을 찾을 수 없습니다."),
+
+    /**
+     * 이미 확인한 소유자 변경을 관리자가 다시 확인하려 했다. 확인은 한 번이다({@link OwnershipChange#confirm}). 두 관리자가 거의 동시에 같은
+     * 변경을 확인해 한쪽이 먼저 처리한 경우도 이 코드다.
+     */
+    OWNERSHIP_CHANGE_ALREADY_CONFIRMED("이미 확인한 소유자 변경입니다."),
+
     /** 그 주최자의 운영자가 아닌 사람을 내보내려 했다. 소유자는 내보낼 수 없다 — 먼저 소유자를 넘긴다. */
     NOT_AN_OPERATOR("이 주최자의 운영자가 아닙니다."),
 

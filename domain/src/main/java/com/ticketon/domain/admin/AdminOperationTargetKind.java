@@ -11,5 +11,8 @@ public enum AdminOperationTargetKind {
     ADMIN_ACCOUNT,
 
     /** 주최자 신청서 — 심사받는 주최자는 신청서가 가리킨다. */
-    ORGANIZER_APPLICATION
+    ORGANIZER_APPLICATION,
+
+    /** 소유자 변경 이력 — 소유자를 넘긴 한 건. */
+    OWNERSHIP_CHANGE
 }

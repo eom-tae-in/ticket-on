@@ -5,6 +5,7 @@ package com.ticketon.domain.account;
  * <p>
  * docs/01 "관리자 2등급" 표의 칸을 <b>한 항목씩 그대로</b> 나눠 옮겼다. 한 항목에 여러 일이 묶여 있으면(예: "행사 페이지 내리기 · 다시 올리기")
  * 일마다 하나씩 둔다. '관리자' 줄의 일은 두 등급 모두 하고, '최고 관리자' 줄에 더해진 둘(영구 정지, 관리자 계정 발급)만 최고 관리자가 한다.
+ * 표 밖에서 다른 문서가 관리자에게 맡긴 일은 맨 아래에 따로 모았다.
  * <p>
  * 기준은 <b>되돌릴 수 있는가</b>다. 영구 정지와 계정 발급은 아무나 하면 안 되지만, 나머지는 관리자를 뽑을 때 이미 신뢰한 사람이다(docs/01).
  * 심사와 운영을 더 나누지 않는다(docs/99 B "관리자 등급 세분화"). 누가 할 수 있는지는 {@link AdminGrade#can}이 답한다.
@@ -82,7 +83,15 @@ public enum AdminAction {
     PERMANENTLY_SUSPEND_ORGANIZER(true),
 
     /** 관리자 계정 발급. */
-    ISSUE_ADMIN_ACCOUNT(true);
+    ISSUE_ADMIN_ACCOUNT(true),
+
+    // ── 표 밖: 다른 문서가 관리자에게 맡긴 일 (두 등급 모두 — 되돌릴 수 없는 일이 아니다)
+
+    /**
+     * 소유자 변경 사후 확인 — 소유자가 바뀌면 관리자에게도 알리고(docs/12 "소유자가 바뀌면 관리자에게도 알립니다"), 관리자는 알림 대신 처리
+     * 목록으로 받는다(docs/12 "관리자 대상"). 관리자를 거치지 않고 이미 바뀐 일이라 승인이 아니라 확인이고, 확인하면 처리 목록에서 빠진다.
+     */
+    CONFIRM_OWNERSHIP_CHANGE(false);
 
     private final boolean superAdminOnly;
 
