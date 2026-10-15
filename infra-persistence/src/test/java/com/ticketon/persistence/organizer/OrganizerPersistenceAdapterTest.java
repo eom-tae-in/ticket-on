@@ -14,6 +14,7 @@ import com.ticketon.domain.organizer.OrganizerLogo;
 import com.ticketon.domain.organizer.OrganizerName;
 import com.ticketon.domain.organizer.OrganizerPublicProfile;
 import com.ticketon.domain.organizer.OrganizerStatus;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -35,7 +36,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 진짜 PostgreSQL에 마이그레이션(V8 주최자, V16 공개 정보)을 올리고 새 주최자 저장, 다시 읽기, 승인 저장(심사 중일 때만), 공개 정보 저장
- * (소개 · SNS 링크 · 로고 열쇠)을 본다.
+ * (소개 · SNS 링크 · 로고 열쇠), 주최자명 저장을 본다.
  * Docker가 없는 환경에서는 건너뛴다.
  */
 @Testcontainers(disabledWithoutDocker = true)
@@ -257,6 +258,38 @@ class OrganizerPersistenceAdapterTest {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    @DisplayName("바꾼 주최자명을 저장하면 이름만 바뀐다 — 앞뒤 공백을 걷은 이름이 남고 상태 · 공개 정보는 그대로다")
+    void savesName() {
+        long id = activeOrganizer("극단 열두달");
+        Organizer organizer = adapter.findById(id).orElseThrow();
+        organizer.changeIntroductionAndSnsLinks("소개", List.of(ExternalLink.of("https://a.example.com")));
+        organizer.changeLogo(LOGO);
+        adapter.savePublicProfile(organizer);
+        Organizer locked = adapter.findByIdForUpdate(id).orElseThrow();
+        locked.rename(OrganizerName.of(" 열두달 프로젝트 "), 1, Instant.parse("2026-10-15T01:00:00Z"));
+
+        adapter.saveName(locked);
+
+        Organizer found = adapter.findById(id).orElseThrow();
+        assertThat(found.name()).isEqualTo(OrganizerName.of("열두달 프로젝트"));
+        assertThat(dsl.selectFrom(ORGANIZER).where(ORGANIZER.ID.eq(id)).fetchSingle().getName()).isEqualTo("열두달 프로젝트");
+        assertThat(found.status()).isEqualTo(OrganizerStatus.ACTIVE);
+        assertThat(found.publicProfile()).isEqualTo(new OrganizerPublicProfile("소개",
+                List.of(ExternalLink.of("https://a.example.com")), LOGO));
+    }
+
+    @Test
+    @DisplayName("저장 전 주최자나 표에 없는 주최자의 이름은 저장하지 않는다")
+    void requiresStoredOrganizerForName() {
+        Organizer unsaved = Organizer.underReview(OrganizerName.of("늦여름"));
+        Organizer missing = Organizer.restore(999_999, OrganizerName.of("늦여름"), OrganizerStatus.ACTIVE,
+                OrganizerPublicProfile.empty());
+
+        assertThatIllegalArgumentException().isThrownBy(() -> adapter.saveName(unsaved));
+        assertThatIllegalArgumentException().isThrownBy(() -> adapter.saveName(missing));
     }
 
     @Test

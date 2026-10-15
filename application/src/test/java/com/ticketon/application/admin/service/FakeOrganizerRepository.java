@@ -57,6 +57,11 @@ final class FakeOrganizerRepository implements OrganizerRepository {
     }
 
     @Override
+    public void saveName(Organizer renamedOrganizer) {
+        throw new UnsupportedOperationException("심사 화면·승인·반려·사후 확인에서는 주최자명을 저장하지 않습니다");
+    }
+
+    @Override
     public void saveApproval(Organizer approvedOrganizer) {
         long id = approvedOrganizer.id().orElseThrow();
         if (statuses.get(id) != OrganizerStatus.UNDER_REVIEW) {

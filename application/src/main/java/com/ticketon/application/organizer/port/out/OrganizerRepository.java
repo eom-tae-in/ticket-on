@@ -9,6 +9,7 @@ import java.util.Optional;
  * <p>
  * 새 주최자 신청을 받으면 그 주최자를 심사 중으로 만들어 저장한다(docs/14 "전체 관계도" — 주최자 상태: 심사 중 / 활동 / 닫힘 / 영구 정지).
  * 승인되면 활동으로 바꾼다. 주최자는 지우지 않는다 — 닫혀도 '닫힘'으로 남고(docs/11 "데이터 보관"), 신청이 반려돼도 심사 중으로 남는다.
+ * 주최자명은 소유자가 바꾸면 그 자리에서 고친다 — 바꾸기 전 이름은 주최자명 변경 이력({@link OrganizerNameChangeRepository})에 남는다.
  * 공개 정보(소개 · SNS 링크 · 로고 열쇠)도 주최자와 함께 저장한다. 로고 파일 자체는 파일 저장소({@link OrganizerLogoStoragePort})에 있고
  * 여기에는 그 열쇠만 둔다.
  */
@@ -49,4 +50,13 @@ public interface OrganizerRepository {
      * @throws IllegalArgumentException 저장 전 주최자이거나 표에 없는 주최자이면
      */
     void savePublicProfile(Organizer organizer);
+
+    /**
+     * 바꾼 주최자명을 저장한다. 상태 · 공개 정보는 건드리지 않는다. {@link #findByIdForUpdate}로 줄을 잠그고 읽은 뒤 부른다 — 두 요청이 거의
+     * 동시에 이름을 바꿔도 뒤의 요청은 앞의 요청이 바꾼 이름을 읽고 바꾸므로, 이력의 "바꾸기 전 이름"이 실제로 바꾸기 전 이름과 어긋나지 않는다.
+     *
+     * @param renamedOrganizer {@link Organizer#rename}으로 이름을 바꾼 저장된 주최자
+     * @throws IllegalArgumentException 저장 전 주최자이거나 표에 없는 주최자이면
+     */
+    void saveName(Organizer renamedOrganizer);
 }
