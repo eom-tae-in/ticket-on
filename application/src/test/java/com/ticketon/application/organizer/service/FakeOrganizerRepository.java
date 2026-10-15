@@ -13,9 +13,19 @@ import java.util.Optional;
 final class FakeOrganizerRepository implements OrganizerRepository {
 
     private final List<Organizer> organizers = new ArrayList<>();
+    private final RowLockLog rowLockLog;
     private int publicProfileSaves;
     private int nameSaves;
     private boolean failingPublicProfileSaves;
+
+    FakeOrganizerRepository() {
+        this(new RowLockLog());
+    }
+
+    /** 다른 메모리 저장소와 같은 잠금 기록에 주최자 줄 잠금을 적는다 — 줄 사이의 잠금 순서를 보려고. */
+    FakeOrganizerRepository(RowLockLog rowLockLog) {
+        this.rowLockLog = rowLockLog;
+    }
 
     @Override
     public Organizer add(Organizer newOrganizer) {
@@ -45,8 +55,10 @@ final class FakeOrganizerRepository implements OrganizerRepository {
         return organizers.stream().filter(organizer -> organizer.id().orElseThrow() == id).findFirst();
     }
 
+    /** 메모리 저장소에는 다른 트랜잭션이 없어 잠글 것이 없다 — 잠금 기록에 차례만 남기고 지금 저장된 값을 돌려준다. */
     @Override
     public Optional<Organizer> findByIdForUpdate(long id) {
+        rowLockLog.record("주최자 " + id + " FOR UPDATE");
         return findById(id);
     }
 

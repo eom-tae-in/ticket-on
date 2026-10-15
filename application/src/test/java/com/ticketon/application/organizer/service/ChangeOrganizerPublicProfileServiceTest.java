@@ -79,6 +79,16 @@ class ChangeOrganizerPublicProfileServiceTest {
     }
 
     @Test
+    @DisplayName("잠금 순서 — 고치는 운영진의 계정 줄에 외래 키 확인 잠금을 주최자 줄보다 먼저 건다 (계정 줄 → 주최자 줄, #195)")
+    void locksEditorAccountBeforeOrganizer() {
+        change(PLANNER, scene.twelveMonths, INTRODUCTION, LINKS);
+
+        assertThat(scene.rowLockLog.locks()).containsExactly("계정 " + PLANNER + " FOR KEY SHARE",
+                "주최자 " + scene.twelveMonths + " FOR UPDATE");
+        assertThat(scene.staffAccountRepository.lockedAccountIds()).isEmpty();
+    }
+
+    @Test
     @DisplayName("소개를 비우고 링크를 빼면 지운다")
     void clears() {
         change(JUNGHOON, scene.twelveMonths, INTRODUCTION, LINKS);
@@ -112,6 +122,7 @@ class ChangeOrganizerPublicProfileServiceTest {
                 .isThrownBy(() -> change(YEOREUM, scene.twelveMonths, INTRODUCTION, LINKS));
         assertThat(scene.organizerRepository.publicProfileSaves()).isZero();
         assertThat(scene.recordRepository.records()).isEmpty();
+        assertThat(scene.rowLockLog.locks()).isEmpty();
     }
 
     @Test

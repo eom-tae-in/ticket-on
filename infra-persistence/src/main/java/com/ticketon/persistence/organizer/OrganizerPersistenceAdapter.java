@@ -29,7 +29,9 @@ import org.springframework.stereotype.Component;
  * <p>
  * 승인 저장은 {@code UPDATE … WHERE status = 'UNDER_REVIEW'}로 한다. 바뀐 줄이 없으면 읽은 뒤 다른 처리가 먼저 상태를 바꾼 것이라 충돌이다.
  * 공개 정보 편집과 주최자명 변경은 {@link #findByIdForUpdate}({@code SELECT … FOR UPDATE})로 줄을 잠그고 읽은 뒤 저장하므로, 저장은 조건
- * 없이 그 주최자의 공개 정보 칸 · 이름 칸만 바꾼다.
+ * 없이 그 주최자의 공개 정보 칸 · 이름 칸만 바꾼다. 로고 열쇠는 유일 칸이라 로고를 바꾸는 저장은 줄을 FOR UPDATE와 같은 세기로 잠근다 — 이
+ * 주최자를 가리키는 줄을 넣는 외래 키 확인 잠금(FOR KEY SHARE)과 부딪힌다. 그래서 줄을 잠그는 흐름은 운영진 계정 줄을 먼저 잡는다(잠금 순서 —
+ * application의 StaffAccountLocks).
  */
 @Component
 public class OrganizerPersistenceAdapter implements OrganizerRepository {
