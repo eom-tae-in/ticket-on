@@ -6,6 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ticketon.application.account.port.in.WithdrawStaffAccountCommand;
 import com.ticketon.application.account.port.in.WithdrawStaffAccountUseCase;
+import com.ticketon.application.admin.port.in.ApproveOrganizerApplicationCommand;
+import com.ticketon.application.admin.port.in.ApproveOrganizerApplicationUseCase;
+import com.ticketon.application.admin.port.in.RejectOrganizerApplicationCommand;
+import com.ticketon.application.admin.port.in.RejectOrganizerApplicationUseCase;
 import com.ticketon.application.organizer.port.in.AcceptStaffInvitationUseCase;
 import com.ticketon.application.organizer.port.in.ActingStaff;
 import com.ticketon.application.organizer.port.in.AnswerStaffInvitationCommand;
@@ -18,6 +22,7 @@ import com.ticketon.domain.error.DomainException;
 import com.ticketon.domain.error.ErrorCode;
 import com.ticketon.domain.error.RuleViolationException;
 import com.ticketon.domain.organizer.OrganizerErrorCode;
+import com.ticketon.domain.organizer.RejectionReason;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -38,12 +43,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL로 운영진 로그인 탈퇴와 소속을 바꾸는 일(초대 수락, 소유자 넘기기)이 엇갈리는 순간을 고정한다 — 둘 다 계정 줄을 맨 먼저 잠그므로
+ * 진짜 PostgreSQL로 운영진 로그인 탈퇴와 소속을 바꾸는 일(초대 수락, 소유자 넘기기, 주최자 신청 승인)이 엇갈리는 순간을 고정한다 — 둘 다 계정 줄을 맨 먼저 잠그므로
  * 탈퇴가 커밋되기 전에 들어온 쪽은 탈퇴가 끝날 때까지 기다렸다가 탈퇴한 계정을 보고 멈춘다. 탈퇴한 계정에 지금 소속이 남지 않는다(docs/01 "탈퇴와
  * 주최자 닫기"). Docker가 없는 환경에서는 건너뛴다.
  * <p>
- * 탈퇴를 한 트랜잭션 안에서 마친 뒤 커밋하지 않고 붙잡아 두고, 다른 스레드에서 수락 · 넘기기를 부른다. 그쪽이 잠금을 기다리기 시작한 것을
- * PostgreSQL의 잠금 표(pg_locks)로 확인한 뒤 탈퇴를 커밋한다. 운영진 로그인 · 주최자 · 소속 · 초대는 표에 바로 넣는다.
+ * 탈퇴를 한 트랜잭션 안에서 마친 뒤 커밋하지 않고 붙잡아 두고, 다른 스레드에서 수락 · 넘기기 · 승인을 부른다. 그쪽이 잠금을 기다리기 시작한 것을
+ * PostgreSQL의 잠금 표(pg_locks)로 확인한 뒤 탈퇴를 커밋한다. 운영진 로그인 · 주최자 · 소속 · 초대 · 신청서 · 관리자는 표에 바로 넣는다.
  */
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
@@ -68,6 +73,12 @@ class StaffWithdrawalRaceIntegrationTest {
 
     @Autowired
     private TransferOwnershipUseCase transferOwnershipUseCase;
+
+    @Autowired
+    private ApproveOrganizerApplicationUseCase approveOrganizerApplicationUseCase;
+
+    @Autowired
+    private RejectOrganizerApplicationUseCase rejectOrganizerApplicationUseCase;
 
     private String suffix;
     private long twelveMonths;
@@ -118,6 +129,28 @@ class StaffWithdrawalRaceIntegrationTest {
                 .isEqualTo(junghoon);
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM ownership_change WHERE organizer_id = ?", Long.class,
                 twelveMonths)).isZero();
+    }
+
+    @Test
+    @DisplayName("신청자의 탈퇴가 커밋되기 전에 들어온 주최자 신청 승인은 탈퇴를 기다렸다가 APPLICANT_WITHDRAWN으로 멈춘다 — 반려는 할 수 있다")
+    void approvalWaitsForApplicantWithdrawalAndStops() throws Exception {
+        long applicant = storeStaff("최여름", "여름" + suffix, "yeoreum-" + suffix + "@example.com");
+        long underReview = storeOrganizer("늦여름 " + suffix, "UNDER_REVIEW");
+        long applicationId = storeApplication(underReview, applicant, "늦여름 " + suffix);
+        AccountRef admin = AccountRef.of(AccountKind.ADMIN, storeAdmin("admin-" + suffix + "@ticket-on.example"));
+
+        Future<?> approval = contendWithHeldWithdrawal(applicant, () -> approveOrganizerApplicationUseCase.approve(
+                new ApproveOrganizerApplicationCommand(admin, applicationId)));
+
+        assertStoppedWith(approval, OrganizerErrorCode.APPLICANT_WITHDRAWN);
+        assertThat(statusOf(applicant)).isEqualTo("WITHDRAWN");
+        assertThat(activeMembershipCount(applicant)).isZero();
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM organizer WHERE id = ?", String.class, underReview))
+                .isEqualTo("UNDER_REVIEW");
+        rejectOrganizerApplicationUseCase.reject(new RejectOrganizerApplicationCommand(admin, applicationId,
+                RejectionReason.of("연락이 닿지 않음")));
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM organizer_application WHERE id = ?", String.class,
+                applicationId)).isEqualTo("REJECTED");
     }
 
     /**
@@ -207,8 +240,37 @@ class StaffWithdrawalRaceIntegrationTest {
     }
 
     private long storeOrganizer(String name) {
-        Long id = jdbcTemplate.queryForObject("INSERT INTO organizer (name, status) VALUES (?, 'ACTIVE') RETURNING id",
-                Long.class, name);
+        return storeOrganizer(name, "ACTIVE");
+    }
+
+    private long storeOrganizer(String name, String status) {
+        Long id = jdbcTemplate.queryForObject("INSERT INTO organizer (name, status) VALUES (?, ?) RETURNING id",
+                Long.class, name, status);
+        assertThat(id).isNotNull();
+        return id;
+    }
+
+    /** 심사 중인 비사업자 주최자 신청서 한 줄 — 신청서 제출(#20)을 거치지 않고 표에 바로 넣는다. */
+    private long storeApplication(long organizerId, long applicantStaffAccountId, String name) {
+        Long id = jdbcTemplate.queryForObject("""
+                INSERT INTO organizer_application (organizer_id, applicant_staff_account_id, status, organizer_type, name,
+                                                   contact_phone_number, email, event_history_or_plan, business_status,
+                                                   settlement_bank_name, settlement_account_number,
+                                                   settlement_account_holder, submitted_at)
+                VALUES (?, ?, 'UNDER_REVIEW', 'GROUP', ?, '010-2345-6789', 'contact@example.com',
+                        '소극장 정기공연을 해마다 두 번 올립니다.', 'NON_BUSINESS', '국민은행', '123456-78-901234', '최여름',
+                        now() - interval '1 day')
+                RETURNING id""", Long.class, organizerId, applicantStaffAccountId, name);
+        assertThat(id).isNotNull();
+        return id;
+    }
+
+    /** 관리자 계정 한 줄 — 이 테스트는 로그인하지 않아 비밀번호 해시는 아무 값이다. */
+    private long storeAdmin(String email) {
+        Long id = jdbcTemplate.queryForObject("""
+                INSERT INTO admin_account (grade, email, email_lowercase, password_hash, issued_at)
+                VALUES ('ADMIN', ?, lower(?), '{test}hashed-password', now())
+                RETURNING id""", Long.class, email, email);
         assertThat(id).isNotNull();
         return id;
     }

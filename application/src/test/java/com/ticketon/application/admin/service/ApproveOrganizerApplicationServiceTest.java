@@ -48,6 +48,7 @@ class ApproveOrganizerApplicationServiceTest {
     private static final long JUNGHOON = 1L;
 
     private final FakeAdminAccountRepository adminAccountRepository = new FakeAdminAccountRepository();
+    private final FakeStaffAccountRepository staffAccountRepository = new FakeStaffAccountRepository();
     private final FakeOrganizerApplicationRepository applicationRepository = new FakeOrganizerApplicationRepository();
     private final FakeOrganizerRepository organizerRepository = new FakeOrganizerRepository();
     private final FakeOrganizerStaffRepository staffRepository = new FakeOrganizerStaffRepository();
@@ -56,7 +57,7 @@ class ApproveOrganizerApplicationServiceTest {
     private final MutableClock clock = MutableClock.at(NOW);
 
     private final ApproveOrganizerApplicationService service = new ApproveOrganizerApplicationService(
-            adminAccountRepository, applicationRepository, organizerRepository, staffRepository,
+            adminAccountRepository, staffAccountRepository, applicationRepository, organizerRepository, staffRepository,
             new AdminOperationRecorder(recordRepository), sendNotificationUseCase, clock);
 
     private long dohyun;
@@ -66,6 +67,7 @@ class ApproveOrganizerApplicationServiceTest {
     @BeforeEach
     void storeApplicationUnderReview() {
         dohyun = storedAdmin("dohyun@ticket-on.example", AdminGrade.ADMIN);
+        staffAccountRepository.storeActive(JUNGHOON, "박정훈", "조용한고래", "junghoon@example.com");
         organizerId = organizerRepository.store("극단 열두달", OrganizerStatus.UNDER_REVIEW);
         applicationId = applicationRepository.store(organizerId, JUNGHOON, OrganizerApplicationForms.twelveMonths(),
                 SUBMITTED_AT);
@@ -85,6 +87,14 @@ class ApproveOrganizerApplicationServiceTest {
             assertThat(saved.reviewedAt()).contains(clock.instant());
             assertThat(saved.rejectionReason()).isEmpty();
             assertThat(organizerRepository.statusOf(organizerId)).isEqualTo(OrganizerStatus.ACTIVE);
+        }
+
+        @Test
+        @DisplayName("신청한 사람의 운영진 계정 줄을 잠그고 읽는다 — 같은 사람의 탈퇴와 엇갈리지 않게(계정 줄 → 소속 줄)")
+        void locksApplicantAccount() {
+            service.approve(command(dohyun));
+
+            assertThat(staffAccountRepository.lockedAccountIds()).containsExactly(JUNGHOON);
         }
 
         @Test
@@ -173,6 +183,15 @@ class ApproveOrganizerApplicationServiceTest {
             assertThat(staffRepository.findByOrganizerId(organizerId).memberships()).isEmpty();
             assertThat(recordRepository.records()).isEmpty();
             assertThat(sendNotificationUseCase.sentCommands()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("신청한 운영진 로그인이 탈퇴했으면 규칙 위반 APPLICANT_WITHDRAWN — 탈퇴한 계정이 소유자가 되지 않는다")
+        void applicantWithdrawn() {
+            staffAccountRepository.markWithdrawn(JUNGHOON);
+
+            assertRejectedWith(RuleViolationException.class, OrganizerErrorCode.APPLICANT_WITHDRAWN);
+            assertNothingChanged();
         }
 
         @Test

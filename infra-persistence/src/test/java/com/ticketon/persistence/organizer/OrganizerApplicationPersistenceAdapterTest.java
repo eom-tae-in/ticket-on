@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ticketon.common.KoreanTime;
 import com.ticketon.domain.account.EmailAddress;
+import com.ticketon.domain.account.StaffAccount;
 import com.ticketon.domain.error.ConflictException;
 import com.ticketon.domain.organizer.ApplicantReviewState;
 import com.ticketon.domain.organizer.BusinessDeclaration;
@@ -27,6 +28,7 @@ import com.ticketon.domain.organizer.OrganizerType;
 import com.ticketon.domain.organizer.RejectionReason;
 import com.ticketon.domain.organizer.SettlementAccount;
 import com.ticketon.domain.organizer.TelephoneNumber;
+import com.ticketon.persistence.account.StaffAccountPersistenceAdapter;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -260,7 +262,7 @@ class OrganizerApplicationPersistenceAdapterTest {
         void savesApproval() {
             long id = submitTwelveMonths();
             OrganizerApplication application = adapter.findById(id).orElseThrow();
-            application.approve(organizerOf(application), REVIEWED_AT);
+            application.approve(organizerOf(application), applicantOf(application), REVIEWED_AT);
 
             adapter.saveReview(application);
 
@@ -293,7 +295,7 @@ class OrganizerApplicationPersistenceAdapterTest {
             long id = submitTwelveMonths();
             OrganizerApplication application = adapter.findById(id).orElseThrow();
             reject(id, "연락이 닿지 않음");
-            application.approve(organizerOf(application), REVIEWED_AT);
+            application.approve(organizerOf(application), applicantOf(application), REVIEWED_AT);
 
             assertThatExceptionOfType(ConflictException.class)
                     .isThrownBy(() -> adapter.saveReview(application))
@@ -350,7 +352,7 @@ class OrganizerApplicationPersistenceAdapterTest {
                     bothRead.await(10, TimeUnit.SECONDS);
                     if (approve) {
                         application.approve(new OrganizerPersistenceAdapter(transaction.dsl())
-                                .findById(application.organizerId()).orElseThrow(), REVIEWED_AT);
+                                .findById(application.organizerId()).orElseThrow(), applicantOf(application), REVIEWED_AT);
                     } else {
                         application.reject(RejectionReason.of("연락이 닿지 않음"), REVIEWED_AT);
                     }
@@ -362,6 +364,10 @@ class OrganizerApplicationPersistenceAdapterTest {
 
         private Organizer organizerOf(OrganizerApplication application) {
             return new OrganizerPersistenceAdapter(dsl).findById(application.organizerId()).orElseThrow();
+        }
+
+        private StaffAccount applicantOf(OrganizerApplication application) {
+            return new StaffAccountPersistenceAdapter(dsl).findById(application.applicantStaffAccountId()).orElseThrow();
         }
     }
 

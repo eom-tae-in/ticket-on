@@ -50,8 +50,9 @@ public class OrganizerApplicationReviewController {
     }
 
     @Operation(summary = "승인", description = "신청서를 승인한다. 주최자가 활동이 되고 신청한 사람이 소유자가 되며, 신청서의 이메일로 승인 메일이 "
-            + "간다. 이미 승인·반려한 신청이거나 다른 관리자가 먼저 처리했으면 409 APPLICATION_ALREADY_REVIEWED, 없는 신청서면 404 "
-            + "APPLICATION_NOT_FOUND. 승인은 관리자 조작 기록에 남는다.")
+            + "간다. 이미 승인·반려한 신청이거나 다른 관리자가 먼저 처리했으면 409 APPLICATION_ALREADY_REVIEWED, 신청한 운영진 로그인이 "
+            + "탈퇴했으면 409 APPLICANT_WITHDRAWN(반려는 할 수 있다), 없는 신청서면 404 APPLICATION_NOT_FOUND. 승인은 관리자 조작 기록에 "
+            + "남는다.")
     @PostMapping("/approval")
     public ApproveOrganizerApplicationResponse approve(@CurrentAccount AccountRef account,
             @PathVariable @Positive(message = INVALID_ID_MESSAGE) long applicationId) {

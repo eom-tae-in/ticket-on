@@ -16,8 +16,8 @@ public interface ApproveOrganizerApplicationUseCase {
 
     /**
      * @throws NotFoundException      없는 신청서면(APPLICATION_NOT_FOUND)
-     * @throws RuleViolationException 이미 승인·반려한 신청서면(APPLICATION_ALREADY_REVIEWED), 주최자가 심사 중이 아니면
-     *                                (ORGANIZER_NOT_UNDER_REVIEW)
+     * @throws RuleViolationException 이미 승인·반려한 신청서면(APPLICATION_ALREADY_REVIEWED), 신청한 운영진 로그인이 탈퇴했으면
+     *                                (APPLICANT_WITHDRAWN — 반려는 할 수 있다), 주최자가 심사 중이 아니면(ORGANIZER_NOT_UNDER_REVIEW)
      * @throws ConflictException      다른 관리자가 거의 동시에 먼저 처리했으면(APPLICATION_ALREADY_REVIEWED)
      */
     ApproveOrganizerApplicationResult approve(ApproveOrganizerApplicationCommand command);
