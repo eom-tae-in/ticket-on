@@ -10,7 +10,7 @@ import java.util.Objects;
  * @param name                 이름
  * @param email                이메일(가입할 때 적은 그대로)
  * @param phoneNumber          전화번호 — 숫자만 남긴 11자리
- * @param suspended            이용 정지 중인지. 정지 중에는 새 예매·변경·신고가 막힌다(docs/01 "관객 이용 정지").
+ * @param suspended            이용 정지 중인지. 정지 중에는 새 예매·변경·신고·전화번호 변경이 막힌다(docs/01 "관객 이용 정지").
  * @param linkedOAuthProviders 연결된 카카오·구글 — 제공자 선언 순서(카카오, 구글)대로
  */
 public record GetMyAudienceAccountResult(String name, String email, String phoneNumber, boolean suspended,

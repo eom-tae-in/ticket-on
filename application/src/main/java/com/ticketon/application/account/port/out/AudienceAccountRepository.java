@@ -1,6 +1,7 @@
 package com.ticketon.application.account.port.out;
 
 import com.ticketon.domain.account.AudienceAccount;
+import com.ticketon.domain.account.ConsentRecord;
 import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.account.EmailAvailability;
 import com.ticketon.domain.account.PhoneNumber;
@@ -11,8 +12,9 @@ import java.util.Optional;
 /**
  * 관객 계정 저장소 — 나가는 포트.
  * <p>
- * 번호·이메일을 쓸 수 있는지는 저장소가 확인해 가입 규칙({@link AudienceAccount#signUp})에 넘긴다. 확인과 저장 사이에 같은 번호나
- * 이메일로 다른 가입이 먼저 저장될 수 있으므로, 저장할 때 다시 막는다({@link #add}).
+ * 번호·이메일을 쓸 수 있는지는 저장소가 확인해 가입 규칙({@link AudienceAccount#signUp})과 번호 변경 규칙
+ * ({@link AudienceAccount#changePhoneNumber})에 넘긴다. 확인과 저장 사이에 같은 번호나 이메일로 다른 가입·번호 변경이 먼저 저장될 수
+ * 있으므로, 저장할 때 다시 막는다({@link #add}, {@link #savePhoneNumber}).
  * <p>
  * '가입한 계정'은 탈퇴하지 않은 계정 — 인증 대기·활동·이용 정지 — 이다. 인증 대기 계정도 번호와 이메일을 쥔다
  * (docs/01 "같은 번호로 가입한 계정이 있으면 가입 불가", "일반 탈퇴 — 번호가 풀려 다시 가입할 수 있음").
@@ -40,6 +42,14 @@ public interface AudienceAccountRepository {
     Optional<AudienceAccount> findById(long id);
 
     /**
+     * 그 계정을 이 트랜잭션이 끝날 때까지 잠그고 읽는다. 다른 트랜잭션이 잠가 두었으면 끝날 때까지 기다렸다가, 그 트랜잭션이 남긴 것까지 읽는다.
+     * <p>
+     * 마케팅 수신 동의를 바꿀 때 쓴다 — 같은 관객이 거의 동시에 두 번 철회해도 뒤에 온 요청은 앞 요청이 더한 줄을 보고 아무것도 더하지 않아,
+     * 기록과 처리 결과 안내가 두 번 남지 않는다.
+     */
+    Optional<AudienceAccount> findByIdForUpdate(long id);
+
+    /**
      * 그 이메일로 가입한 계정 — 로그인 아이디로 찾는다. 대소문자를 가리지 않는다. 없으면 비어 있다.
      * <p>
      * 탈퇴한 계정은 찾지 않는다. 탈퇴하면 이메일이 풀려 같은 이메일로 새로 가입할 수 있으므로, 가입한 계정은 이메일마다 많아야 하나다.
@@ -62,4 +72,24 @@ public interface AudienceAccountRepository {
      * @throws ConflictException 그 사이 계정이 탈퇴했으면({@code AUDIENCE_NOT_ACTIVE})
      */
     void savePassword(AudienceAccount changedAccount);
+
+    /**
+     * 바꾼 전화번호를 저장한다. 저장소의 계정이 활동 중일 때만 바꾼다 — 이용 정지 중에는 번호를 바꿀 수 없다.
+     * <p>
+     * 확인({@link #phoneNumberAvailability})과 저장 사이에 같은 번호로 다른 가입이나 다른 계정의 번호 변경이 먼저 저장될 수 있으므로,
+     * 저장할 때 다시 막는다 — 가입한 계정 사이에서 번호는 하나다.
+     *
+     * @param changedAccount {@link AudienceAccount#changePhoneNumber}로 번호를 바꾼 계정
+     * @throws ConflictException 확인한 뒤 다른 계정이 같은 번호를 먼저 저장했거나({@code PHONE_NUMBER_ALREADY_REGISTERED}),
+     *                           그 사이 이용 정지됐거나({@code AUDIENCE_SUSPENDED}) 탈퇴했으면({@code AUDIENCE_NOT_ACTIVE})
+     */
+    void savePhoneNumber(AudienceAccount changedAccount);
+
+    /**
+     * 동의 기록 한 줄을 더한다. 이전 기록은 고치지 않는다 — 한 항목의 지금 상태는 가장 최근 줄이다.
+     *
+     * @param audienceAccountId 저장된 관객 계정
+     * @param consentRecord     {@link AudienceAccount#changeMarketingConsent}가 돌려준 새 기록
+     */
+    void addConsentRecord(long audienceAccountId, ConsentRecord consentRecord);
 }

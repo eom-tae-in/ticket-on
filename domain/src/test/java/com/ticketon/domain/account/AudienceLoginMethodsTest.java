@@ -48,7 +48,7 @@ class AudienceLoginMethodsTest {
         }
 
         @Test
-        @DisplayName("이용 정지 중에도 연결된다 — 정지로 막히는 것은 새 예매·변경·신고뿐이다 (docs/01)")
+        @DisplayName("이용 정지 중에도 연결된다 — 정지로 막히는 것은 새 예매·변경·신고와 전화번호 변경뿐이다 (docs/01)")
         void suspendedAccountLinks() {
             AudienceLoginMethods methods = AudienceLoginMethods.of(account(AudienceAccountStatus.SUSPENDED, PASSWORD_HASH),
                     List.of());

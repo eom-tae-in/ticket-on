@@ -8,21 +8,26 @@ import java.util.List;
 
 /**
  * 내 알림 설정 응답 — 마이페이지 알림 설정(docs/12 "알림 설정"). 끌 수 있는 묶음만 화면 순서대로 담는다.
- * 끌 수 없는 알림(행사 변경·취소·연기·장소·시간·출연자 변경·공연 중단)은 목록에 없다.
+ * 끌 수 없는 알림(행사 변경·취소·연기·장소·시간·출연자 변경·공연 중단)은 목록에 없다. 마케팅 수신은 묶음과 구분해 따로 담는다.
  *
  * @param preferences 묶음과 받는지, 화면 순서대로
+ * @param marketing   마케팅 수신 상태와 동의 일시
  */
 @Schema(description = "내 알림 설정")
 public record NotificationSettingsResponse(
         @Schema(description = "끌 수 있는 알림 묶음과 받는지. 화면 순서대로 — 예매·취소 확인, 공연 전날 리마인더, 예매 오픈 알림",
                 requiredMode = REQUIRED)
-        List<NotificationPreferenceItem> preferences) {
+        List<NotificationPreferenceItem> preferences,
+
+        @Schema(description = "마케팅 수신 — 거래 알림 묶음과 따로 보이는 법적 동의 항목. 바꾸기는 PUT /api/audience/notification-settings/marketing",
+                requiredMode = REQUIRED)
+        MarketingConsentResponse marketing) {
 
     static NotificationSettingsResponse from(NotificationSettingsResult result) {
         return new NotificationSettingsResponse(result.preferences().stream()
                 .map(choice -> new NotificationPreferenceItem(NotificationPreferenceCode.from(choice.preference()),
                         choice.receives()))
-                .toList());
+                .toList(), MarketingConsentResponse.from(result.marketing()));
     }
 
     /**

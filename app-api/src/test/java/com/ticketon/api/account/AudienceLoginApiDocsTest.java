@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ticketon.api.security.SecurityConfiguration;
+import com.ticketon.application.account.port.in.ChangeAudiencePhoneNumberUseCase;
 import com.ticketon.application.account.port.in.GetMyAudienceAccountUseCase;
 import com.ticketon.application.account.port.in.LogInAudienceUseCase;
 import org.junit.jupiter.api.DisplayName;
@@ -23,13 +24,14 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 /**
- * 화면 타입은 /v3/api-docs에서 생성된다(npm run api:types). 관객 로그인·로그아웃·내 계정 조회의 요청·응답 모양이 명세에 그대로 실리는지 본다.
+ * 화면 타입은 /v3/api-docs에서 생성된다(npm run api:types). 관객 로그인·로그아웃·내 계정 조회·전화번호 변경의 요청·응답 모양이 명세에
+ * 그대로 실리는지 본다.
  * DB 없이 돈다.
  */
 @WebMvcTest(controllers = {AudienceLoginController.class, AudienceAccountController.class})
 @Import(SecurityConfiguration.class)
 @ImportAutoConfiguration({SpringDocConfiguration.class, SpringDocConfigProperties.class, SpringDocWebMvcConfiguration.class})
-@DisplayName("관객 로그인·로그아웃·내 계정 조회 API 명세")
+@DisplayName("관객 로그인·로그아웃·내 계정 조회·전화번호 변경 API 명세")
 class AudienceLoginApiDocsTest {
 
     @Autowired
@@ -40,6 +42,9 @@ class AudienceLoginApiDocsTest {
 
     @MockitoBean
     private GetMyAudienceAccountUseCase getMyAudienceAccountUseCase;
+
+    @MockitoBean
+    private ChangeAudiencePhoneNumberUseCase changeAudiencePhoneNumberUseCase;
 
     @Test
     @DisplayName("로그인은 200에 LogInAudienceResponse(returnPath)를 돌려주고, 요청은 email·password가 필수이고 returnPath는 고를 수 있다")
@@ -52,6 +57,21 @@ class AudienceLoginApiDocsTest {
                         containsInAnyOrder("email", "password")))
                 .andExpect(jsonPath("$.components.schemas.LogInAudienceRequest.properties.returnPath").exists())
                 .andExpect(jsonPath("$.components.schemas.LogInAudienceResponse.required", containsInAnyOrder("returnPath")));
+    }
+
+    @Test
+    @DisplayName("전화번호 변경은 PUT에 phoneNumber 하나가 필수인 요청을 받고, 200에 AudiencePhoneNumberResponse(phoneNumber)를 돌려준다")
+    void changePhoneNumberOperation() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/audience/account/phone-number'].put.requestBody"
+                        + ".content['application/json'].schema['$ref']")
+                        .value("#/components/schemas/ChangeAudiencePhoneNumberRequest"))
+                .andExpect(jsonPath("$.paths['/api/audience/account/phone-number'].put.responses['200']"
+                        + ".content['application/json'].schema['$ref']").value("#/components/schemas/AudiencePhoneNumberResponse"))
+                .andExpect(jsonPath("$.paths['/api/audience/account/phone-number'].put.parameters").doesNotExist())
+                .andExpect(jsonPath("$.components.schemas.ChangeAudiencePhoneNumberRequest.required", contains("phoneNumber")))
+                .andExpect(jsonPath("$.components.schemas.AudiencePhoneNumberResponse.required", contains("phoneNumber")));
     }
 
     @Test

@@ -41,6 +41,10 @@ import org.springframework.stereotype.Component;
  * 예외로 받지 않는 이유: PostgreSQL은 문장이 실패하면 그 트랜잭션의 다음 조회를 받지 않아, 어느 칸이 겹쳤는지 다시 볼 수 없다.
  * 진 쪽은 겹친 칸을 다시 조회해 번호면 번호 문구, 이메일이면 이메일 문구의 {@link ConflictException}(409)이 된다.
  * 먼저 들어온 쪽이 아직 커밋하지 않았으면 PostgreSQL이 그 결과를 기다렸다가 판정하므로 둘 다 들어가는 일은 없다.
+ * <p>
+ * 전화번호 변경(#18)도 같은 유일 색인이 마지막으로 판정한다. UPDATE라 {@code ON CONFLICT}를 쓸 수 없어, 색인에 막히면 PostgreSQL이 그
+ * 문장을 거부하고(SQLSTATE 23505) 바꾸는 칸이 번호 하나라 바로 번호 문구의 {@link ConflictException}이 된다. 트랜잭션은 그 뒤 되돌려진다.
+ * 같은 번호로 가입하는 쪽과 겹쳐도 같다 — 둘 중 하나만 남는다.
  *
  * <h2>이메일 대소문자</h2>
  * email 칸은 적은 그대로 두고, 비교는 PostgreSQL lower()로 소문자로 바꾼 email_lowercase로 한다. 저장할 때도 같은 lower()로 채워
@@ -110,6 +114,16 @@ public class AudienceAccountPersistenceAdapter implements AudienceAccountReposit
                 .map(this::toAccount);
     }
 
+    /** 계정 줄을 {@code SELECT … FOR UPDATE}로 잠근 뒤 동의 기록을 따로 읽는다 — 잠금을 기다린 뒤의 조회라 앞 트랜잭션이 더한 줄까지 보인다. */
+    @Override
+    public Optional<AudienceAccount> findByIdForUpdate(long id) {
+        return dsl.selectFrom(AUDIENCE_ACCOUNT)
+                .where(AUDIENCE_ACCOUNT.ID.eq(id))
+                .forUpdate()
+                .fetchOptional()
+                .map(this::toAccount);
+    }
+
     /** 유일 색인(탈퇴하지 않은 계정 사이에서 소문자 이메일이 하나)이 있어 많아야 한 줄이다. */
     @Override
     public Optional<AudienceAccount> findRegisteredByEmail(EmailAddress email) {
@@ -148,6 +162,52 @@ public class AudienceAccountPersistenceAdapter implements AudienceAccountReposit
         if (updatedRows == 0) {
             throw new ConflictException(AccountErrorCode.AUDIENCE_NOT_ACTIVE, "비밀번호를 바꿀 수 없게 된 계정: " + id);
         }
+    }
+
+    @Override
+    public void savePhoneNumber(AudienceAccount changedAccount) {
+        long id = changedAccount.id().orElseThrow(() -> new IllegalArgumentException("저장하지 않은 계정입니다"));
+        int updatedRows = updatePhoneNumber(id, changedAccount.personalInformation().phoneNumber());
+        if (updatedRows == 0) {
+            throw phoneNumberNoLongerChangeable(id);
+        }
+    }
+
+    @Override
+    public void addConsentRecord(long audienceAccountId, ConsentRecord consentRecord) {
+        insertConsentRecords(audienceAccountId, List.of(consentRecord));
+    }
+
+    /**
+     * 활동 중인 계정의 번호만 바꾼다 — 이용 정지 중에는 바꿀 수 없다(정지 회피 방지, docs/01 "관객 이용 정지"). 번호 유일 색인에 막히면 번호
+     * 문구의 충돌로 바꾼다 — 바꾸는 칸이 번호 하나라 겹친 칸을 다시 볼 필요가 없다. 그 밖의 오류는 그대로 내보낸다.
+     */
+    private int updatePhoneNumber(long id, PhoneNumber phoneNumber) {
+        try {
+            return dsl.update(AUDIENCE_ACCOUNT)
+                    .set(AUDIENCE_ACCOUNT.PHONE_NUMBER, phoneNumber.digits())
+                    .where(AUDIENCE_ACCOUNT.ID.eq(id))
+                    .and(AUDIENCE_ACCOUNT.STATUS.eq(AudienceAccountStatus.ACTIVE.name()))
+                    .execute();
+        } catch (RuntimeException exception) {
+            if (UniqueViolation.isCauseOf(exception)) {
+                throw new ConflictException(AccountErrorCode.PHONE_NUMBER_ALREADY_REGISTERED,
+                        "전화번호 변경 경합 — 다른 계정이 같은 번호를 먼저 저장함 (계정 " + id + ")");
+            }
+            throw exception;
+        }
+    }
+
+    /**
+     * 번호를 바꾸지 못한 까닭 — 그 사이 이용 정지됐으면 정지 문구, 탈퇴했으면 활동 중이 아니라는 문구. 막힌 것은 조건부 UPDATE가 0줄을 바꾼
+     * 것이지 문장이 거부된 것이 아니라 다시 조회할 수 있다.
+     */
+    private ConflictException phoneNumberNoLongerChangeable(long id) {
+        String storedStatus = dsl.select(AUDIENCE_ACCOUNT.STATUS).from(AUDIENCE_ACCOUNT).where(AUDIENCE_ACCOUNT.ID.eq(id))
+                .fetchOptional(AUDIENCE_ACCOUNT.STATUS).orElse(WITHDRAWN);
+        AccountErrorCode errorCode = AudienceAccountStatus.SUSPENDED.name().equals(storedStatus)
+                ? AccountErrorCode.AUDIENCE_SUSPENDED : AccountErrorCode.AUDIENCE_NOT_ACTIVE;
+        return new ConflictException(errorCode, "전화번호를 바꿀 수 없게 된 계정: " + id + " (" + storedStatus + ")");
     }
 
     private boolean isRegistered(PhoneNumber phoneNumber) {

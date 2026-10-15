@@ -14,7 +14,6 @@ import com.ticketon.domain.account.StaffAccountStatus;
 import com.ticketon.domain.account.StaffPersonalInformation;
 import com.ticketon.domain.error.ConflictException;
 import com.ticketon.persistence.jooq.tables.records.StaffAccountRecord;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -49,8 +48,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class StaffAccountPersistenceAdapter implements StaffAccountRepository {
-
-    private static final String UNIQUE_VIOLATION_SQL_STATE = "23505";
 
     private final DSLContext dsl;
 
@@ -171,7 +168,7 @@ public class StaffAccountPersistenceAdapter implements StaffAccountRepository {
                     .and(STAFF_ACCOUNT.STATUS.eq(StaffAccountStatus.ACTIVE.name()))
                     .execute();
         } catch (RuntimeException exception) {
-            if (isUniqueViolation(exception)) {
+            if (UniqueViolation.isCauseOf(exception)) {
                 throw new ConflictException(AccountErrorCode.STAFF_NICKNAME_ALREADY_TAKEN,
                         "닉네임 변경 경합 — 다른 운영진이 먼저 저장함 (계정 " + id + ")");
             }
@@ -196,20 +193,6 @@ public class StaffAccountPersistenceAdapter implements StaffAccountRepository {
             return new ConflictException(AccountErrorCode.STAFF_NICKNAME_ALREADY_TAKEN, "동시 가입 경합 — 닉네임이 먼저 저장됨");
         }
         return new IllegalStateException("운영진 계정을 저장하지 못했는데 겹치는 이메일·닉네임이 없습니다");
-    }
-
-    /**
-     * 유일 색인 위반(SQLSTATE 23505)인지 — 원인을 거슬러 올라가 JDBC 오류를 찾는다. jOOQ가 바로 던진 오류든 Spring이 바꿔 던진 오류든
-     * 맨 안쪽에는 드라이버의 SQLException이 있다.
-     */
-    private static boolean isUniqueViolation(Throwable exception) {
-        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
-            if (cause instanceof SQLException sqlException
-                    && UNIQUE_VIOLATION_SQL_STATE.equals(sqlException.getSQLState())) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private StaffAccount toAccount(StaffAccountRecord account) {

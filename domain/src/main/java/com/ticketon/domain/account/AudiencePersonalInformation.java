@@ -40,4 +40,9 @@ public record AudiencePersonalInformation(String name, LocalDate birthDate, Emai
     public static AudiencePersonalInformation of(String name, LocalDate birthDate, String email, String phoneNumber) {
         return new AudiencePersonalInformation(name, birthDate, EmailAddress.of(email), PhoneNumber.of(phoneNumber));
     }
+
+    /** 전화번호만 바꾼 가입 정보 — 이름·생년월일·이메일은 그대로다. 번호를 바꿀 수 있는지는 계정이 본다({@link AudienceAccount#changePhoneNumber}). */
+    public AudiencePersonalInformation withPhoneNumber(PhoneNumber newPhoneNumber) {
+        return new AudiencePersonalInformation(name, birthDate, email, newPhoneNumber);
+    }
 }

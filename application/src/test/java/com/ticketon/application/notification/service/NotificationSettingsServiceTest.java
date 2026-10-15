@@ -3,14 +3,18 @@ package com.ticketon.application.notification.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.ticketon.application.account.port.in.MarketingConsentResult;
 import com.ticketon.application.notification.port.in.ChangeNotificationPreferenceCommand;
 import com.ticketon.application.notification.port.in.GetNotificationSettingsQuery;
 import com.ticketon.application.notification.port.in.NotificationSettingsResult;
 import com.ticketon.application.notification.port.in.NotificationSettingsResult.PreferenceChoice;
+import com.ticketon.common.KoreanTime;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.notification.NotificationKind;
 import com.ticketon.domain.notification.NotificationPreference;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -20,11 +24,16 @@ class NotificationSettingsServiceTest {
     private static final AccountRef SEOYUN = AccountRef.of(AccountKind.AUDIENCE, 7);
     private static final AccountRef JIHOON = AccountRef.of(AccountKind.AUDIENCE, 8);
 
-    private final FakeNotificationSettingsRepository settingsRepository = new FakeNotificationSettingsRepository();
+    /** docs/12 "알림 설정" 예시의 동의 일시 — "2026-03-01 동의 · 언제든 철회할 수 있습니다". */
+    private static final Instant MARKETING_AGREED_AT = KoreanTime.toInstant(LocalDateTime.of(2026, 3, 1, 9, 30));
 
-    private final GetNotificationSettingsService getService = new GetNotificationSettingsService(settingsRepository);
+    private final FakeNotificationSettingsRepository settingsRepository = new FakeNotificationSettingsRepository();
+    private final FakeGetMarketingConsentUseCase getMarketingConsentUseCase = new FakeGetMarketingConsentUseCase();
+
+    private final GetNotificationSettingsService getService =
+            new GetNotificationSettingsService(settingsRepository, getMarketingConsentUseCase);
     private final ChangeNotificationPreferenceService changeService =
-            new ChangeNotificationPreferenceService(settingsRepository);
+            new ChangeNotificationPreferenceService(settingsRepository, getMarketingConsentUseCase);
 
     @Test
     @DisplayName("바꾼 적 없으면 세 묶음 모두 받음으로, 예매·취소 확인 → 리마인더 → 예매 오픈 알림 순서로 보인다")
@@ -82,6 +91,30 @@ class NotificationSettingsServiceTest {
 
         assertThat(getService.getSettings(new GetNotificationSettingsQuery(JIHOON)).preferences())
                 .allMatch(PreferenceChoice::receives);
+    }
+
+    @Test
+    @DisplayName("마케팅 수신은 묶음 목록에 섞지 않고 상태와 동의 일시를 따로 담는다 — 2026-03-01 동의 (docs/12 예시)")
+    void marketingConsentSeparately() {
+        getMarketingConsentUseCase.set(SEOYUN.id(), new MarketingConsentResult(true, MARKETING_AGREED_AT));
+
+        NotificationSettingsResult result = getService.getSettings(new GetNotificationSettingsQuery(SEOYUN));
+
+        assertThat(result.marketing()).isEqualTo(new MarketingConsentResult(true, MARKETING_AGREED_AT));
+        assertThat(result.preferences()).hasSize(3);
+        assertThat(getService.getSettings(new GetNotificationSettingsQuery(JIHOON)).marketing())
+                .isEqualTo(new MarketingConsentResult(false, null));
+    }
+
+    @Test
+    @DisplayName("한 줄 바꾸기도 바뀐 뒤의 설정 전체와 함께 마케팅 수신 상태를 돌려준다 — 화면이 이 응답으로 다시 그린다")
+    void changeAlsoReturnsMarketingConsent() {
+        getMarketingConsentUseCase.set(SEOYUN.id(), new MarketingConsentResult(true, MARKETING_AGREED_AT));
+
+        NotificationSettingsResult changed = changeService.changePreference(
+                new ChangeNotificationPreferenceCommand(SEOYUN, NotificationPreference.BOOKING_OPEN, false));
+
+        assertThat(changed.marketing()).isEqualTo(new MarketingConsentResult(true, MARKETING_AGREED_AT));
     }
 
     @Test

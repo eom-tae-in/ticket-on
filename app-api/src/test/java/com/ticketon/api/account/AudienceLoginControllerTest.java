@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ticketon.api.security.SecurityConfiguration;
+import com.ticketon.application.account.port.in.ChangeAudiencePhoneNumberUseCase;
 import com.ticketon.application.account.port.in.GetMyAudienceAccountQuery;
 import com.ticketon.application.account.port.in.GetMyAudienceAccountResult;
 import com.ticketon.application.account.port.in.GetMyAudienceAccountUseCase;
@@ -79,6 +80,9 @@ class AudienceLoginControllerTest {
 
     @MockitoBean
     private GetMyAudienceAccountUseCase getMyAudienceAccountUseCase;
+
+    @MockitoBean
+    private ChangeAudiencePhoneNumberUseCase changeAudiencePhoneNumberUseCase;
 
     @Nested
     @DisplayName("로그인")

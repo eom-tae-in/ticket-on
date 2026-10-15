@@ -48,8 +48,8 @@ class AudienceAccountSuspensionTest {
         }
 
         @ParameterizedTest(name = "{0}")
-        @EnumSource(value = AudienceAction.class, names = {"BOOK", "CHANGE_BOOKING", "REPORT"})
-        @DisplayName("막히는 것 — 새 예매·변경·신고 (docs/01)")
+        @EnumSource(value = AudienceAction.class, names = {"BOOK", "CHANGE_BOOKING", "REPORT", "CHANGE_PHONE_NUMBER"})
+        @DisplayName("막히는 것 — 새 예매·변경·신고 (docs/01), 정지를 피하는 길이 되는 전화번호 변경")
         void restrictedActions(AudienceAction action) {
             assertThat(suspendedAccount().can(action)).isFalse();
         }
@@ -57,8 +57,9 @@ class AudienceAccountSuspensionTest {
         @ParameterizedTest(name = "{0}")
         @EnumSource(value = AudienceAction.class,
                 names = {"LOG_IN", "VIEW_ACCOUNT", "VIEW_TICKETS", "SHOW_TICKET_QR", "CANCEL_TICKET", "RESET_PASSWORD",
-                        "MANAGE_LOGIN_METHODS"})
-        @DisplayName("되는 것 — 로그인·계정 정보 보기·기존 티켓 보기·QR·취소·비밀번호 찾기·카카오·구글 연결 관리, 산 표는 뺏지 않는다 (docs/01)")
+                        "MANAGE_LOGIN_METHODS", "CHANGE_MARKETING_CONSENT"})
+        @DisplayName("되는 것 — 로그인·계정 정보 보기·기존 티켓 보기·QR·취소·비밀번호 찾기·카카오·구글 연결 관리·"
+                + "마케팅 수신 동의 변경(언제든 철회), 산 표는 뺏지 않는다 (docs/01)")
         void allowedActions(AudienceAction action) {
             assertThat(suspendedAccount().can(action)).isTrue();
         }
