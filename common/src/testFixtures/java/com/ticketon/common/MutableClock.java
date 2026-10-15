@@ -12,6 +12,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * 테스트용 시계. 정한 순간에 멈춰 있다가 테스트가 옮길 때만 움직인다. 시간대는 한국 시각({@link KoreanTime#ZONE})이다.
  * <p>
  * 서비스 단위 테스트는 생성자에 바로 넣고, Spring 통합 테스트는 {@code @TestBean(name = "clock")}으로 Clock 빈을 이것으로 바꾼다.
+ * 그 칸 타입은 이 클래스가 아니라 {@link Clock}으로 둔다 — 이 클래스면 {@code @SpringBootTest}에서 컨텍스트가 뜨지 않는다
+ * (app-api의 ClockOverrideTest).
  * <pre>{@code
  * MutableClock clock = MutableClock.at(LocalDateTime.of(2026, 3, 14, 19, 0));
  * clock.advance(TimePolicy.SEAT_SELECTION_TIMER);   // 10분 뒤로
