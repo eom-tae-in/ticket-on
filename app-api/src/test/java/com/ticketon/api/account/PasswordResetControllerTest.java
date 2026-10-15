@@ -162,8 +162,10 @@ class PasswordResetControllerTest {
         @ParameterizedTest(name = "\"{0}\" → {1}")
         @CsvSource(delimiter = '|', value = {
                 "''      | 이메일을 입력해 주세요.",
+                "'　' | 이메일을 입력해 주세요.",
+                "' 　 　 ' | 이메일을 입력해 주세요.",
                 "seoyun  | 이메일 주소를 확인해 주세요."})
-        @DisplayName("이메일이 비었거나 형식이 틀리면 400이고 유스케이스를 부르지 않는다 — 적은 값만 보고 정하므로 가입 여부와 상관없다")
+        @DisplayName("이메일이 비었거나(전각 공백 같은 유니코드 공백만 넣은 것 포함) 형식이 틀리면 400이고 유스케이스를 부르지 않는다 — 적은 값만 보고 정하므로 가입 여부와 상관없다")
         void rejectsInvalidEmail(String email, String message) throws Exception {
             mockMvc.perform(requestReset(STAFF_REQUEST_PATH, email))
                     .andExpect(status().isBadRequest())

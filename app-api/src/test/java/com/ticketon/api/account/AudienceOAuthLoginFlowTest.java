@@ -2,6 +2,7 @@ package com.ticketon.api.account;
 
 import static com.ticketon.api.error.ErrorResponseMatchers.errorBody;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
@@ -50,6 +51,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -334,6 +337,31 @@ class AudienceOAuthLoginFlowTest {
                     .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                     .andExpect(jsonPath("$.fieldErrors[0].field").value("email"))
                     .andExpect(jsonPath("$.fieldErrors[0].message").value("이메일을 입력해 주세요."));
+            verifyNoInteractions(signUpWithOAuthUseCase);
+        }
+
+        @ParameterizedTest(name = "{0} = \"{1}\" → {2}")
+        @CsvSource(delimiter = '|', value = {
+                "name        | '　'               | 이름을 입력해 주세요.",
+                "name        | ' 　 　 ' | 이름을 입력해 주세요.",
+                "phoneNumber | '　'               | 전화번호를 입력해 주세요.",
+                "phoneNumber | ' 　 　 ' | 전화번호를 입력해 주세요.",
+                "email       | '　'               | 이메일을 입력해 주세요.",
+                "email       | ' 　 　 ' | 이메일을 입력해 주세요."})
+        @DisplayName("전각 공백 같은 유니코드 공백만 넣은 칸도 빈 칸이라 400이고 그 칸에 문구가 붙는다 — 이메일은 제공자가 확인한 이메일이 없을 때 받는 칸")
+        void unicodeWhitespaceOnlyFieldIsBlank(String field, String value, String message) throws Exception {
+            given(logInWithOAuthUseCase.logIn(any())).willReturn(new LogInWithOAuthResult.SignUpRequired());
+            MockHttpSession session = new MockHttpSession();
+            completeProviderLogin(session, "kakao", "kakao-code-blank", KAKAO_USER_WITH_UNVERIFIED_EMAIL, null);
+            Map<String, Object> body = signUpBody("seoyun@example.com");
+            body.put(field, value);
+
+            mockMvc.perform(signUpRequest(body).session(session))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                    .andExpect(jsonPath("$.fieldErrors", hasSize(1)))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value(field))
+                    .andExpect(jsonPath("$.fieldErrors[0].message").value(message));
             verifyNoInteractions(signUpWithOAuthUseCase);
         }
 

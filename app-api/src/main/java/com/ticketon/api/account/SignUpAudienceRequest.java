@@ -2,11 +2,11 @@ package com.ticketon.api.account;
 
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.ticketon.api.validation.FilledText;
 import com.ticketon.application.account.port.in.SignUpAudienceCommand;
 import com.ticketon.domain.account.AudiencePersonalInformation;
 import com.ticketon.domain.account.NewPassword;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
 import java.time.LocalDate;
@@ -20,7 +20,7 @@ import java.time.LocalDate;
 @Schema(description = "관객 직접 가입 요청")
 public record SignUpAudienceRequest(
         @Schema(description = "이름", example = "한서윤", requiredMode = REQUIRED)
-        @NotBlank(message = "이름을 입력해 주세요.")
+        @FilledText(message = "이름을 입력해 주세요.")
         String name,
 
         @Schema(description = "생년월일", example = "1998-04-02", requiredMode = REQUIRED)
@@ -30,12 +30,12 @@ public record SignUpAudienceRequest(
 
         @Schema(description = "이메일 — 로그인 아이디. 인증 링크를 이 주소로 보낸다", example = "seoyun@example.com",
                 requiredMode = REQUIRED)
-        @NotBlank(message = "이메일을 입력해 주세요.")
+        @FilledText(message = "이메일을 입력해 주세요.")
         @EmailAddressFormat
         String email,
 
         @Schema(description = "휴대폰 번호. 하이픈·공백은 있어도 된다", example = "010-1234-5678", requiredMode = REQUIRED)
-        @NotBlank(message = "전화번호를 입력해 주세요.")
+        @FilledText(message = "전화번호를 입력해 주세요.")
         @PhoneNumberFormat
         String phoneNumber,
 

@@ -177,16 +177,22 @@ class AudienceSignUpControllerTest {
         @ParameterizedTest(name = "{0} = \"{1}\" → {2}")
         @CsvSource(delimiter = '|', value = {
                 "name        | '   '                 | 이름을 입력해 주세요.",
+                "name        | '　'              | 이름을 입력해 주세요.",
+                "name        | ' 　 　 ' | 이름을 입력해 주세요.",
                 "email       | ''                    | 이메일을 입력해 주세요.",
+                "email       | '　'              | 이메일을 입력해 주세요.",
+                "email       | ' 　 　 ' | 이메일을 입력해 주세요.",
                 "email       | seoyun                | 이메일 주소를 확인해 주세요.",
                 "email       | seo yun@example.com   | 이메일 주소를 확인해 주세요.",
                 "phoneNumber | ''                    | 전화번호를 입력해 주세요.",
+                "phoneNumber | '　'              | 전화번호를 입력해 주세요.",
+                "phoneNumber | ' 　 　 ' | 전화번호를 입력해 주세요.",
                 "phoneNumber | 011-123-4567          | 010으로 시작하는 휴대폰 번호 11자리를 입력해 주세요.",
                 "phoneNumber | 010-1234-567          | 010으로 시작하는 휴대폰 번호 11자리를 입력해 주세요.",
                 "password    | abc1234               | 비밀번호는 8자 이상 입력해 주세요.",
                 "password    | ''                    | 비밀번호는 8자 이상 입력해 주세요.",
                 "birthDate   | 2026-10-16            | 생년월일을 확인해 주세요."})
-        @DisplayName("칸이 비었거나 형식이 틀리면 그 칸과 문구를 알려 주고 유스케이스를 부르지 않는다")
+        @DisplayName("칸이 비었거나(전각 공백 같은 유니코드 공백만 넣은 것 포함) 형식이 틀리면 그 칸과 문구를 알려 주고 유스케이스를 부르지 않는다")
         void rejectsInvalidField(String field, String value, String message) throws Exception {
             Map<String, Object> body = validBody();
             body.put(field, value);

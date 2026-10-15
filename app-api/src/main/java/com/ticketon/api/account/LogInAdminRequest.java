@@ -3,7 +3,7 @@ package com.ticketon.api.account;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
-import com.ticketon.api.organizer.FilledText;
+import com.ticketon.api.validation.FilledText;
 import com.ticketon.application.account.port.in.LogInAdminCommand;
 import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.account.EnteredPassword;

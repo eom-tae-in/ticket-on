@@ -126,12 +126,15 @@ class AudienceAccountControllerTest {
         verify(changeAudiencePhoneNumberUseCase, never()).changePhoneNumber(any());
     }
 
-    @Test
-    @DisplayName("번호가 비면 400 — 가입과 같은 문구다")
-    void blankIsBadRequest() throws Exception {
-        mockMvc.perform(change("{\"phoneNumber\": \"\"}").with(loggedInAs(SEOYUN)))
+    @ParameterizedTest(name = "\"{0}\"")
+    @ValueSource(strings = {"", "   ", "　", " 　 　 "})
+    @DisplayName("번호가 비면(전각 공백 같은 유니코드 공백만 넣어도) 400 — 가입과 같은 문구다")
+    void blankIsBadRequest(String phoneNumber) throws Exception {
+        mockMvc.perform(change("{\"phoneNumber\": \"" + phoneNumber + "\"}").with(loggedInAs(SEOYUN)))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.fieldErrors", hasSize(1)))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("phoneNumber"))
                 .andExpect(jsonPath("$.fieldErrors[0].message").value("전화번호를 입력해 주세요."));
 
         verify(changeAudiencePhoneNumberUseCase, never()).changePhoneNumber(any());

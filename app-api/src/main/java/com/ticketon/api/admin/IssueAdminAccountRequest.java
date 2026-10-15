@@ -5,7 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import com.ticketon.api.account.AdminGradeCode;
 import com.ticketon.api.account.EmailAddressFormat;
 import com.ticketon.api.account.NewPasswordRule;
-import com.ticketon.api.organizer.FilledText;
+import com.ticketon.api.validation.FilledText;
 import com.ticketon.application.admin.port.in.IssueAdminAccountCommand;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.account.EmailAddress;

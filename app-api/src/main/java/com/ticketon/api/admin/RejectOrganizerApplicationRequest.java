@@ -2,7 +2,7 @@ package com.ticketon.api.admin;
 
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
-import com.ticketon.api.organizer.FilledText;
+import com.ticketon.api.validation.FilledText;
 import com.ticketon.application.admin.port.in.RejectOrganizerApplicationCommand;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.organizer.RejectionReason;

@@ -17,7 +17,7 @@ import java.lang.annotation.Target;
  * {@value ProposedPolicy#NICKNAME_MAXIMUM_LENGTH}자 이하, 확인 필요)으로 본다. 글자 수는 사람이 세는 대로 센다 — {@code @Size}는
  * 이모지 하나를 두 자로 세고 공백을 걷기 전 길이를 보므로 쓰지 않는다.
  * <p>
- * 너무 긴 닉네임이 안쪽까지 가면 값 객체가 만들어지지 않아 500이 되므로 여기서 400으로 막는다. 비어 있으면 {@code @NotBlank}가 맡는다
+ * 너무 긴 닉네임이 안쪽까지 가면 값 객체가 만들어지지 않아 500이 되므로 여기서 400으로 막는다. 비었거나 공백뿐이면 {@code @FilledText}가 맡는다
  * (칸 하나에 오류 하나).
  */
 @Documented

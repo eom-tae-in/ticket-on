@@ -13,7 +13,7 @@ import java.lang.annotation.Target;
 
 /**
  * 관객 전화번호 형식 — 도메인 {@link PhoneNumber}와 같은 규칙(숫자만 남겨 010으로 시작하는 11자리)으로 본다.
- * 형식이 틀린 번호가 안쪽까지 가면 값 객체가 만들어지지 않아 500이 되므로 여기서 400으로 막는다. 비어 있으면 {@code @NotBlank}가 맡는다.
+ * 형식이 틀린 번호가 안쪽까지 가면 값 객체가 만들어지지 않아 500이 되므로 여기서 400으로 막는다. 비었거나 공백뿐이면 {@code @FilledText}가 맡는다.
  */
 @Documented
 @Target({ElementType.FIELD, ElementType.PARAMETER})

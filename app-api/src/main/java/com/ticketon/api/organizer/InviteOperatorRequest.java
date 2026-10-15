@@ -3,6 +3,7 @@ package com.ticketon.api.organizer;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.ticketon.api.account.EmailAddressFormat;
+import com.ticketon.api.validation.FilledText;
 import com.ticketon.application.organizer.port.in.ActingStaff;
 import com.ticketon.application.organizer.port.in.InviteOperatorCommand;
 import com.ticketon.domain.account.EmailAddress;
