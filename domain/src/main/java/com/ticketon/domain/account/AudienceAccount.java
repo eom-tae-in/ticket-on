@@ -30,6 +30,10 @@ import java.util.Set;
  * 비밀번호가 없다. 비밀번호는 비밀번호 찾기로만 다시 정하거나 처음 정한다({@link #resetPassword}).
  * 상태는 의도가 드러나는 메서드로만 바꾼다. 시각은 인자로 받는다.
  * <p>
+ * 가입한 뒤 바꿀 수 있는 것은 전화번호({@link #changePhoneNumber})와 마케팅 수신 동의({@link #changeMarketingConsent})다
+ * (docs/13 마이페이지 "계정 정보 — 전화번호 변경", "알림 설정 · 마케팅 수신"). 번호를 바꿀 때도 번호 하나에 계정 하나를 똑같이 지키고,
+ * 동의를 바꿀 때는 동의 기록에 새 줄을 더한다.
+ * <p>
  * <b>관객에게 거는 제재는 이용 정지 하나뿐이다</b>({@link #suspend}, {@link #lift}). 정지 중에는 새 예매·변경·신고만 막히고
  * 로그인·기존 티켓 보기·QR·취소는 된다({@link #can}).
  * <p>
@@ -38,10 +42,10 @@ import java.util.Set;
 public final class AudienceAccount {
 
     private final Long id;
-    private final AudiencePersonalInformation personalInformation;
     private final Instant signedUpAt;
     private final List<ConsentRecord> consentRecords;
     private final List<AudienceSuspension> suspensions;
+    private AudiencePersonalInformation personalInformation;
     private PasswordHash passwordHash;
     private AudienceAccountStatus status;
     private Instant emailVerifiedAt;
@@ -226,6 +230,65 @@ public final class AudienceAccount {
     }
 
     /**
+     * 전화번호를 바꾼다 — 마이페이지 "계정 정보"에서(docs/13). 가입과 같은 확인을 거친다: 다른 계정이 쓰는 번호나 차단된 번호로는 바꿀 수
+     * 없다(docs/01 "전화번호 — 번호 변경 (마이페이지)"). 차단된 번호도 같은 문구로 막는다. 문구가 다르면 정지 이력이 드러난다.
+     * <p>
+     * 번호는 인증하지 않는다 — 관객이 본인 번호를 정확히 적는다고 가정한다(docs/01, docs/12 "전화번호는 인증하지 않습니다").
+     * 지금 번호와 같으면 아무것도 바꾸지 않는다 — 그 번호는 이 계정이 쥐고 있어 저장소는 가입된 번호라고 답하지만, 겹치는 것은 아니다.
+     * <p>
+     * 로그인할 수 있는 계정({@link AudienceAction#CHANGE_PHONE_NUMBER} — 활동·이용 정지)만 바꾼다. 이용 정지로 막히는 것은 새 예매·변경·신고뿐이다.
+     *
+     * @param newPhoneNumber          새 번호 — 숫자만 남긴 값({@link PhoneNumber#of})
+     * @param phoneNumberAvailability 새 번호를 쓸 수 있는지 — 저장소가 확인한 값
+     * @return 번호가 바뀌었으면 true, 지금 번호와 같아 그대로면 false
+     * @throws RuleViolationException 다른 계정이 쓰는 번호 또는 차단된 번호({@link AccountErrorCode#PHONE_NUMBER_ALREADY_REGISTERED}),
+     *                                인증 대기·탈퇴 계정({@link AccountErrorCode#AUDIENCE_NOT_ACTIVE})
+     */
+    public boolean changePhoneNumber(PhoneNumber newPhoneNumber, PhoneNumberAvailability phoneNumberAvailability) {
+        Objects.requireNonNull(newPhoneNumber, "newPhoneNumber");
+        Objects.requireNonNull(phoneNumberAvailability, "phoneNumberAvailability");
+        requireAllowed(AudienceAction.CHANGE_PHONE_NUMBER);
+        if (newPhoneNumber.equals(personalInformation.phoneNumber())) {
+            return false;
+        }
+        requirePhoneNumberAvailable(phoneNumberAvailability);
+        personalInformation = personalInformation.withPhoneNumber(newPhoneNumber);
+        return true;
+    }
+
+    /**
+     * 마케팅 수신에 동의하거나 동의를 철회한다 — 가입 때 고른 값을 마이페이지 알림 설정에서 언제든 바꾼다(docs/01 "약관과 동의 — 가입 시",
+     * docs/12 "마케팅 수신은 구분해서 표시").
+     * <p>
+     * <b>동의 기록을 고치지 않고 새 줄을 더한다.</b> 이전 기록은 그대로 남아 "언제 동의했나"의 근거가 되고, 지금 상태는 가장 최근 줄이
+     * 정한다({@link #latestConsent}). 지금 상태와 같으면 아무것도 더하지 않는다 — 이미 동의한 사람의 동의를 다시 남기면 동의 일시가 뒤로
+     * 밀려 실제로 동의한 날이 화면에서 사라진다.
+     * <p>
+     * 로그인할 수 있는 계정({@link AudienceAction#CHANGE_MARKETING_CONSENT} — 활동·이용 정지)만 바꾼다.
+     *
+     * @param agreed 동의하는지(false면 철회)
+     * @param now    동의하거나 철회한 일시 — 새 기록의 일시가 된다
+     * @return 더한 동의 기록. 지금 상태와 같아 그대로면 비어 있다.
+     * @throws RuleViolationException   인증 대기·탈퇴 계정({@link AccountErrorCode#AUDIENCE_NOT_ACTIVE})
+     * @throws IllegalArgumentException 일시가 마케팅 수신의 가장 최근 기록보다 앞서면 — 그 기록이 계속 지금 상태로 남게 된다
+     */
+    public Optional<ConsentRecord> changeMarketingConsent(boolean agreed, Instant now) {
+        Objects.requireNonNull(now, "now");
+        requireAllowed(AudienceAction.CHANGE_MARKETING_CONSENT);
+        if (isMarketingAgreed() == agreed) {
+            return Optional.empty();
+        }
+        Optional<ConsentRecord> latestMarketingConsent = latestConsent(ConsentItem.MARKETING);
+        if (latestMarketingConsent.isPresent() && now.isBefore(latestMarketingConsent.get().recordedAt())) {
+            throw new IllegalArgumentException("마케팅 수신 동의 변경 일시(" + now + ")가 가장 최근 기록("
+                    + latestMarketingConsent.get().recordedAt() + ")보다 앞섭니다");
+        }
+        ConsentRecord newRecord = new ConsentRecord(ConsentItem.MARKETING, agreed, now);
+        consentRecords.add(newRecord);
+        return Optional.of(newRecord);
+    }
+
+    /**
      * 지금 상태에서 그 일을 할 수 있는지.
      * <p>
      * 활동 중이면 전부 된다. 이용 정지면 새 예매·변경·신고만 막히고 로그인·기존 티켓 보기·QR·취소는 된다 — 산 표는 뺏지 않는다
@@ -294,6 +357,14 @@ public final class AudienceAccount {
         return latestConsent(ConsentItem.MARKETING).map(ConsentRecord::agreed).orElse(false);
     }
 
+    /**
+     * 지금 마케팅 수신에 동의한 상태면 그 동의 일시 — 알림 설정에 "2026-03-01 동의 · 언제든 철회할 수 있습니다"로 보인다(docs/12 "알림 설정").
+     * 동의하지 않았거나 철회한 상태면 비어 있다.
+     */
+    public Optional<Instant> marketingAgreedAt() {
+        return latestConsent(ConsentItem.MARKETING).filter(ConsentRecord::agreed).map(ConsentRecord::recordedAt);
+    }
+
     /** 이용 정지 이력 전부 — 해제한 정지도 사유와 함께 남는다. 일어난 순서대로. */
     public List<AudienceSuspension> suspensions() {
         return List.copyOf(suspensions);
@@ -303,6 +374,17 @@ public final class AudienceAccount {
     public Optional<AudienceSuspension> currentSuspension() {
         return suspensions.isEmpty() ? Optional.empty()
                 : Optional.of(suspensions.getLast()).filter(suspension -> !suspension.isLifted());
+    }
+
+    /**
+     * 지금 상태에서 그 일을 할 수 있어야 한다({@link #can}). 정지 중에도 되는 일(계정 정보 바꾸기)에만 쓴다 — 막히는 것은 인증 대기·탈퇴뿐이고,
+     * 로그인 세션은 있는데 그런 상태인 경우라 계정 정보 보기와 같은 코드로 알린다. 정지로 막히는 일(새 예매 등)은 정지 문구가 따로 필요하다.
+     */
+    private void requireAllowed(AudienceAction action) {
+        if (!can(action)) {
+            throw new RuleViolationException(AccountErrorCode.AUDIENCE_NOT_ACTIVE,
+                    "계정 " + id + " " + action + " 할 수 없는 상태: " + status);
+        }
     }
 
     private static void requireMinimumAge(LocalDate birthDate, Instant now) {

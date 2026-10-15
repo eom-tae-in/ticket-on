@@ -38,6 +38,19 @@ public enum AudienceAction {
      */
     MANAGE_LOGIN_METHODS(false),
 
+    /**
+     * 전화번호 변경(마이페이지 "계정 정보 — 전화번호 변경", docs/13) — 정지 중에도 된다. 정지로 막히는 '변경'은 예매의 좌석·회차 변경이고
+     * ({@link #CHANGE_BOOKING}), 막히는 것은 새 예매·변경·신고뿐이다(docs/01 "관객 이용 정지"). 다른 계정이 쓰는 번호나 차단된 번호로
+     * 바꿀 수 없는 것은 정지와 상관없이 같다({@link AudienceAccount#changePhoneNumber}).
+     */
+    CHANGE_PHONE_NUMBER(false),
+
+    /**
+     * 마케팅 수신 동의·철회(마이페이지 "알림 설정 · 마케팅 수신", docs/13) — 정지 중에도 된다. 가입 때 받은 동의는 언제든 철회할 수
+     * 있어야 하고(docs/01 "약관과 동의 — 가입 시", docs/12 "마케팅 수신은 구분해서 표시"), 정지로 막히는 것은 새 예매·변경·신고뿐이다.
+     */
+    CHANGE_MARKETING_CONSENT(false),
+
     /** 새 예매 — 정지 중에는 막힌다. */
     BOOK(true),
 

@@ -65,9 +65,17 @@ class NotificationKindTest {
         }
 
         @Test
-        @DisplayName("표의 관객 대상 종류는 위의 25개가 전부다")
+        @DisplayName("관객 대상 종류는 표의 25개와 표 밖의 마케팅 수신 처리 결과 안내 하나가 전부다")
         void audienceKindsAreExactlyTheTable() {
-            assertThat(kindsOf(RecipientSide.AUDIENCE)).hasSize(25);
+            assertThat(kindsOf(RecipientSide.AUDIENCE)).hasSize(26);
+        }
+
+        @Test
+        @DisplayName("마케팅 수신 동의·철회 처리 결과 안내는 관객에게 이메일로만 가고, 끌 수 없다 (docs/12 \"마케팅 발송\")")
+        void marketingConsentResultIsEmailOnlyAndMandatory() {
+            assertThat(NotificationKind.MARKETING_CONSENT_CHANGED.side()).isEqualTo(RecipientSide.AUDIENCE);
+            assertThat(NotificationKind.MARKETING_CONSENT_CHANGED.channels()).containsExactly(EMAIL);
+            assertThat(NotificationPreference.covering(NotificationKind.MARKETING_CONSENT_CHANGED)).isEmpty();
         }
 
         @Test
