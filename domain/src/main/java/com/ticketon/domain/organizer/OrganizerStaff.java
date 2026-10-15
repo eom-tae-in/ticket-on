@@ -24,7 +24,8 @@ import java.util.Set;
  * 하는 일:
  * <ul>
  *   <li>{@link #startWithOwner 승인} — 신청한 사람이 소유자가 된다.</li>
- *   <li>{@link #requirePermission 권한 확인} — 지금 소속돼 있고 그 역할로 할 수 있는 일인지({@link StaffRole#can}).</li>
+ *   <li>{@link #requirePermission 권한 확인} — 지금 소속돼 있고 그 역할로 할 수 있는 일인지({@link StaffRole#can}). 주최 관리 기능은
+ *       주최자 상태까지 함께 보는 {@link StaffPermission#check}로 확인한다.</li>
  *   <li>{@link #addOperator 운영자 들이기} — 초대를 수락한 사람이 운영자가 된다. 운영자는 심사를 받지 않는다.</li>
  *   <li>{@link #transferOwnership 소유자 넘기기} — 받는 사람은 이미 그 주최자의 운영자여야 하고, 넘긴 사람은 운영자로 남는다.</li>
  *   <li>{@link #leave 나가기}·{@link #removeOperator 내보내기} — 운영자는 언제든 나가고, 소유자가 내보낸다. 소유자는 먼저 넘겨야 나간다.</li>

@@ -19,7 +19,8 @@ import java.util.OptionalLong;
  *   <li><b>공개 정보</b>({@link OrganizerPublicProfile}) — 소개 · SNS 링크 · 로고(선택). 운영진 누구나 편집한다.
  *       로고가 없으면 {@link #initialAvatar 이름 첫 글자 + 정해진 색}으로 보인다.</li>
  * </ul>
- * 누가 그 일을 할 수 있는지는 운영진 명단({@link OrganizerStaff#requirePermission})이 본다. 이 객체는 주최자 상태에 따른 규칙만 지킨다.
+ * 누가 그 일을 할 수 있는지는 운영진 권한 확인({@link StaffPermission#check})이 운영진 명단의 소속·역할과 이 주최자의 상태를 함께 본다.
+ * 이 객체는 주최자 상태에 따른 규칙만 지킨다.
  * 시각은 인자로 받는다.
  * <p>
  * 저장소에서 다시 읽을 때는 {@link #restore}를 쓴다. 저장 전 주최자는 id가 없다.
