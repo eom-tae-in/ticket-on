@@ -47,6 +47,16 @@ final class FakeOrganizerRepository implements OrganizerRepository {
     }
 
     @Override
+    public Optional<Organizer> findByIdForUpdate(long id) {
+        return findById(id);
+    }
+
+    @Override
+    public void savePublicProfile(Organizer organizer) {
+        throw new UnsupportedOperationException("심사 화면·승인·반려에서는 공개 정보를 저장하지 않습니다");
+    }
+
+    @Override
     public void saveApproval(Organizer approvedOrganizer) {
         long id = approvedOrganizer.id().orElseThrow();
         if (statuses.get(id) != OrganizerStatus.UNDER_REVIEW) {

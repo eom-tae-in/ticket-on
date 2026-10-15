@@ -13,6 +13,7 @@ import java.util.Optional;
 final class FakeOrganizerRepository implements OrganizerRepository {
 
     private final List<Organizer> organizers = new ArrayList<>();
+    private int publicProfileSaves;
 
     @Override
     public Organizer add(Organizer newOrganizer) {
@@ -43,7 +44,26 @@ final class FakeOrganizerRepository implements OrganizerRepository {
     }
 
     @Override
+    public Optional<Organizer> findByIdForUpdate(long id) {
+        return findById(id);
+    }
+
+    @Override
     public void saveApproval(Organizer approvedOrganizer) {
         throw new UnsupportedOperationException("주최자 신청 제출·주최 홈·운영진 권한 확인에서는 승인을 저장하지 않습니다");
+    }
+
+    @Override
+    public void savePublicProfile(Organizer organizer) {
+        long id = organizer.id().orElseThrow(() -> new IllegalArgumentException("저장 전 주최자입니다"));
+        Organizer stored = findById(id).orElseThrow(() -> new IllegalArgumentException("없는 주최자입니다: " + id));
+        organizers.set(organizers.indexOf(stored), Organizer.restore(id, organizer.name(), stored.status(),
+                organizer.publicProfile()));
+        publicProfileSaves++;
+    }
+
+    /** 공개 정보를 저장한 횟수. */
+    int publicProfileSaves() {
+        return publicProfileSaves;
     }
 }
