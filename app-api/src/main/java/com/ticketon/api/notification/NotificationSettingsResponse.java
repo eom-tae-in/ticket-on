@@ -19,7 +19,7 @@ public record NotificationSettingsResponse(
                 requiredMode = REQUIRED)
         List<NotificationPreferenceItem> preferences,
 
-        @Schema(description = "마케팅 수신 — 거래 알림 묶음과 따로 보이는 법적 동의 항목",
+        @Schema(description = "마케팅 수신 — 거래 알림 묶음과 따로 보이는 법적 동의 항목. 바꾸기는 PUT /api/audience/notification-settings/marketing",
                 requiredMode = REQUIRED)
         MarketingConsentResponse marketing) {
 

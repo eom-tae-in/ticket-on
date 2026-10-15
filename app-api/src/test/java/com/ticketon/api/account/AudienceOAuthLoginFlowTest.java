@@ -19,6 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ticketon.api.config.WebAddressConfiguration;
 import com.ticketon.api.security.LoginTestController;
 import com.ticketon.api.security.SecurityConfiguration;
+import com.ticketon.application.account.port.in.ChangeAudiencePhoneNumberUseCase;
 import com.ticketon.application.account.port.in.GetMyAudienceAccountQuery;
 import com.ticketon.application.account.port.in.GetMyAudienceAccountResult;
 import com.ticketon.application.account.port.in.GetMyAudienceAccountUseCase;
@@ -132,6 +133,9 @@ class AudienceOAuthLoginFlowTest {
 
     @MockitoBean
     private GetMyAudienceAccountUseCase getMyAudienceAccountUseCase;
+
+    @MockitoBean
+    private ChangeAudiencePhoneNumberUseCase changeAudiencePhoneNumberUseCase;
 
     @DynamicPropertySource
     static void useFakeProvider(DynamicPropertyRegistry registry) {

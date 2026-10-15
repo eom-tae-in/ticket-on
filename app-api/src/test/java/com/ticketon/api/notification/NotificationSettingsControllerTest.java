@@ -16,6 +16,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ticketon.api.security.SecurityConfiguration;
+import com.ticketon.application.account.port.in.ChangeMarketingConsentCommand;
+import com.ticketon.application.account.port.in.ChangeMarketingConsentUseCase;
 import com.ticketon.application.account.port.in.MarketingConsentResult;
 import com.ticketon.application.notification.port.in.ChangeNotificationPreferenceCommand;
 import com.ticketon.application.notification.port.in.ChangeNotificationPreferenceUseCase;
@@ -70,6 +72,9 @@ class NotificationSettingsControllerTest {
 
     @MockitoBean
     private ChangeNotificationPreferenceUseCase changeNotificationPreferenceUseCase;
+
+    @MockitoBean
+    private ChangeMarketingConsentUseCase changeMarketingConsentUseCase;
 
     @Nested
     @DisplayName("조회")
@@ -214,6 +219,93 @@ class NotificationSettingsControllerTest {
 
         private MockHttpServletRequestBuilder change(String preference, String body) {
             return put(SETTINGS_PATH + "/" + preference)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body)
+                    .with(csrf());
+        }
+    }
+
+    @Nested
+    @DisplayName("마케팅 수신 동의·철회")
+    class ChangeMarketingConsent {
+
+        private static final String MARKETING_PATH = SETTINGS_PATH + "/marketing";
+
+        @Test
+        @DisplayName("본문의 동의 여부를 Command로 넘기고, 바뀐 뒤의 상태를 돌려준다 — 철회하면 동의 일시가 없다")
+        void convertsRequestToCommand() throws Exception {
+            given(changeMarketingConsentUseCase.changeConsent(any())).willReturn(NOT_AGREED);
+
+            mockMvc.perform(changeMarketing("{\"agreed\": false}").with(loggedInAs(SEOYUN)))
+                    .andExpect(status().isOk())
+                    .andExpect(content().json("{\"agreed\": false, \"agreedAt\": null}", JsonCompareMode.STRICT));
+
+            ArgumentCaptor<ChangeMarketingConsentCommand> command = ArgumentCaptor.forClass(ChangeMarketingConsentCommand.class);
+            verify(changeMarketingConsentUseCase).changeConsent(command.capture());
+            assertThat(command.getValue()).isEqualTo(new ChangeMarketingConsentCommand(SEOYUN, false));
+        }
+
+        @Test
+        @DisplayName("동의하면 동의 일시를 한국 시각으로 돌려준다")
+        void agreementReturnsAgreedAt() throws Exception {
+            Instant agreedAt = KoreanTime.toInstant(LocalDateTime.of(2026, 3, 1, 9, 30));
+            given(changeMarketingConsentUseCase.changeConsent(any())).willReturn(new MarketingConsentResult(true, agreedAt));
+
+            mockMvc.perform(changeMarketing("{\"agreed\": true}").with(loggedInAs(SEOYUN)))
+                    .andExpect(status().isOk())
+                    .andExpect(content().json("{\"agreed\": true, \"agreedAt\": \"2026-03-01T09:30:00+09:00\"}",
+                            JsonCompareMode.STRICT));
+        }
+
+        @Test
+        @DisplayName("동의 여부가 빠지면 400 — 어느 쪽으로도 읽지 않는다")
+        void missingAgreedIsBadRequest() throws Exception {
+            mockMvc.perform(changeMarketing("{}").with(loggedInAs(SEOYUN)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                    .andExpect(jsonPath("$.fieldErrors", hasSize(1)))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("agreed"))
+                    .andExpect(jsonPath("$.fieldErrors[0].message").value("마케팅 수신 동의 여부를 골라 주세요."));
+
+            verify(changeMarketingConsentUseCase, never()).changeConsent(any());
+        }
+
+        @Test
+        @DisplayName("'marketing'은 끌 수 있는 묶음 이름이 아니라 이 주소로 간다 — 알림 묶음 바꾸기를 부르지 않는다")
+        void doesNotGoToPreferenceChange() throws Exception {
+            given(changeMarketingConsentUseCase.changeConsent(any())).willReturn(NOT_AGREED);
+
+            mockMvc.perform(changeMarketing("{\"agreed\": false}").with(loggedInAs(SEOYUN)))
+                    .andExpect(status().isOk());
+
+            verify(changeNotificationPreferenceUseCase, never()).changePreference(any());
+        }
+
+        @Test
+        @DisplayName("CSRF 토큰이 없으면 403이다")
+        void requiresCsrfToken() throws Exception {
+            mockMvc.perform(put(MARKETING_PATH)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"agreed\": false}")
+                            .with(loggedInAs(SEOYUN)))
+                    .andExpect(status().isForbidden());
+
+            verify(changeMarketingConsentUseCase, never()).changeConsent(any());
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @ValueSource(strings = {"STAFF", "ADMIN", "CHECKIN"})
+        @DisplayName("관객이 아닌 계정으로는 403이다 — 마케팅 수신 동의는 관객 가입 때 받는다")
+        void otherAccountKindIsDenied(AccountKind kind) throws Exception {
+            mockMvc.perform(changeMarketing("{\"agreed\": false}").with(loggedInAs(kind, 7)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(errorBody("ACCESS_DENIED", "이 요청을 처리할 권한이 없습니다."));
+
+            verify(changeMarketingConsentUseCase, never()).changeConsent(any());
+        }
+
+        private MockHttpServletRequestBuilder changeMarketing(String body) {
+            return put(MARKETING_PATH)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body)
                     .with(csrf());

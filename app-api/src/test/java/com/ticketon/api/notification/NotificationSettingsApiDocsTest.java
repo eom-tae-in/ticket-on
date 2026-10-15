@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ticketon.api.security.SecurityConfiguration;
+import com.ticketon.application.account.port.in.ChangeMarketingConsentUseCase;
 import com.ticketon.application.notification.port.in.ChangeNotificationPreferenceUseCase;
 import com.ticketon.application.notification.port.in.GetNotificationSettingsUseCase;
 import org.junit.jupiter.api.DisplayName;
@@ -39,6 +40,9 @@ class NotificationSettingsApiDocsTest {
 
     @MockitoBean
     private ChangeNotificationPreferenceUseCase changeNotificationPreferenceUseCase;
+
+    @MockitoBean
+    private ChangeMarketingConsentUseCase changeMarketingConsentUseCase;
 
     @Test
     @DisplayName("조회와 한 줄 바꾸기 모두 200에 NotificationSettingsResponse를 돌려준다")
@@ -74,6 +78,20 @@ class NotificationSettingsApiDocsTest {
                 .andExpect(jsonPath("$.components.schemas.MarketingConsentResponse.required", contains("agreed")))
                 .andExpect(jsonPath("$.components.schemas.MarketingConsentResponse.properties.agreedAt.format")
                         .value("date-time"));
+    }
+
+    @Test
+    @DisplayName("마케팅 수신 동의·철회는 PUT에 agreed 하나가 필수인 요청을 받고, 200에 MarketingConsentResponse를 돌려준다")
+    void changeMarketingConsentOperation() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/audience/notification-settings/marketing'].put.requestBody"
+                        + ".content['application/json'].schema['$ref']")
+                        .value("#/components/schemas/ChangeMarketingConsentRequest"))
+                .andExpect(jsonPath("$.paths['/api/audience/notification-settings/marketing'].put.responses['200']"
+                        + ".content['application/json'].schema['$ref']").value("#/components/schemas/MarketingConsentResponse"))
+                .andExpect(jsonPath("$.paths['/api/audience/notification-settings/marketing'].put.parameters").doesNotExist())
+                .andExpect(jsonPath("$.components.schemas.ChangeMarketingConsentRequest.required", contains("agreed")));
     }
 
     @Test
