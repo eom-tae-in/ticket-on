@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ticketon.api.security.SecurityConfiguration;
@@ -64,6 +65,19 @@ class AdminWorkQueueControllerTest {
                           {"kind": "ORGANIZER_APPLICATION", "targetId": 4, "title": "늦여름",
                            "receivedAt": "2026-10-16T18:00:00+09:00", "highlighted": false}
                         ]}""", JsonCompareMode.STRICT));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(AdminWorkKind.class)
+    @DisplayName("처리 목록의 종류는 모두 같은 이름의 API 이름으로 나간다 — 종류를 더하면 API 이름도 함께 더한다")
+    void everyKindHasApiName(AdminWorkKind kind) throws Exception {
+        given(getAdminWorkQueueUseCase.getWorkQueue()).willReturn(new AdminWorkQueueResult(List.of(
+                new AdminWorkQueueResult.Item(kind, 5, "극단 열두달 → 열두달 프로젝트",
+                        KoreanTime.toInstant(LocalDateTime.of(2026, 10, 15, 10, 0)), false))));
+
+        mockMvc.perform(get(WORK_QUEUE_PATH).with(loggedInAsAdmin(4, AdminGrade.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].kind").value(kind.name()));
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.ticketon.persistence.admin;
 
 import static com.ticketon.persistence.jooq.Tables.ORGANIZER;
 import static com.ticketon.persistence.jooq.Tables.ORGANIZER_APPLICATION;
+import static com.ticketon.persistence.jooq.Tables.ORGANIZER_NAME_CHANGE;
 import static com.ticketon.persistence.jooq.Tables.OWNERSHIP_CHANGE;
 import static com.ticketon.persistence.jooq.Tables.OWNERSHIP_CLAIM;
 import static com.ticketon.persistence.jooq.Tables.STAFF_ACCOUNT;
@@ -29,6 +30,8 @@ import org.springframework.stereotype.Component;
  *       공개 프로필의 닉네임으로 적는다(탈퇴해도 닉네임은 남는다). 접수 일시는 넘긴 일시다.</li>
  *   <li>소유자 이전 신청 — 소유자 이전 신청 표(ownership_claim — V14)의 심사 중인 줄. 제목은 "주최자명 · 신청한 사람"이고 사람은 공개
  *       프로필의 닉네임으로 적는다. 접수 일시는 신청 일시다. 사유는 심사 화면에서 본다.</li>
+ *   <li>주최자명 변경 — 주최자명 변경 이력 표(organizer_name_change — V17)의 확인 전인 줄. 제목은 "바꾸기 전 이름 → 바꾼 이름"으로 그 한
+ *       건의 두 이름을 그대로 적는다 — 그 뒤 또 바꿨어도 줄마다 무엇을 무엇으로 바꿨는지 읽힌다. 접수 일시는 바꾼 일시다.</li>
  * </ul>
  * 다른 종류는 그 기능의 이슈가 원천 조회를 하나씩 더해 {@link #pendingWork}에 잇는다.
  */
@@ -48,7 +51,8 @@ public class AdminWorkQueueQueryPersistenceAdapter implements AdminWorkQueueQuer
 
     @Override
     public List<PendingAdminWork> pendingWork() {
-        return Stream.of(pendingOrganizerApplications(), unconfirmedOwnershipChanges(), pendingOwnershipClaims())
+        return Stream.of(pendingOrganizerApplications(), unconfirmedOwnershipChanges(), pendingOwnershipClaims(),
+                        unconfirmedOrganizerNameChanges())
                 .flatMap(List::stream)
                 .sorted(RECEIVED_ORDER)
                 .toList();
@@ -70,6 +74,15 @@ public class AdminWorkQueueQueryPersistenceAdapter implements AdminWorkQueueQuer
                 .where(OWNERSHIP_CLAIM.STATUS.eq(OwnershipClaimStatus.UNDER_REVIEW.name()))
                 .fetch(row -> new PendingAdminWork(AdminWorkKind.OWNERSHIP_CLAIM, row.value1(),
                         row.value2() + " · " + row.value3(), row.value4().toInstant()));
+    }
+
+    private List<PendingAdminWork> unconfirmedOrganizerNameChanges() {
+        return dsl.select(ORGANIZER_NAME_CHANGE.ID, ORGANIZER_NAME_CHANGE.PREVIOUS_NAME, ORGANIZER_NAME_CHANGE.NEW_NAME,
+                        ORGANIZER_NAME_CHANGE.CHANGED_AT)
+                .from(ORGANIZER_NAME_CHANGE)
+                .where(ORGANIZER_NAME_CHANGE.CONFIRMED_AT.isNull())
+                .fetch(row -> new PendingAdminWork(AdminWorkKind.ORGANIZER_NAME_CHANGE, row.value1(),
+                        row.value2() + " → " + row.value3(), row.value4().toInstant()));
     }
 
     private List<PendingAdminWork> unconfirmedOwnershipChanges() {

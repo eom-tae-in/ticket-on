@@ -2,6 +2,8 @@ package com.ticketon.api.organizer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ticketon.api.admin.AdminWorkKindCode;
+import com.ticketon.api.admin.AdminWorkQueueResponse;
 import com.ticketon.api.error.ErrorResponse;
 import com.ticketon.api.security.LoginTestController;
 import com.ticketon.application.account.port.out.PasswordHashPort;
@@ -44,7 +46,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 서버 전체를 진짜 PostgreSQL(마이그레이션 전체)로 띄우고, 실제 HTTP 요청으로 주최자명 변경이 주최자 이름 · 이름 변경 이력 · 운영진 조작 기록 ·
- * 운영진 전원 메일에 반영되는지 끝까지 돌린다(#30 완료 조건). Docker가 없는 환경에서는 건너뛴다.
+ * 운영진 전원 메일 · 관리자 처리 목록(사후 확인)에 반영되는지 끝까지 돌린다(#30 완료 조건). Docker가 없는 환경에서는 건너뛴다.
  * <p>
  * 극단 열두달(대표 박정훈 소유자, 기획 단원 · 홍보 단원 운영자)의 대표가 이름을 "열두달 프로젝트"로 바꾼다. 이도현은 다른 주최자 늦여름의 운영자라
  * 열두달에는 바깥 사람이다. 운영진 로그인 · 주최자 · 소속은 표에 바로 넣고, 로그인은 실제 로그인 API로 한다. 메일은 '기록만' 어댑터를 그대로
@@ -61,6 +63,8 @@ class OrganizerRenameIntegrationTest {
     private static final String CSRF_HEADER = "X-CSRF-TOKEN";
 
     private static final String STAFF_PASSWORD = "junghoon1234";
+
+    private static final String ADMIN_PASSWORD = "dohyun-admin-1234";
 
     @Container
     @ServiceConnection
@@ -91,10 +95,11 @@ class OrganizerRenameIntegrationTest {
     private String promoterEmail;
     private String dohyunEmail;
     private String junghoonNickname;
+    private String suffix;
 
     @BeforeEach
     void storeOrganizers() {
-        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        suffix = UUID.randomUUID().toString().substring(0, 8);
         junghoonEmail = "junghoon-" + suffix + "@example.com";
         plannerEmail = "planner-" + suffix + "@example.com";
         promoterEmail = "promoter-" + suffix + "@example.com";
@@ -156,6 +161,47 @@ class OrganizerRenameIntegrationTest {
                 });
             }
             assertThat(mailsTo(dohyunEmail)).isEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("바꾸면 관리자 처리 목록에 '주최자명 변경'이 쌓이고, 관리자가 확인하면 빠지며 관리자 조작 기록이 남는다 — 다시 확인하면 409")
+    void adminConfirmsNameChange() throws Exception {
+        String adminEmail = "admin-" + suffix + "@ticket-on.example";
+        long adminId = storeAdmin(adminEmail);
+        try (Browser owner = new Browser(); Browser admin = new Browser()) {
+            owner.logInStaff(junghoonEmail);
+            admin.logInAdmin(adminEmail);
+            assertThat(owner.put(namePath(), Map.of("name", projectName)).statusCode()).isEqualTo(200);
+            long changeId = count("SELECT id FROM organizer_name_change WHERE organizer_id = ?", twelveMonths);
+
+            assertThat(nameChangeItems(admin)).filteredOn(item -> item.targetId() == changeId).singleElement()
+                    .satisfies(item -> {
+                        assertThat(item.title()).isEqualTo(twelveMonthsName + " → " + projectName);
+                        assertThat(item.highlighted()).isFalse();
+                    });
+
+            assertThat(admin.post(confirmationPath(changeId), null).statusCode()).isEqualTo(204);
+
+            assertThat(nameChangeItems(admin)).noneMatch(item -> item.targetId() == changeId);
+            assertThat(jdbcTemplate.queryForList(
+                    "SELECT confirmed_by_admin_account_id, confirmed_at FROM organizer_name_change WHERE id = ?", changeId))
+                    .singleElement().satisfies(change -> {
+                        assertThat(change.get("confirmed_by_admin_account_id")).isEqualTo(adminId);
+                        assertThat(change.get("confirmed_at")).isNotNull();
+                    });
+            assertThat(jdbcTemplate.queryForList("""
+                    SELECT operation_kind, target_kind, target_id, summary FROM admin_operation_record
+                    WHERE admin_account_id = ?""", adminId)).singleElement().satisfies(record -> {
+                assertThat(record.get("operation_kind")).isEqualTo("CONFIRM_ORGANIZER_NAME_CHANGE");
+                assertThat(record.get("target_kind")).isEqualTo("ORGANIZER_NAME_CHANGE");
+                assertThat(record.get("target_id")).isEqualTo(changeId);
+                assertThat(record.get("summary")).isEqualTo("주최자명 변경 확인 — " + twelveMonthsName + " → " + projectName);
+            });
+            assertThat(currentName()).isEqualTo(projectName);
+            expectError(admin.post(confirmationPath(changeId), null), 409, "ORGANIZER_NAME_CHANGE_ALREADY_CONFIRMED");
+            expectError(admin.post(confirmationPath(changeId + 10_000), null), 404, "ORGANIZER_NAME_CHANGE_NOT_FOUND");
+            assertThat(owner.post(confirmationPath(changeId), null).statusCode()).isEqualTo(403);
         }
     }
 
@@ -247,6 +293,30 @@ class OrganizerRenameIntegrationTest {
 
     private String namePath() {
         return "/api/organizer/organizers/" + twelveMonths + "/name";
+    }
+
+    private static String confirmationPath(long organizerNameChangeId) {
+        return "/api/admin/organizer-name-changes/" + organizerNameChangeId + "/confirmation";
+    }
+
+    /** 관리자 처리 목록의 '주최자명 변경' 항목. */
+    private List<AdminWorkQueueResponse.AdminWorkItem> nameChangeItems(Browser admin) throws Exception {
+        HttpResponse<String> response = admin.get("/api/admin/work-queue");
+        assertThat(response.statusCode()).isEqualTo(200);
+        return jsonMapper.readValue(response.body(), AdminWorkQueueResponse.class).items().stream()
+                .filter(item -> item.kind() == AdminWorkKindCode.ORGANIZER_NAME_CHANGE)
+                .toList();
+    }
+
+    /** 관리자 계정 한 줄 — 비밀번호 해시는 서버의 해시 어댑터로 만든다. */
+    private long storeAdmin(String email) {
+        String passwordHash = passwordHashPort.hash(new NewPassword(ADMIN_PASSWORD)).value();
+        Long id = jdbcTemplate.queryForObject("""
+                INSERT INTO admin_account (grade, email, email_lowercase, password_hash, issued_at)
+                VALUES ('ADMIN', ?, lower(?), ?, now())
+                RETURNING id""", Long.class, email, email, passwordHash);
+        assertThat(id).isNotNull();
+        return id;
     }
 
     private String currentName() {
@@ -358,6 +428,11 @@ class OrganizerRenameIntegrationTest {
 
         void logInStaff(String email) throws Exception {
             assertThat(post("/api/auth/staff/login", Map.of("email", email, "password", STAFF_PASSWORD)).statusCode())
+                    .isEqualTo(200);
+        }
+
+        void logInAdmin(String email) throws Exception {
+            assertThat(post("/api/auth/admin/login", Map.of("email", email, "password", ADMIN_PASSWORD)).statusCode())
                     .isEqualTo(200);
         }
 

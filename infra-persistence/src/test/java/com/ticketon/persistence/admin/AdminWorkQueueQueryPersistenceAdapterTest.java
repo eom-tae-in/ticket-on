@@ -14,6 +14,8 @@ import com.ticketon.domain.organizer.OrganizerApplication;
 import com.ticketon.domain.organizer.OrganizerApplicationForm;
 import com.ticketon.domain.organizer.OrganizerApplicationStatus;
 import com.ticketon.domain.organizer.OrganizerName;
+import com.ticketon.domain.organizer.OrganizerNameChange;
+import com.ticketon.domain.organizer.OrganizerNameChangeEntry;
 import com.ticketon.domain.organizer.OrganizerStaff;
 import com.ticketon.domain.organizer.OrganizerStatus;
 import com.ticketon.domain.organizer.OrganizerType;
@@ -26,6 +28,7 @@ import com.ticketon.domain.organizer.RejectionReason;
 import com.ticketon.domain.organizer.SettlementAccount;
 import com.ticketon.domain.organizer.TelephoneNumber;
 import com.ticketon.persistence.organizer.OrganizerApplicationPersistenceAdapter;
+import com.ticketon.persistence.organizer.OrganizerNameChangePersistenceAdapter;
 import com.ticketon.persistence.organizer.OrganizerRows;
 import com.ticketon.persistence.organizer.OwnershipChangePersistenceAdapter;
 import com.ticketon.persistence.organizer.OwnershipClaimPersistenceAdapter;
@@ -47,7 +50,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 진짜 PostgreSQL에 마이그레이션 전체를 올리고 관리자 처리 목록 조회를 본다 — 지금 원천은 심사 중인 주최자 신청, 확인 전인 소유자 넘기기, 심사
- * 중인 소유자 이전 신청이다.
+ * 중인 소유자 이전 신청, 확인 전인 주최자명 변경이다.
  * Docker가 없는 환경에서는 건너뛴다.
  */
 @Testcontainers(disabledWithoutDocker = true)
@@ -194,6 +197,33 @@ class AdminWorkQueueQueryPersistenceAdapterTest {
         claims.saveReview(rejected);
 
         assertThat(adapter.pendingWork()).extracting(PendingAdminWork::targetId).containsExactly(plannerClaim);
+    }
+
+    @Test
+    @DisplayName("확인 전인 주최자명 변경이 접수 순서로 쌓이고 — 대상은 이력 id, 제목은 '바꾸기 전 이름 → 바꾼 이름' — 확인하면 빠진다")
+    void unconfirmedOrganizerNameChangesJoinTheQueue() {
+        long application = submit("applicant@example.com", "늦여름", MONDAY_MORNING.plusSeconds(60));
+        long organizerId = rows.organizer("극단 열세달", OrganizerStatus.ACTIVE);
+        long owner = rows.staffAccount("junghoon@example.com");
+        OrganizerNameChangePersistenceAdapter nameChanges = new OrganizerNameChangePersistenceAdapter(dsl);
+        long first = nameChanges.add(organizerId, new OrganizerNameChange(OrganizerName.of("극단 열두달"),
+                OrganizerName.of("열두달 프로젝트"), owner, MONDAY_MORNING)).id();
+        long second = nameChanges.add(organizerId, new OrganizerNameChange(OrganizerName.of("열두달 프로젝트"),
+                OrganizerName.of("극단 열세달"), owner, MONDAY_MORNING.plusSeconds(120))).id();
+
+        assertThat(adapter.pendingWork()).containsExactly(
+                new PendingAdminWork(AdminWorkKind.ORGANIZER_NAME_CHANGE, first, "극단 열두달 → 열두달 프로젝트",
+                        MONDAY_MORNING),
+                new PendingAdminWork(AdminWorkKind.ORGANIZER_APPLICATION, application, "늦여름",
+                        MONDAY_MORNING.plusSeconds(60)),
+                new PendingAdminWork(AdminWorkKind.ORGANIZER_NAME_CHANGE, second, "열두달 프로젝트 → 극단 열세달",
+                        MONDAY_MORNING.plusSeconds(120)));
+
+        OrganizerNameChangeEntry confirmed = nameChanges.findById(first).orElseThrow();
+        confirmed.confirm(AccountRef.of(AccountKind.ADMIN, adminAccount()), MONDAY_MORNING.plusSeconds(3_600));
+        nameChanges.saveConfirmation(confirmed);
+
+        assertThat(adapter.pendingWork()).extracting(PendingAdminWork::targetId).containsExactly(application, second);
     }
 
     /** 활동 중인 주최자에서 소유자가 운영자에게 넘긴 한 건을 이력으로 저장한다 — 소속은 이 조회와 상관없어 넣지 않는다. */
