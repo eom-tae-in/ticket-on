@@ -85,4 +85,40 @@ class PolicyValuesTest {
             assertThatThrownBy(() -> BusinessDays.of(-1)).isInstanceOf(IllegalArgumentException.class);
         }
     }
+
+    @Nested
+    @DisplayName("파일 용량")
+    class FileSizeTest {
+
+        @Test
+        @DisplayName("1MB는 1,048,576바이트로 센다 — 2MB는 2,097,152바이트")
+        void megabytesAreBinary() {
+            assertThat(FileSize.ofMegabytes(2).bytes()).isEqualTo(2_097_152L);
+            assertThat(FileSize.ofMegabytes(2)).hasToString("2MB");
+        }
+
+        @Test
+        @DisplayName("상한과 같은 크기는 넘지 않고, 1바이트라도 크면 넘는다")
+        void exceededOnlyAboveLimit() {
+            FileSize limit = FileSize.ofMegabytes(2);
+
+            assertThat(limit.isExceededBy(2_097_152L)).isFalse();
+            assertThat(limit.isExceededBy(2_097_153L)).isTrue();
+            assertThat(limit.isExceededBy(0)).isFalse();
+        }
+
+        @Test
+        @DisplayName("메가바이트로 나누어떨어지지 않으면 킬로바이트나 바이트로 보인다")
+        void readableText() {
+            assertThat(new FileSize(512 * 1024)).hasToString("512KB");
+            assertThat(new FileSize(100)).hasToString("100B");
+        }
+
+        @Test
+        @DisplayName("0 이하의 용량은 거부한다")
+        void positive() {
+            assertThatThrownBy(() -> new FileSize(0)).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> FileSize.ofMegabytes(-1)).isInstanceOf(IllegalArgumentException.class);
+        }
+    }
 }

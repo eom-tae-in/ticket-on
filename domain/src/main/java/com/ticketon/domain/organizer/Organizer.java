@@ -3,6 +3,7 @@ package com.ticketon.domain.organizer;
 import com.ticketon.domain.account.InitialAvatar;
 import com.ticketon.domain.error.RuleViolationException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -93,14 +94,51 @@ public final class Organizer {
     }
 
     /**
-     * 공개 정보(소개 · SNS 링크 · 로고)를 바꾼다. 운영진 누구나 하는 일이다({@link StaffAction#EDIT_PUBLIC_PROFILE}).
+     * 공개 정보 중 소개 · SNS 링크를 바꾼다. 로고는 그대로다. 운영진 누구나 하는 일이다({@link StaffAction#EDIT_PUBLIC_PROFILE}).
+     * 둘 다 선택이라 비우면 없는 것으로 둔다({@link OrganizerPublicProfile}).
      *
+     * @param newIntroduction 소개 — 비었거나 공백뿐이면 소개 없음
+     * @param newSnsLinks     SNS 링크 — 적은 순서대로. 없으면 빈 목록
+     * @return 바뀌었는지 — 지금과 같으면 아무것도 바꾸지 않고 false
      * @throws RuleViolationException 활동 중인 주최자가 아니면({@link OrganizerErrorCode#ORGANIZER_NOT_ACTIVE})
      */
-    public void changePublicProfile(OrganizerPublicProfile newPublicProfile) {
-        Objects.requireNonNull(newPublicProfile, "newPublicProfile");
+    public boolean changeIntroductionAndSnsLinks(String newIntroduction, List<ExternalLink> newSnsLinks) {
         requireActive();
-        publicProfile = newPublicProfile;
+        OrganizerPublicProfile changed = publicProfile.withIntroductionAndSnsLinks(newIntroduction, newSnsLinks);
+        if (changed.equals(publicProfile)) {
+            return false;
+        }
+        publicProfile = changed;
+        return true;
+    }
+
+    /**
+     * 로고를 새로 올린 것으로 바꾼다(처음 올리기 포함). 운영진 누구나 하는 일이다({@link StaffAction#EDIT_PUBLIC_PROFILE}).
+     * 바꾸기 전 로고는 더는 가리키지 않으므로 그 파일을 지우는 일은 유스케이스가 한다.
+     *
+     * @return 바꾸기 전 로고. 없었으면 빈 값
+     * @throws RuleViolationException 활동 중인 주최자가 아니면({@link OrganizerErrorCode#ORGANIZER_NOT_ACTIVE})
+     */
+    public Optional<OrganizerLogo> changeLogo(OrganizerLogo newLogo) {
+        Objects.requireNonNull(newLogo, "newLogo");
+        requireActive();
+        Optional<OrganizerLogo> previousLogo = Optional.ofNullable(publicProfile.logo());
+        publicProfile = publicProfile.withLogo(newLogo);
+        return previousLogo;
+    }
+
+    /**
+     * 로고를 지운다 — 로고 자리에 다시 이름 첫 글자 + 정해진 색({@link #initialAvatar})이 보인다(docs/01 "공개 페이지 — 로고"). 운영진 누구나
+     * 하는 일이다({@link StaffAction#EDIT_PUBLIC_PROFILE}). 지운 로고의 파일을 지우는 일은 유스케이스가 한다.
+     *
+     * @return 지운 로고. 로고가 없었으면 아무것도 바꾸지 않고 빈 값
+     * @throws RuleViolationException 활동 중인 주최자가 아니면({@link OrganizerErrorCode#ORGANIZER_NOT_ACTIVE})
+     */
+    public Optional<OrganizerLogo> removeLogo() {
+        requireActive();
+        Optional<OrganizerLogo> removedLogo = Optional.ofNullable(publicProfile.logo());
+        removedLogo.ifPresent(logo -> publicProfile = publicProfile.withoutLogo());
+        return removedLogo;
     }
 
     /**
