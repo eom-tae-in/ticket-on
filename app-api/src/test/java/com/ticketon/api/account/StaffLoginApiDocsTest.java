@@ -6,7 +6,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ticketon.api.security.SecurityConfiguration;
-import com.ticketon.application.account.port.in.ChangeStaffNicknameUseCase;
+import com.ticketon.application.account.port.in.ChangeStaffProfileUseCase;
+import com.ticketon.application.account.port.in.GetMyStaffProfileUseCase;
 import com.ticketon.application.account.port.in.LogInStaffUseCase;
 import com.ticketon.application.account.port.in.WithdrawStaffAccountUseCase;
 import org.junit.jupiter.api.DisplayName;
@@ -22,13 +23,13 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * 화면 타입은 /v3/api-docs에서 생성된다(npm run api:types). 운영진 로그인·로그아웃·닉네임 변경의 요청·응답 모양이 명세에 그대로 실리는지
+ * 화면 타입은 /v3/api-docs에서 생성된다(npm run api:types). 운영진 로그인·로그아웃·내 프로필·탈퇴의 요청·응답 모양이 명세에 그대로 실리는지
  * 본다. DB 없이 돈다.
  */
 @WebMvcTest(controllers = {StaffLoginController.class, StaffAccountController.class})
 @Import(SecurityConfiguration.class)
 @ImportAutoConfiguration({SpringDocConfiguration.class, SpringDocConfigProperties.class, SpringDocWebMvcConfiguration.class})
-@DisplayName("운영진 로그인·로그아웃·닉네임 변경 API 명세")
+@DisplayName("운영진 로그인·로그아웃·내 프로필·탈퇴 API 명세")
 class StaffLoginApiDocsTest {
 
     @Autowired
@@ -38,7 +39,10 @@ class StaffLoginApiDocsTest {
     private LogInStaffUseCase logInStaffUseCase;
 
     @MockitoBean
-    private ChangeStaffNicknameUseCase changeStaffNicknameUseCase;
+    private GetMyStaffProfileUseCase getMyStaffProfileUseCase;
+
+    @MockitoBean
+    private ChangeStaffProfileUseCase changeStaffProfileUseCase;
 
     @MockitoBean
     private WithdrawStaffAccountUseCase withdrawStaffAccountUseCase;
@@ -75,14 +79,46 @@ class StaffLoginApiDocsTest {
     }
 
     @Test
-    @DisplayName("닉네임 변경은 PUT으로 nickname 하나를 받아 200에 StaffNicknameResponse를 돌려준다 — 로그인 주체는 파라미터로 싣지 않는다")
-    void changeNicknameOperation() throws Exception {
+    @DisplayName("내 프로필 조회는 GET으로 200에 MyStaffProfileResponse를 돌려준다 — 로그인 주체는 파라미터로 싣지 않는다")
+    void getMyProfileOperation() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.paths['/api/organizer/account/nickname'].put.responses['200']"
-                        + ".content['application/json'].schema['$ref']").value("#/components/schemas/StaffNicknameResponse"))
-                .andExpect(jsonPath("$.paths['/api/organizer/account/nickname'].put.parameters").doesNotExist())
-                .andExpect(jsonPath("$.components.schemas.ChangeStaffNicknameRequest.required", containsInAnyOrder("nickname")))
-                .andExpect(jsonPath("$.components.schemas.StaffNicknameResponse.required", containsInAnyOrder("nickname")));
+                .andExpect(jsonPath("$.paths['/api/organizer/account/profile'].get.responses['200']"
+                        + ".content['application/json'].schema['$ref']").value("#/components/schemas/MyStaffProfileResponse"))
+                .andExpect(jsonPath("$.paths['/api/organizer/account/profile'].get.parameters").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("내 프로필 편집은 PUT으로 nickname(필수) · introduction(선택)을 받아 200에 MyStaffProfileResponse를 돌려준다")
+    void changeProfileOperation() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/organizer/account/profile'].put.responses['200']"
+                        + ".content['application/json'].schema['$ref']").value("#/components/schemas/MyStaffProfileResponse"))
+                .andExpect(jsonPath("$.paths['/api/organizer/account/profile'].put.parameters").doesNotExist())
+                .andExpect(jsonPath("$.components.schemas.ChangeStaffProfileRequest.required", containsInAnyOrder("nickname")))
+                .andExpect(jsonPath("$.components.schemas.ChangeStaffProfileRequest.properties.introduction").exists());
+    }
+
+    @Test
+    @DisplayName("내 프로필 응답은 staffAccountId · nickname · avatar가 필수이고 introduction은 비어 있을 수 있다 — 이름 · 이메일 칸은 없다")
+    void myProfileResponseSchema() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.components.schemas.MyStaffProfileResponse.required",
+                        containsInAnyOrder("staffAccountId", "nickname", "avatar")))
+                .andExpect(jsonPath("$.components.schemas.MyStaffProfileResponse.properties.introduction").exists())
+                .andExpect(jsonPath("$.components.schemas.MyStaffProfileResponse.properties.name").doesNotExist())
+                .andExpect(jsonPath("$.components.schemas.MyStaffProfileResponse.properties.email").doesNotExist())
+                .andExpect(jsonPath("$.components.schemas.InitialAvatarResponse.required",
+                        containsInAnyOrder("initial", "paletteIndex")));
+    }
+
+    @Test
+    @DisplayName("닉네임만 바꾸던 경로(PUT /api/organizer/account/nickname)는 내 프로필 편집에 합쳐져 명세에 없다")
+    void nicknameOnlyPathIsMerged() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/organizer/account/nickname']").doesNotExist());
     }
 }
