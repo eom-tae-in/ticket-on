@@ -15,15 +15,15 @@ import com.ticketon.domain.organizer.TelephoneNumber;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 /**
  * 주최자 신청서 제출 요청 — docs/01 "신청 항목" 표의 항목 전부.
  * <p>
- * 칸마다 비었는지·형식은 여기서 보고(400), 사업자 항목이 사업자 여부와 맞는지(사업자면 다섯 모두 필수, 비사업자면 받지 않음)는 신청
- * 규칙이 본다(409). 담당자 연락처 · 사업자 정보 · 정산 계좌는 민감한 값이라 {@link #toString}에 싣지 않는다.
+ * 칸마다 비었는지·형식은 여기서 도메인 값 객체와 같은 규칙으로 본다(400 — 전각 공백만 넣은 칸도 빈 칸이다, {@link FilledText}).
+ * 사업자 항목이 사업자 여부와 맞는지(사업자면 다섯 모두 필수, 비사업자면 받지 않음)는 신청 규칙이 본다(409).
+ * 담당자 연락처 · 사업자 정보 · 정산 계좌는 민감한 값이라 {@link #toString}에 싣지 않는다.
  */
 @Schema(description = "주최자 신청서 제출 요청")
 public record SubmitOrganizerApplicationRequest(
@@ -33,17 +33,17 @@ public record SubmitOrganizerApplicationRequest(
 
         @Schema(description = "이름 또는 단체명 — 승인되면 주최자명이 된다. 다른 주최자와 겹쳐도 된다", example = "극단 열두달",
                 requiredMode = REQUIRED)
-        @NotBlank(message = "이름 또는 단체명을 입력해 주세요.")
+        @FilledText(message = "이름 또는 단체명을 입력해 주세요.")
         String name,
 
         @Schema(description = "담당자 연락처 — 관리자가 실제로 전화해 본다. 휴대폰·유선·대표번호 모두 된다", example = "010-2345-6789",
                 requiredMode = REQUIRED)
-        @NotBlank(message = "담당자 연락처를 입력해 주세요.")
+        @FilledText(message = "담당자 연락처를 입력해 주세요.")
         String contactPhoneNumber,
 
         @Schema(description = "이메일 — 승인·반려 통지를 받는다. 운영진 로그인 이메일과 달라도 된다", example = "twelve-months@example.com",
                 requiredMode = REQUIRED)
-        @NotBlank(message = "이메일을 입력해 주세요.")
+        @FilledText(message = "이메일을 입력해 주세요.")
         @EmailAddressFormat
         String email,
 
@@ -55,7 +55,7 @@ public record SubmitOrganizerApplicationRequest(
 
         @Schema(description = "과거 행사 이력 또는 계획 — 자유 기술", example = "2019년부터 소극장 정기공연을 해마다 두 번 올립니다.",
                 requiredMode = REQUIRED)
-        @NotBlank(message = "과거 행사 이력 또는 계획을 입력해 주세요.")
+        @FilledText(message = "과거 행사 이력 또는 계획을 입력해 주세요.")
         String eventHistoryOrPlan,
 
         @Schema(description = "사업자 여부 — 사업자면 businessInformation의 다섯 칸이 모두 필수, 비사업자면 businessInformation을 보내지 않는다",
@@ -138,15 +138,15 @@ public record SubmitOrganizerApplicationRequest(
     @Schema(description = "정산 계좌")
     public record SettlementAccountRequest(
             @Schema(description = "은행", example = "국민은행", requiredMode = REQUIRED)
-            @NotBlank(message = "은행을 입력해 주세요.")
+            @FilledText(message = "은행을 입력해 주세요.")
             String bankName,
 
             @Schema(description = "계좌번호 — 적은 그대로 둔다", example = "123456-78-901234", requiredMode = REQUIRED)
-            @NotBlank(message = "계좌번호를 입력해 주세요.")
+            @FilledText(message = "계좌번호를 입력해 주세요.")
             String accountNumber,
 
             @Schema(description = "예금주", example = "박정훈", requiredMode = REQUIRED)
-            @NotBlank(message = "예금주를 입력해 주세요.")
+            @FilledText(message = "예금주를 입력해 주세요.")
             String accountHolder) {
 
         SettlementAccount toSettlementAccount() {

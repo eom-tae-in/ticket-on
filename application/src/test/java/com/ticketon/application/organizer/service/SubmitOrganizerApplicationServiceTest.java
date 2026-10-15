@@ -114,6 +114,17 @@ class SubmitOrganizerApplicationServiceTest {
         }
 
         @Test
+        @DisplayName("전각 공백만 적은 사업자 항목은 적지 않은 것이다 — 빠진 항목으로 거부한다")
+        void unicodeWhitespaceOnlyItemsAreMissing() {
+            BusinessItems whitespaceOnly = new BusinessItems("늦여름 레코드", "\u3000", "서울특별시 마포구 와우산로 12",
+                    "\u3000\u2003", "\u3000");
+
+            assertRejected(() -> service.submit(lateSummer(DOHYUN, whitespaceOnly)),
+                    OrganizerErrorCode.BUSINESS_INFORMATION_MISSING);
+            assertThat(organizerRepository.savedOrganizers()).isEmpty();
+        }
+
+        @Test
         @DisplayName("사업자인데 사업자 항목을 하나도 적지 않으면 거부한다")
         void businessWithoutItemsIsRejected() {
             assertRejected(() -> service.submit(lateSummer(DOHYUN, BusinessItems.none())),

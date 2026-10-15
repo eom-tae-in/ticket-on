@@ -39,6 +39,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -191,6 +192,29 @@ class OrganizerApplicationControllerTest {
         verify(submitOrganizerApplicationUseCase, never()).submit(any());
     }
 
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', value = {
+            "name                           | 극단 열두달                                 | 이름 또는 단체명을 입력해 주세요.",
+            "contactPhoneNumber             | 010-2345-6789                               | 담당자 연락처를 입력해 주세요.",
+            "email                          | twelve-months@example.com                   | 이메일을 입력해 주세요.",
+            "eventHistoryOrPlan             | 2019년부터 소극장 정기공연을 해마다 두 번 올립니다. | 과거 행사 이력 또는 계획을 입력해 주세요.",
+            "settlementAccount.bankName     | 국민은행                                    | 은행을 입력해 주세요.",
+            "settlementAccount.accountNumber | 123456-78-901234                           | 계좌번호를 입력해 주세요.",
+            "settlementAccount.accountHolder | 박정훈                                     | 예금주를 입력해 주세요."})
+    @DisplayName("전각 공백(U+3000)처럼 유니코드 공백만 넣은 칸도 빈 칸이라 400이다 — 도메인 값 객체와 같은 규칙이라 500이 되지 않는다")
+    void unicodeWhitespaceOnlyIsBadRequest(String field, String writtenValue, String message) throws Exception {
+        String body = TWELVE_MONTHS_BODY.replace("\"" + writtenValue + "\"", "\" \u3000\u2003\u3000 \"");
+
+        mockMvc.perform(submit(body).with(loggedInAs(JUNGHOON)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                .andExpect(jsonPath("$.fieldErrors", hasSize(1)))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value(field))
+                .andExpect(jsonPath("$.fieldErrors[0].message").value(message));
+
+        verify(submitOrganizerApplicationUseCase, never()).submit(any());
+    }
+
     @Test
     @DisplayName("정산 계좌를 보내지 않으면 400 '정산 계좌를 입력해 주세요.'다")
     void settlementAccountIsRequired() throws Exception {
@@ -206,7 +230,7 @@ class OrganizerApplicationControllerTest {
     }
 
     @ParameterizedTest(name = "\"{0}\"")
-    @ValueSource(strings = {"javascript:alert(1)", "www.instagram.com/twelve", "ftp://files.example", " "})
+    @ValueSource(strings = {"javascript:alert(1)", "www.instagram.com/twelve", "ftp://files.example", " ", "\u3000"})
     @DisplayName("http(s) 주소가 아닌 링크는 400이고 몇 번째 링크인지 알려 준다")
     void invalidLinkIsBadRequest(String link) throws Exception {
         String body = TWELVE_MONTHS_BODY.replace("\"https://blog.example/twelve-months\"", "\"" + link + "\"");
