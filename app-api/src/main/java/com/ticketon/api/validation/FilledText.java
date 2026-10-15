@@ -1,4 +1,4 @@
-package com.ticketon.api.organizer;
+package com.ticketon.api.validation;
 
 import jakarta.validation.Constraint;
 import jakarta.validation.ConstraintValidator;

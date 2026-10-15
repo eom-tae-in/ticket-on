@@ -4,6 +4,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.ticketon.api.account.EmailAddressFormat;
+import com.ticketon.api.validation.FilledText;
 import com.ticketon.application.organizer.port.in.BusinessItems;
 import com.ticketon.application.organizer.port.in.SubmitOrganizerApplicationCommand;
 import com.ticketon.domain.account.AccountRef;
