@@ -8,5 +8,8 @@ package com.ticketon.domain.admin;
 public enum AdminOperationTargetKind {
 
     /** 관리자 계정. */
-    ADMIN_ACCOUNT
+    ADMIN_ACCOUNT,
+
+    /** 주최자 신청서 — 심사받는 주최자는 신청서가 가리킨다. */
+    ORGANIZER_APPLICATION
 }

@@ -148,7 +148,7 @@ class OrganizerHomeQueryPersistenceAdapterTest {
                 .id().getAsLong();
     }
 
-    /** 관리자가 반려한 것처럼 표를 바꾼다 — 반려 유스케이스는 #23이 만든다. */
+    /** 관리자가 반려한 것처럼 표를 바로 바꾼다 — 심사 결과 저장은 신청서 저장소 테스트가 본다. */
     private static void reject(long applicationId, String reason, Instant reviewedAt) {
         dsl.update(ORGANIZER_APPLICATION)
                 .set(ORGANIZER_APPLICATION.STATUS, OrganizerApplicationStatus.REJECTED.name())

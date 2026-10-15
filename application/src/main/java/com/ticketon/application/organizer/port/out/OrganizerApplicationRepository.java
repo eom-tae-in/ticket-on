@@ -29,4 +29,18 @@ public interface OrganizerApplicationRepository {
     OrganizerApplication add(OrganizerApplication newApplication);
 
     Optional<OrganizerApplication> findById(long id);
+
+    /**
+     * 승인·반려한 신청서의 상태 · 처리 일시 · 반려 사유를 저장한다.
+     * <p>
+     * <b>표에서 아직 심사 중일 때만 바꾼다.</b> 두 관리자가 같은 신청을 거의 동시에 승인·반려하면 둘 다 심사 중으로 읽고 규칙을 통과할 수 있어,
+     * 마지막 판정은 이 조건부 저장이 한다. 진 쪽은 충돌이 되고 그 트랜잭션은 되돌려진다 — 함께 바꾼 주최자·소속·조작 기록도 남지 않고 메일도
+     * 나가지 않는다.
+     *
+     * @param reviewedApplication {@link OrganizerApplication#approve} 또는 {@link OrganizerApplication#reject}로 처리한, 저장된
+     *                            신청서
+     * @throws ConflictException        표의 신청서가 이미 심사 중이 아니면({@code APPLICATION_ALREADY_REVIEWED}) — 다른 관리자가 먼저 처리했다
+     * @throws IllegalArgumentException 저장 전 신청서이거나 아직 심사 중인 신청서면
+     */
+    void saveReview(OrganizerApplication reviewedApplication);
 }

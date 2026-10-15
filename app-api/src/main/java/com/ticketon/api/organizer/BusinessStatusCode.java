@@ -21,6 +21,16 @@ public enum BusinessStatusCode {
         this.businessStatus = businessStatus;
     }
 
+    /** 도메인 사업자 여부의 API 이름 — 관리자 심사 화면도 쓴다. */
+    public static BusinessStatusCode from(BusinessStatus businessStatus) {
+        for (BusinessStatusCode code : values()) {
+            if (code.businessStatus == businessStatus) {
+                return code;
+            }
+        }
+        throw new IllegalArgumentException("API 이름이 없는 사업자 여부: " + businessStatus);
+    }
+
     BusinessStatus toBusinessStatus() {
         return businessStatus;
     }

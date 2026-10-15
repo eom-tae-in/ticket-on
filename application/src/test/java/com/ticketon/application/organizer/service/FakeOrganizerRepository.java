@@ -4,6 +4,7 @@ import com.ticketon.application.organizer.port.out.OrganizerRepository;
 import com.ticketon.domain.organizer.Organizer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /** 메모리 주최자 저장소 — 저장 순서대로 1부터 id를 붙인다. */
 final class FakeOrganizerRepository implements OrganizerRepository {
@@ -23,5 +24,15 @@ final class FakeOrganizerRepository implements OrganizerRepository {
 
     List<Organizer> savedOrganizers() {
         return List.copyOf(organizers);
+    }
+
+    @Override
+    public Optional<Organizer> findById(long id) {
+        return organizers.stream().filter(organizer -> organizer.id().orElseThrow() == id).findFirst();
+    }
+
+    @Override
+    public void saveApproval(Organizer approvedOrganizer) {
+        throw new UnsupportedOperationException("주최자 신청 제출·주최 홈에서는 승인을 저장하지 않습니다");
     }
 }

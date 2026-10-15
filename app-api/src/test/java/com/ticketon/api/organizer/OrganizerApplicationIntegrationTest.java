@@ -33,7 +33,8 @@ import tools.jackson.databind.json.JsonMapper;
  * 서버 전체를 진짜 PostgreSQL(마이그레이션 전체)로 띄우고, 실제 HTTP 요청으로 운영진 로그인 → 주최 홈(소속 없음) → 신청서 제출 →
  * 주최 홈(심사 중) → 반려 → 주최 홈(반려 사유) → 다시 신청을 끝까지 돌린다. Docker가 없는 환경에서는 건너뛴다.
  * <p>
- * 반려와 승인은 관리자 심사(#23)가 만들므로, 그 결과는 표를 바꿔 흉내 낸다. 브라우저 하나를 쿠키를 기억하는 HTTP 클라이언트 하나로
+ * 관리자 심사(승인·반려)는 OrganizerReviewIntegrationTest가 끝까지 돌리므로, 여기서는 그 결과를 표를 바꿔 흉내 내고 주최 홈 상태만
+ * 본다. 브라우저 하나를 쿠키를 기억하는 HTTP 클라이언트 하나로
  * 흉내 내고, 상태를 바꾸는 요청에는 그 세션의 CSRF 토큰을 싣는다(시험 전용 주소 {@link LoginTestController}에서 받는다).
  * 테스트끼리 같은 DB를 쓰므로 테스트마다 다른 이메일·닉네임을 쓴다.
  */
@@ -200,7 +201,7 @@ class OrganizerApplicationIntegrationTest {
         return jsonMapper.readValue(response.body(), OrganizerHomeResponse.class);
     }
 
-    /** 관리자가 반려한 것처럼 표를 바꾼다 — 반려 유스케이스는 #23이 만든다. */
+    /** 관리자가 반려한 것처럼 표를 바꾼다 — 관리자 반려 흐름은 OrganizerReviewIntegrationTest가 본다. */
     private void rejectAsAdministrator(long applicationId, String reason) {
         jdbcTemplate.update("""
                 UPDATE organizer_application
@@ -208,7 +209,7 @@ class OrganizerApplicationIntegrationTest {
                 WHERE id = ?""", reason, applicationId);
     }
 
-    /** 관리자가 승인한 것처럼 표를 바꾼다 — 주최자는 활동, 신청한 사람은 소유자. 승인 유스케이스는 #23이 만든다. */
+    /** 관리자가 승인한 것처럼 표를 바꾼다 — 주최자는 활동, 신청한 사람은 소유자. 관리자 승인 흐름은 OrganizerReviewIntegrationTest가 본다. */
     private long approveAsAdministrator(long applicationId, long applicantStaffAccountId) {
         Long organizerId = jdbcTemplate.queryForObject("SELECT organizer_id FROM organizer_application WHERE id = ?",
                 Long.class, applicationId);
