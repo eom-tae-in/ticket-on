@@ -11,6 +11,7 @@ import com.ticketon.domain.account.NicknameAvailability;
 import com.ticketon.domain.account.PasswordHash;
 import com.ticketon.domain.account.StaffAccount;
 import com.ticketon.domain.account.StaffAccountStatus;
+import com.ticketon.domain.account.StaffIntroduction;
 import com.ticketon.domain.account.StaffPersonalInformation;
 import com.ticketon.domain.error.ConflictException;
 import com.ticketon.persistence.jooq.tables.records.StaffAccountRecord;
@@ -33,13 +34,13 @@ import org.springframework.stereotype.Component;
  * 운영진 로그인 계정 저장소(staff_account — V5) 어댑터.
  *
  * <h2>이메일·닉네임 하나에 계정 하나 — 동시 가입·변경 경합</h2>
- * 가입과 닉네임 변경은 "쓸 수 있는지 확인 → 저장" 두 단계라, 같은 이메일이나 닉네임으로 거의 동시에 요청하면 둘 다 확인을 통과할 수 있다.
+ * 가입과 닉네임 변경(내 프로필 저장)은 "쓸 수 있는지 확인 → 저장" 두 단계라, 같은 이메일이나 닉네임으로 거의 동시에 요청하면 둘 다 확인을 통과할 수 있다.
  * 그래서 마지막 판정은 표의 유일 색인(탈퇴하지 않은 계정 사이에서 소문자 이메일이 하나, 모든 계정 사이에서 닉네임이 하나)이 한다.
  * <ul>
  *   <li>가입은 {@code INSERT … ON CONFLICT DO NOTHING}으로 하고, 한 줄도 들어가지 않으면 진 쪽이다. 진 쪽은 겹친 칸을 다시 조회해
  *       이메일이면 이메일 문구, 닉네임이면 닉네임 문구의 {@link ConflictException}(409)이 된다(관객 계정 어댑터와 같은 방식).</li>
- *   <li>닉네임 변경은 UPDATE라 ON CONFLICT를 쓸 수 없다. 유일 색인에 막히면 PostgreSQL이 그 문장을 거부하는데(SQLSTATE 23505),
- *       바꾸는 칸이 닉네임 하나라 겹친 칸을 다시 볼 필요 없이 닉네임 문구의 충돌로 바꾼다. 트랜잭션은 그 뒤 되돌려진다.</li>
+ *   <li>프로필 저장은 UPDATE라 ON CONFLICT를 쓸 수 없다. 유일 색인에 막히면 PostgreSQL이 그 문장을 거부하는데(SQLSTATE 23505),
+ *       함께 바꾸는 한 줄 소개에는 유일 색인이 없어 겹친 칸을 다시 볼 필요 없이 닉네임 문구의 충돌로 바꾼다. 트랜잭션은 그 뒤 되돌려진다.</li>
  * </ul>
  * 먼저 들어온 쪽이 아직 커밋하지 않았으면 PostgreSQL이 그 결과를 기다렸다가 판정하므로 둘 다 들어가는 일은 없다.
  *
@@ -47,7 +48,7 @@ import org.springframework.stereotype.Component;
  * email 칸은 적은 그대로 두고, 비교는 PostgreSQL lower()로 소문자로 바꾼 email_lowercase로 한다(관객 계정과 같다).
  *
  * <h2>탈퇴</h2>
- * 탈퇴하면 줄은 남기고 이름 · 이메일 · 비밀번호 해시 · 이메일 인증 일시를 지운다(V13). 닉네임과 가입 일시는 남는다. 같은 계정의 탈퇴가 거의
+ * 탈퇴하면 줄은 남기고 이름 · 이메일 · 한 줄 소개 · 비밀번호 해시 · 이메일 인증 일시를 지운다(V13, V15). 닉네임과 가입 일시는 남는다. 같은 계정의 탈퇴가 거의
  * 동시에 두 번 들어와도 {@code UPDATE … WHERE status = 'ACTIVE'}가 하나만 통과시킨다.
  */
 @Component
@@ -152,9 +153,9 @@ public class StaffAccountPersistenceAdapter implements StaffAccountRepository {
     }
 
     @Override
-    public void saveNickname(StaffAccount changedAccount) {
+    public void saveProfile(StaffAccount changedAccount) {
         long id = changedAccount.id().orElseThrow(() -> new IllegalArgumentException("저장하지 않은 계정입니다"));
-        int updatedRows = updateNickname(id, changedAccount.nickname());
+        int updatedRows = updateProfile(id, changedAccount.nickname(), changedAccount.introduction().orElse(null));
         if (updatedRows == 0) {
             throw new ConflictException(AccountErrorCode.STAFF_NOT_ACTIVE, "활동 중이 아니게 된 운영진 계정: " + id);
         }
@@ -184,6 +185,7 @@ public class StaffAccountPersistenceAdapter implements StaffAccountRepository {
                 .setNull(STAFF_ACCOUNT.NAME)
                 .setNull(STAFF_ACCOUNT.EMAIL)
                 .setNull(STAFF_ACCOUNT.EMAIL_LOWERCASE)
+                .setNull(STAFF_ACCOUNT.INTRODUCTION)
                 .setNull(STAFF_ACCOUNT.PASSWORD_HASH)
                 .setNull(STAFF_ACCOUNT.EMAIL_VERIFIED_AT)
                 .where(STAFF_ACCOUNT.ID.eq(id))
@@ -194,11 +196,12 @@ public class StaffAccountPersistenceAdapter implements StaffAccountRepository {
         }
     }
 
-    /** 유일 색인에 막히면 닉네임 충돌로 바꾼다. 그 밖의 오류는 그대로 내보낸다. */
-    private int updateNickname(long id, Nickname nickname) {
+    /** 닉네임과 한 줄 소개를 함께 바꾼다. 유일 색인에 막히면 닉네임 충돌로 바꾼다. 그 밖의 오류는 그대로 내보낸다. */
+    private int updateProfile(long id, Nickname nickname, StaffIntroduction introduction) {
         try {
             return dsl.update(STAFF_ACCOUNT)
                     .set(STAFF_ACCOUNT.NICKNAME, nickname.value())
+                    .set(STAFF_ACCOUNT.INTRODUCTION, introduction == null ? null : introduction.value())
                     .where(STAFF_ACCOUNT.ID.eq(id))
                     .and(STAFF_ACCOUNT.STATUS.eq(StaffAccountStatus.ACTIVE.name()))
                     .execute();
@@ -238,8 +241,10 @@ public class StaffAccountPersistenceAdapter implements StaffAccountRepository {
         StaffPersonalInformation personalInformation = new StaffPersonalInformation(account.getName(),
                 new EmailAddress(account.getEmail()));
         Instant emailVerifiedAt = account.getEmailVerifiedAt() == null ? null : account.getEmailVerifiedAt().toInstant();
+        StaffIntroduction introduction = account.getIntroduction() == null ? null
+                : new StaffIntroduction(account.getIntroduction());
         return StaffAccount.restore(account.getId(), personalInformation, new Nickname(account.getNickname()),
-                new PasswordHash(account.getPasswordHash()), account.getSignedUpAt().toInstant(),
+                introduction, new PasswordHash(account.getPasswordHash()), account.getSignedUpAt().toInstant(),
                 StaffAccountStatus.valueOf(account.getStatus()), emailVerifiedAt);
     }
 

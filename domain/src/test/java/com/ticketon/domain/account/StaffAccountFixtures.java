@@ -20,6 +20,9 @@ final class StaffAccountFixtures {
 
     static final Nickname NICKNAME = Nickname.of("조용한고래");
 
+    /** 한 줄 소개 — docs/01 "운영진 프로필" 예시. */
+    static final StaffIntroduction INTRODUCTION = new StaffIntroduction("극단에서 연출하고 있습니다");
+
     private StaffAccountFixtures() {
     }
 
@@ -35,13 +38,19 @@ final class StaffAccountFixtures {
 
     /** 저장소에서 읽은 인증 대기 계정 — id가 있다. */
     static StaffAccount storedPendingAccount(long id) {
-        return StaffAccount.restore(id, personalInformation(), NICKNAME, PASSWORD_HASH, SIGNUP_TIME,
+        return StaffAccount.restore(id, personalInformation(), NICKNAME, null, PASSWORD_HASH, SIGNUP_TIME,
                 StaffAccountStatus.PENDING_VERIFICATION, null);
     }
 
     /** 저장소에서 읽은, 이메일 인증까지 마친 계정(활동). */
     static StaffAccount storedActiveAccount(long id) {
-        return StaffAccount.restore(id, personalInformation(), NICKNAME, PASSWORD_HASH, SIGNUP_TIME,
+        return StaffAccount.restore(id, personalInformation(), NICKNAME, null, PASSWORD_HASH, SIGNUP_TIME,
+                StaffAccountStatus.ACTIVE, SIGNUP_TIME.plusSeconds(300));
+    }
+
+    /** 저장소에서 읽은, 한 줄 소개를 적은 활동 계정. */
+    static StaffAccount storedActiveAccountWithIntroduction(long id) {
+        return StaffAccount.restore(id, personalInformation(), NICKNAME, INTRODUCTION, PASSWORD_HASH, SIGNUP_TIME,
                 StaffAccountStatus.ACTIVE, SIGNUP_TIME.plusSeconds(300));
     }
 

@@ -7,7 +7,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 
 /**
- * 운영진 로그인 계정 — 주최자 쪽 로그인. 이름·이메일, 닉네임, 비밀번호 해시, 상태, 이메일 인증 여부
+ * 운영진 로그인 계정 — 주최자 쪽 로그인. 이름·이메일, 닉네임, 한 줄 소개, 비밀번호 해시, 상태, 이메일 인증 여부
  * (docs/01 "계정 4종", "수집 정보 — 주최자 운영진").
  * <p>
  * <b>관객 계정과 별개다.</b> 같은 이메일로 관객 계정과 운영진 로그인을 둘 다 만들 수 있지만 서로 연결하지 않고, 운영진 로그인으로는
@@ -16,10 +16,12 @@ import java.util.OptionalLong;
  * <p>
  * 새 계정은 {@link #signUp}으로만 만든다. 이메일과 닉네임이 겹치면 막고, 인증 대기 상태로 시작한다. 이메일 인증을 마쳐야
  * 로그인할 수 있다. 닉네임은 바꿀 수 있다({@link #changeNickname}) — 참여 이력은 계정을 가리키므로 그대로 따라간다.
+ * 닉네임과 한 줄 소개({@link #changeIntroduction})는 운영진 프로필에 공개된다(docs/01 "공개 페이지 — 운영진 프로필"). 소개는 선택이라
+ * 가입할 때는 없고 내 프로필에서 적는다. 이름 · 이메일은 공개되지 않는다.
  * 비밀번호는 해시({@link PasswordHash})로만 갖는다. 원문의 최소 규칙은 {@link NewPassword}가 지킨다. 비밀번호는 비밀번호 찾기로만
  * 다시 정한다({@link #resetPassword}).
  * <p>
- * <b>탈퇴</b>({@link #withdraw})하면 이름 · 이메일 · 비밀번호 해시를 바로 파기한다 — 회원 탈퇴 시 법정 보존 대상 외 즉시 파기
+ * <b>탈퇴</b>({@link #withdraw})하면 이름 · 이메일 · 한 줄 소개 · 비밀번호 해시를 바로 파기한다 — 회원 탈퇴 시 법정 보존 대상 외 즉시 파기
  * (docs/11 "데이터 보관"). 운영진 로그인에는 법정 보존 대상(결제 기록 등)이 없다. <b>닉네임과 가입 일시는 남는다</b> — 닉네임은 공개
  * 프로필과 소속 이력 · 운영진 조작 기록에 남은 이름이라, 다른 사람이 같은 닉네임을 가져가지 않게 탈퇴한 뒤에도 쥔다(#15). 이메일은 풀려 같은
  * 이메일로 다시 가입할 수 있다. 소유자인 주최자가 남아 있으면 탈퇴할 수 없다는 규칙은 소속을 아는 주최자 도메인이 본다
@@ -34,16 +36,19 @@ public final class StaffAccount {
     private final Instant signedUpAt;
     private StaffPersonalInformation personalInformation;
     private Nickname nickname;
+    private StaffIntroduction introduction;
     private PasswordHash passwordHash;
     private StaffAccountStatus status;
     private Instant emailVerifiedAt;
     private Instant withdrawnAt;
 
     private StaffAccount(Long id, StaffPersonalInformation personalInformation, Nickname nickname,
-            PasswordHash passwordHash, Instant signedUpAt, StaffAccountStatus status, Instant emailVerifiedAt) {
+            StaffIntroduction introduction, PasswordHash passwordHash, Instant signedUpAt, StaffAccountStatus status,
+            Instant emailVerifiedAt) {
         this.id = id;
         this.personalInformation = Objects.requireNonNull(personalInformation, "personalInformation");
         this.nickname = Objects.requireNonNull(nickname, "nickname");
+        this.introduction = introduction;
         this.passwordHash = Objects.requireNonNull(passwordHash, "passwordHash");
         this.signedUpAt = Objects.requireNonNull(signedUpAt, "signedUpAt");
         this.status = Objects.requireNonNull(status, "status");
@@ -59,7 +64,7 @@ public final class StaffAccount {
     }
 
     /**
-     * 가입한다. 새 계정은 인증 대기 상태다.
+     * 가입한다. 새 계정은 인증 대기 상태다. 한 줄 소개는 없다 — 가입할 때 받지 않는다.
      * <p>
      * 이메일 → 닉네임 순서로 보고, 처음 걸린 것으로 막는다.
      *
@@ -83,30 +88,33 @@ public final class StaffAccount {
             throw new RuleViolationException(AccountErrorCode.STAFF_EMAIL_ALREADY_REGISTERED);
         }
         requireNicknameAvailable(nickname, nicknameAvailability);
-        return new StaffAccount(null, personalInformation, nickname, passwordHash, now,
+        return new StaffAccount(null, personalInformation, nickname, null, passwordHash, now,
                 StaffAccountStatus.PENDING_VERIFICATION, null);
     }
 
     /**
      * 저장소에서 읽은 값으로 탈퇴하지 않은 계정을 되살린다. 가입 규칙은 다시 보지 않는다.
      *
+     * @param introduction    한 줄 소개. 적지 않았으면 null.
      * @param status          인증 대기 또는 활동. 탈퇴한 계정은 {@link #restoreWithdrawn}으로 되살린다.
      * @param emailVerifiedAt 이메일 인증 일시. 인증 전이면 null.
      * @throws IllegalArgumentException 탈퇴 상태이거나, 상태와 이메일 인증 여부가 맞지 않으면(인증 대기인데 인증 일시가 있는 등)
      */
     public static StaffAccount restore(long id, StaffPersonalInformation personalInformation, Nickname nickname,
-            PasswordHash passwordHash, Instant signedUpAt, StaffAccountStatus status, Instant emailVerifiedAt) {
+            StaffIntroduction introduction, PasswordHash passwordHash, Instant signedUpAt, StaffAccountStatus status,
+            Instant emailVerifiedAt) {
         requirePositiveId(id);
         Objects.requireNonNull(status, "status");
         if (status == StaffAccountStatus.WITHDRAWN) {
             throw new IllegalArgumentException("탈퇴한 계정은 개인정보 없이 restoreWithdrawn으로 되살립니다: " + id);
         }
         requireVerificationMatchesStatus(status, emailVerifiedAt);
-        return new StaffAccount(id, personalInformation, nickname, passwordHash, signedUpAt, status, emailVerifiedAt);
+        return new StaffAccount(id, personalInformation, nickname, introduction, passwordHash, signedUpAt, status,
+                emailVerifiedAt);
     }
 
     /**
-     * 저장소에서 읽은 값으로 탈퇴한 계정을 되살린다. 이름 · 이메일 · 비밀번호 해시는 탈퇴할 때 파기해 없다.
+     * 저장소에서 읽은 값으로 탈퇴한 계정을 되살린다. 이름 · 이메일 · 한 줄 소개 · 비밀번호 해시는 탈퇴할 때 파기해 없다.
      *
      * @param nickname    탈퇴한 뒤에도 쥐고 있는 닉네임
      * @param withdrawnAt 탈퇴 일시
@@ -186,7 +194,43 @@ public final class StaffAccount {
     }
 
     /**
-     * 운영진 로그인을 탈퇴한다 — 이름 · 이메일 · 비밀번호 해시를 파기하고(docs/11 "데이터 보관 — 회원 탈퇴 시"), 닉네임과 가입 일시만 남긴다.
+     * 한 줄 소개를 바꾼다(docs/13 "내 프로필 — 닉네임 · 한 줄 소개 편집"). 소개는 선택이라 지울 수도 있다.
+     * <p>
+     * 지금 소개와 같으면 아무것도 바꾸지 않는다.
+     *
+     * @param newIntroduction 새 소개. 지우려면 null.
+     * @return 소개가 바뀌었으면 true, 지금 소개와 같아 그대로면 false
+     * @throws RuleViolationException 인증 대기 계정({@link AccountErrorCode#STAFF_NOT_ACTIVE}),
+     *                                탈퇴한 계정({@link AccountErrorCode#STAFF_WITHDRAWN})
+     */
+    public boolean changeIntroduction(StaffIntroduction newIntroduction) {
+        requireActive();
+        if (Objects.equals(newIntroduction, introduction)) {
+            return false;
+        }
+        introduction = newIntroduction;
+        return true;
+    }
+
+    /**
+     * 활동 중인 계정인지 확인한다 — 내 프로필(닉네임 · 한 줄 소개)을 보거나 바꾸는 일은 활동 중인 계정만 한다. 인증 전 · 탈퇴 뒤에는 로그인할 수
+     * 없어 보통은 걸리지 않는다.
+     *
+     * @throws RuleViolationException 인증 대기 계정({@link AccountErrorCode#STAFF_NOT_ACTIVE}),
+     *                                탈퇴한 계정({@link AccountErrorCode#STAFF_WITHDRAWN})
+     */
+    public void requireActive() {
+        switch (status) {
+            case ACTIVE -> {
+            }
+            case PENDING_VERIFICATION -> throw new RuleViolationException(AccountErrorCode.STAFF_NOT_ACTIVE);
+            case WITHDRAWN -> throw new RuleViolationException(AccountErrorCode.STAFF_WITHDRAWN);
+        }
+    }
+
+    /**
+     * 운영진 로그인을 탈퇴한다 — 이름 · 이메일 · 한 줄 소개 · 비밀번호 해시를 파기하고(docs/11 "데이터 보관 — 회원 탈퇴 시"), 닉네임과 가입 일시만
+     * 남긴다.
      * 탈퇴한 계정은 로그인할 수 없다. 소유자인 주최자가 남아 있으면 탈퇴할 수 없다는 규칙과 소속을 끝내는 일은 부르는 쪽이 먼저 한다
      * ({@code StaffAffiliations#requireWithdrawable}, {@code OrganizerStaff#leave}). 로그인 세션을 모두 끊는 일도 부르는 쪽이 한다.
      *
@@ -201,6 +245,7 @@ public final class StaffAccount {
                 status = StaffAccountStatus.WITHDRAWN;
                 withdrawnAt = now;
                 personalInformation = null;
+                introduction = null;
                 passwordHash = null;
                 emailVerifiedAt = null;
             }
@@ -231,6 +276,24 @@ public final class StaffAccount {
 
     public Nickname nickname() {
         return nickname;
+    }
+
+    /** 한 줄 소개. 적지 않았거나 탈퇴했으면(탈퇴할 때 파기) 비어 있다. */
+    public Optional<StaffIntroduction> introduction() {
+        return Optional.ofNullable(introduction);
+    }
+
+    /**
+     * 닉네임 첫 글자 + 사람마다 정해진 색 — 운영진 프로필에 사진 대신 보이는 표시(docs/01 "운영진 프로필 — 표시"). 색은 계정 id로 정해져 닉네임을
+     * 바꿔도 그대로다. 주최자 로고와 같은 팔레트를 쓴다.
+     *
+     * @throws IllegalStateException 저장 전이라 id가 없으면
+     */
+    public InitialAvatar initialAvatar() {
+        if (id == null) {
+            throw new IllegalStateException("저장 전 계정은 색을 정할 id가 없습니다");
+        }
+        return InitialAvatar.of(nickname.value(), id);
     }
 
     /**

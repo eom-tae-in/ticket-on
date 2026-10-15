@@ -56,7 +56,7 @@ class OwnershipClaimTest {
 
     private static StaffAccount activeAccount(long id) {
         return StaffAccount.restore(id, StaffPersonalInformation.of("김기획", "planner@example.com"), Nickname.of("푸른바람"),
-                new PasswordHash("{test}hashed-password"), APPROVED_AT, StaffAccountStatus.ACTIVE, APPROVED_AT);
+                null, new PasswordHash("{test}hashed-password"), APPROVED_AT, StaffAccountStatus.ACTIVE, APPROVED_AT);
     }
 
     /** 기획 단원이 낸, 저장된 심사 중 신청 — 신청 때의 소유자는 박정훈이다. */

@@ -21,7 +21,7 @@ import java.util.stream.Stream;
 
 /**
  * 메모리 운영진 계정 저장소 — 저장소 약속을 표처럼 지킨다: 탈퇴하지 않은 계정 사이에서 이메일(대소문자 무시)이 하나, 모든 계정 사이에서
- * 닉네임이 하나, 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만, 닉네임·비밀번호·탈퇴 저장은 활동
+ * 닉네임이 하나, 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만, 프로필·비밀번호·탈퇴 저장은 활동
  * 중일 때만, 이메일로 찾을 때 탈퇴한 계정은 빼고. 저장소에 물은 횟수를 센다.
  */
 final class FakeStaffAccountRepository implements StaffAccountRepository {
@@ -38,7 +38,7 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
         signupRaceLoss = lostOn;
     }
 
-    /** 다음 닉네임 저장 직전에 다른 운영진이 같은 닉네임을 먼저 저장한 것처럼. */
+    /** 다음 프로필 저장 직전에 다른 운영진이 같은 닉네임을 먼저 저장한 것처럼. */
     void letAnotherNicknameChangeWinNextSave() {
         anotherNicknameChangeWinsNextSave = true;
     }
@@ -112,7 +112,7 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
     }
 
     @Override
-    public void saveNickname(StaffAccount changedAccount) {
+    public void saveProfile(StaffAccount changedAccount) {
         long id = changedAccount.id().getAsLong();
         boolean takenByOther = accounts.values().stream()
                 .anyMatch(account -> account.id().getAsLong() != id && account.nickname().equals(changedAccount.nickname()));
@@ -163,7 +163,7 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
             return StaffAccount.restoreWithdrawn(id, account.nickname(), account.signedUpAt(),
                     account.withdrawnAt().orElseThrow());
         }
-        return StaffAccount.restore(id, account.personalInformation(), account.nickname(), account.passwordHash(),
-                account.signedUpAt(), account.status(), account.emailVerifiedAt().orElse(null));
+        return StaffAccount.restore(id, account.personalInformation(), account.nickname(),
+                account.introduction().orElse(null), account.passwordHash(), account.signedUpAt(), account.status(), account.emailVerifiedAt().orElse(null));
     }
 }

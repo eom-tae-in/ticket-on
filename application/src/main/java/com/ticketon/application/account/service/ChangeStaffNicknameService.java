@@ -30,7 +30,7 @@ public class ChangeStaffNicknameService implements ChangeStaffNicknameUseCase {
                 .orElseThrow(() -> new IllegalStateException("로그인한 주체의 운영진 계정이 없습니다: " + accountId));
         Nickname newNickname = command.nickname();
         if (account.changeNickname(newNickname, accountRepository.nicknameAvailability(newNickname))) {
-            accountRepository.saveNickname(account);
+            accountRepository.saveProfile(account);
         }
         return new ChangeStaffNicknameResult(account.nickname().value());
     }
