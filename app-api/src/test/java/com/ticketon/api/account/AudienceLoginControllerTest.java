@@ -26,6 +26,7 @@ import com.ticketon.domain.account.AccountErrorCode;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.account.EmailAddress;
+import com.ticketon.domain.account.OAuthProvider;
 import com.ticketon.domain.error.RuleViolationException;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -306,7 +307,7 @@ class AudienceLoginControllerTest {
     class MyAccount {
 
         @Test
-        @DisplayName("이름·이메일·전화번호·이용 정지 여부·연결된 OAuth를 돌려준다 — 계정 id는 내보내지 않는다")
+        @DisplayName("이름·이메일·전화번호·이용 정지 여부·연결된 카카오·구글을 돌려준다 — 계정 id는 내보내지 않는다")
         void returnsAccount() throws Exception {
             given(getMyAudienceAccountUseCase.getMyAccount(any())).willReturn(seoyunAccount(false));
 
@@ -315,6 +316,18 @@ class AudienceLoginControllerTest {
                     .andExpect(content().json("""
                             {"name":"한서윤","email":"seoyun@example.com","phoneNumber":"01012345678",
                              "suspended":false,"linkedOAuthProviders":[]}""", JsonCompareMode.STRICT));
+        }
+
+        @Test
+        @DisplayName("연결된 카카오·구글은 API 이름(KAKAO, GOOGLE)으로 받은 순서대로 돌려준다")
+        void returnsLinkedProviders() throws Exception {
+            given(getMyAudienceAccountUseCase.getMyAccount(any())).willReturn(new GetMyAudienceAccountResult("한서윤",
+                    "seoyun@example.com", "01012345678", false, List.of(OAuthProvider.KAKAO, OAuthProvider.GOOGLE)));
+
+            mockMvc.perform(get(ACCOUNT_PATH).with(loggedInAs(SEOYUN)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.linkedOAuthProviders[0]").value("KAKAO"))
+                    .andExpect(jsonPath("$.linkedOAuthProviders[1]").value("GOOGLE"));
         }
 
         @Test

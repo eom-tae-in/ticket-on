@@ -122,6 +122,14 @@ class LogInAudienceServiceTest {
             assertLoginFailed(() -> service.logIn(command(SEOYUN_EMAIL, RAW_PASSWORD)));
         }
 
+        @Test
+        @DisplayName("비밀번호를 정하지 않은 계정(카카오·구글로 가입) — 어떤 비밀번호를 적어도 같은 실패다")
+        void accountWithoutPassword() {
+            accounts.withoutPassword(SEOYUN_EMAIL, SEOYUN_PHONE);
+
+            assertLoginFailed(() -> service.logIn(command(SEOYUN_EMAIL, RAW_PASSWORD)));
+        }
+
         private void assertLoginFailed(ThrowingCallable logIn) {
             assertThatExceptionOfType(RuleViolationException.class)
                     .isThrownBy(logIn)
@@ -192,6 +200,16 @@ class LogInAudienceServiceTest {
         @DisplayName("탈퇴한 계정은 없는 이메일과 같다 — 저장된 해시와 비교하지 않고 같은 만큼 시간을 들이는 비교를 한 번 한다")
         void withdrawnAccountSimulatesComparisonOnce() {
             accounts.withdrawn(SEOYUN_EMAIL, SEOYUN_PHONE);
+
+            attemptLogIn(SEOYUN_EMAIL, RAW_PASSWORD);
+
+            assertThat(passwordHashPort.comparisons()).containsExactly(SIMULATED_MATCHING);
+        }
+
+        @Test
+        @DisplayName("비밀번호를 정하지 않은 계정은 비교할 해시가 없어도 같은 만큼 시간을 들이는 비교를 꼭 한 번 한다")
+        void accountWithoutPasswordSimulatesComparisonOnce() {
+            accounts.withoutPassword(SEOYUN_EMAIL, SEOYUN_PHONE);
 
             attemptLogIn(SEOYUN_EMAIL, RAW_PASSWORD);
 

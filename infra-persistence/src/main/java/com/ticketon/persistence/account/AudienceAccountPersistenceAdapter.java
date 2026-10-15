@@ -90,7 +90,7 @@ public class AudienceAccountPersistenceAdapter implements AudienceAccountReposit
                 .set(AUDIENCE_ACCOUNT.EMAIL, personalInformation.email().value())
                 .set(AUDIENCE_ACCOUNT.EMAIL_LOWERCASE, lowercase(personalInformation.email()))
                 .set(AUDIENCE_ACCOUNT.PHONE_NUMBER, personalInformation.phoneNumber().digits())
-                .set(AUDIENCE_ACCOUNT.PASSWORD_HASH, newAccount.passwordHash().value())
+                .set(AUDIENCE_ACCOUNT.PASSWORD_HASH, newAccount.passwordHash().map(PasswordHash::value).orElse(null))
                 .set(AUDIENCE_ACCOUNT.SIGNED_UP_AT, toDatabaseTime(newAccount.signedUpAt()))
                 .set(AUDIENCE_ACCOUNT.EMAIL_VERIFIED_AT, newAccount.emailVerifiedAt().map(this::toDatabaseTime).orElse(null))
                 .onConflictDoNothing()
@@ -138,8 +138,10 @@ public class AudienceAccountPersistenceAdapter implements AudienceAccountReposit
     @Override
     public void savePassword(AudienceAccount changedAccount) {
         long id = changedAccount.id().orElseThrow(() -> new IllegalArgumentException("저장하지 않은 계정입니다"));
+        PasswordHash passwordHash = changedAccount.passwordHash()
+                .orElseThrow(() -> new IllegalArgumentException("비밀번호를 정하지 않은 계정입니다: " + id));
         int updatedRows = dsl.update(AUDIENCE_ACCOUNT)
-                .set(AUDIENCE_ACCOUNT.PASSWORD_HASH, changedAccount.passwordHash().value())
+                .set(AUDIENCE_ACCOUNT.PASSWORD_HASH, passwordHash.value())
                 .where(AUDIENCE_ACCOUNT.ID.eq(id))
                 .and(AUDIENCE_ACCOUNT.STATUS.in(AudienceAccountStatus.ACTIVE.name(), AudienceAccountStatus.SUSPENDED.name()))
                 .execute();
@@ -187,7 +189,8 @@ public class AudienceAccountPersistenceAdapter implements AudienceAccountReposit
         AudiencePersonalInformation personalInformation = new AudiencePersonalInformation(account.getName(),
                 account.getBirthDate(), new EmailAddress(account.getEmail()), new PhoneNumber(account.getPhoneNumber()));
         Instant emailVerifiedAt = account.getEmailVerifiedAt() == null ? null : account.getEmailVerifiedAt().toInstant();
-        return AudienceAccount.restore(account.getId(), personalInformation, new PasswordHash(account.getPasswordHash()),
+        PasswordHash passwordHash = account.getPasswordHash() == null ? null : new PasswordHash(account.getPasswordHash());
+        return AudienceAccount.restore(account.getId(), personalInformation, passwordHash,
                 account.getSignedUpAt().toInstant(), consentRecordsOf(account.getId()),
                 AudienceAccountStatus.valueOf(account.getStatus()), emailVerifiedAt, List.of());
     }

@@ -12,8 +12,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-session-jdbc")
-    // 로그인 — 세션 쿠키 + DB 저장 세션 (docs/16). 카카오·구글 OAuth2 클라이언트는 #17에서 추가한다
+    // 로그인 — 세션 쿠키 + DB 저장 세션 (docs/16)
     implementation("org.springframework.boot:spring-boot-starter-security")
+    // 관객 카카오·구글 로그인 — OAuth2 클라이언트 (docs/16 "로그인 — 카카오·구글은 OAuth2")
+    implementation("org.springframework.boot:spring-boot-starter-security-oauth2-client")
     implementation(libs.springdoc.webmvc.ui)
 
     // 나가는 어댑터는 실행할 때만 묶는다 → 컨트롤러 코드에서 import할 수 없음

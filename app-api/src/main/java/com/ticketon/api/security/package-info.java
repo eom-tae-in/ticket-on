@@ -14,6 +14,9 @@
  *   <li>로그아웃은 같은 컨트롤러가 {@link com.ticketon.api.security.SessionLogin#logOut}으로 지금 세션 하나만 끊는다.
  *       같은 주체가 다른 기기에서 로그인한 세션은 남는다. 정지·탈퇴처럼 모두 끊을 때는 SessionTerminationPort를 쓴다.</li>
  *   <li>컨트롤러는 {@link com.ticketon.api.security.CurrentAccount @CurrentAccount}로 주체를 받아 Command에 담는다.</li>
+ *   <li>관객 카카오·구글 로그인의 시작·콜백 두 주소({@code /api/auth/audience/oauth2/authorization/*}, {@code …/callback/*})는 이 기본
+ *       필터 묶음보다 먼저 걸리는 별도 묶음이 맡는다(api/account AudienceOAuthSecurityConfiguration). 제공자 인증 정보는 세션 주체로
+ *       저장하지 않고, 로그인할 관객 계정이 정해지면 같은 {@link com.ticketon.api.security.SessionLogin}으로 세션을 연다.</li>
  * </ul>
  *
  * <h2>경로 접두사 — 영역마다 하나, 계정 종류에 묶는다</h2>
@@ -25,7 +28,7 @@
  *       <td>공개 영역(docs/13 "1. 공개 영역"): 행사 목록·검색·상세, 주최자 페이지, 운영진 프로필,
  *           링크로만 여는 페이지(공유받은 티켓, 초대권 단체·개별 링크, 마케팅 수신 거부, 비공개 행사 링크)</td></tr>
  *   <tr><td>{@code /api/auth/**}</td><td>누구나(로그인 없이)</td>
- *       <td>로그인·로그아웃·가입·이메일 인증·비밀번호 찾기 — 네 계정 종류 모두</td></tr>
+ *       <td>로그인·로그아웃·가입·이메일 인증·비밀번호 찾기 — 네 계정 종류 모두. 관객 카카오·구글 로그인 결과·추가 정보 입력 가입</td></tr>
  *   <tr><td>{@code /api/audience/**}</td><td>관객(AUDIENCE)</td>
  *       <td>예매, 마이페이지, 알림함, 알림 받기, 신고. 주최자 쪽 로그인으로는 예매할 수 없다(docs/01 "같은 이메일로 양쪽 가입").</td></tr>
  *   <tr><td>{@code /api/organizer/**}</td><td>운영진(STAFF)</td>

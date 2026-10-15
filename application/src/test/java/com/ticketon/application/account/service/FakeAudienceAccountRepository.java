@@ -131,7 +131,7 @@ final class FakeAudienceAccountRepository implements AudienceAccountRepository {
     }
 
     private static AudienceAccount copyOf(AudienceAccount account, long id) {
-        return AudienceAccount.restore(id, account.personalInformation(), account.passwordHash(), account.signedUpAt(),
+        return AudienceAccount.restore(id, account.personalInformation(), account.passwordHash().orElse(null), account.signedUpAt(),
                 new ArrayList<>(account.consentRecords()), account.status(), account.emailVerifiedAt().orElse(null),
                 account.suspensions());
     }

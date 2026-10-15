@@ -33,6 +33,11 @@ public enum AudienceAction {
      */
     RESET_PASSWORD(false),
 
+    /**
+     * 로그인 수단 관리 — 카카오·구글 계정 연결·해제(docs/13 "계정 정보 · OAuth 연동") — 정지 중에도 된다. 정지로 막히는 것은 새 예매·변경·신고뿐이다.
+     */
+    MANAGE_LOGIN_METHODS(false),
+
     /** 새 예매 — 정지 중에는 막힌다. */
     BOOK(true),
 

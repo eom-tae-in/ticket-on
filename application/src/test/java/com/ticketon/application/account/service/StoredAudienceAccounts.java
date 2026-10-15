@@ -5,6 +5,7 @@ import com.ticketon.domain.account.AudienceAccount;
 import com.ticketon.domain.account.AudienceAccountStatus;
 import com.ticketon.domain.account.AudiencePersonalInformation;
 import com.ticketon.domain.account.EmailAvailability;
+import com.ticketon.domain.account.OAuthProvider;
 import com.ticketon.domain.account.PhoneNumberAvailability;
 import com.ticketon.domain.account.SignupConsentChoices;
 import java.time.Duration;
@@ -13,7 +14,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * 메모리 관객 계정 저장소에 상태별 계정을 넣는다. 이름은 한서윤, 비밀번호는 {@value #RAW_PASSWORD}다.
+ * 메모리 관객 계정 저장소에 상태별 계정을 넣는다. 이름은 한서윤, 비밀번호는 {@value #RAW_PASSWORD}다(비밀번호 없는 계정은 빼고).
  * 이용 정지(#125)·탈퇴(#83)는 저장 기능이 아직 없어 계정의 상태를 바꿔 저장소에 바로 넣는다.
  */
 final class StoredAudienceAccounts {
@@ -49,6 +50,20 @@ final class StoredAudienceAccounts {
         return id;
     }
 
+    /**
+     * 카카오·구글로 비밀번호 없이 가입하고, 제공자가 확인한 이메일이라 가입하며 바로 인증을 마친 계정(활동). 연결은 넣지 않는다 — 연결 저장소에
+     * 따로 넣는다.
+     */
+    long withoutPassword(String email, String phoneNumber) {
+        AudiencePersonalInformation personalInformation = AudiencePersonalInformation.of("한서윤",
+                LocalDate.of(1998, 4, 2), email, phoneNumber);
+        AudienceAccount newAccount = AudienceAccount.signUpThroughOAuth(OAuthProvider.KAKAO, personalInformation,
+                SignupConsentChoices.agreeingToAllRequired(false), PhoneNumberAvailability.AVAILABLE,
+                EmailAvailability.AVAILABLE, SIGNUP_TIME);
+        newAccount.verifyEmail(SIGNUP_TIME);
+        return repository.add(newAccount).id().getAsLong();
+    }
+
     /** 활동 중인 계정을 관리자가 이용 정지한 것. */
     long suspended(String email, String phoneNumber) {
         long id = active(email, phoneNumber);
@@ -71,7 +86,7 @@ final class StoredAudienceAccounts {
     long withdrawn(String email, String phoneNumber) {
         long id = active(email, phoneNumber);
         AudienceAccount account = repository.findById(id).orElseThrow();
-        repository.replace(AudienceAccount.restore(id, account.personalInformation(), account.passwordHash(),
+        repository.replace(AudienceAccount.restore(id, account.personalInformation(), account.passwordHash().orElse(null),
                 account.signedUpAt(), account.consentRecords(), AudienceAccountStatus.WITHDRAWN,
                 account.emailVerifiedAt().orElse(null), account.suspensions()));
         return id;

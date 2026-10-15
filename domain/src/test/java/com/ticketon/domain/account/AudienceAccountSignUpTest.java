@@ -42,7 +42,7 @@ class AudienceAccountSignUpTest {
         assertThat(account.id()).isEmpty();
         assertThat(account.signedUpAt()).isEqualTo(SIGNUP_TIME);
         assertThat(account.personalInformation()).isEqualTo(adultPersonalInformation());
-        assertThat(account.passwordHash()).isEqualTo(PASSWORD_HASH);
+        assertThat(account.passwordHash()).contains(PASSWORD_HASH);
     }
 
     @Nested
@@ -307,15 +307,16 @@ class AudienceAccountSignUpTest {
             assertThat(account.status()).isEqualTo(AudienceAccountStatus.ACTIVE);
             assertThat(account.emailVerifiedAt()).contains(SIGNUP_TIME.plusSeconds(60));
             assertThat(account.personalInformation().birthDate()).isEqualTo(ADULT_BIRTH_DATE);
-            assertThat(account.passwordHash()).isEqualTo(PASSWORD_HASH);
+            assertThat(account.passwordHash()).contains(PASSWORD_HASH);
         }
 
         @Test
-        @DisplayName("비밀번호 해시가 없으면 거부한다")
-        void rejectsMissingPasswordHash() {
-            assertThatThrownBy(() -> AudienceAccount.restore(7, adultPersonalInformation(), null, SIGNUP_TIME,
-                    REQUIRED_ONLY.recordsAt(SIGNUP_TIME), AudienceAccountStatus.ACTIVE, SIGNUP_TIME, List.of()))
-                    .isInstanceOf(NullPointerException.class);
+        @DisplayName("비밀번호 해시가 없는 계정(카카오·구글로 가입하고 비밀번호를 정하지 않음)도 비밀번호 없이 되살린다 (#17)")
+        void restoresAccountWithoutPassword() {
+            AudienceAccount account = AudienceAccount.restore(7, adultPersonalInformation(), null, SIGNUP_TIME,
+                    REQUIRED_ONLY.recordsAt(SIGNUP_TIME), AudienceAccountStatus.ACTIVE, SIGNUP_TIME, List.of());
+
+            assertThat(account.passwordHash()).isEmpty();
         }
 
         @Test

@@ -13,7 +13,7 @@ import java.util.List;
  * @param email                이메일(가입할 때 적은 그대로)
  * @param phoneNumber          전화번호 — 숫자만 남긴 11자리
  * @param suspended            이용 정지 중인지
- * @param linkedOAuthProviders 연결된 OAuth 제공자 — OAuth 연동(#17) 전까지 늘 빈 목록
+ * @param linkedOAuthProviders 연결된 카카오·구글 — 카카오, 구글 순서
  */
 @Schema(description = "내 관객 계정")
 public record MyAudienceAccountResponse(
@@ -30,11 +30,11 @@ public record MyAudienceAccountResponse(
                 requiredMode = REQUIRED)
         boolean suspended,
 
-        @Schema(description = "연결된 OAuth 제공자. OAuth 연동 전까지 늘 빈 목록", requiredMode = REQUIRED)
-        List<String> linkedOAuthProviders) {
+        @Schema(description = "연결된 카카오·구글 — 카카오, 구글 순서. 연결이 없으면 빈 목록", requiredMode = REQUIRED)
+        List<OAuthProviderCode> linkedOAuthProviders) {
 
     static MyAudienceAccountResponse from(GetMyAudienceAccountResult result) {
         return new MyAudienceAccountResponse(result.name(), result.email(), result.phoneNumber(), result.suspended(),
-                result.linkedOAuthProviders());
+                result.linkedOAuthProviders().stream().map(OAuthProviderCode::from).toList());
     }
 }
