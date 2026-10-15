@@ -9,6 +9,8 @@ import java.util.Objects;
  * 사람이 소유자 자리를 넘겨받고 계좌를 바꿔 정산금을 가로채지 못하게 하기 위해서다(docs/01 "가로채기를 막는 장치", docs/11 "정산 계좌 변경").
  * <p>
  * 문서에는 "정산 계좌"만 있어, 송금에 필요한 은행 · 계좌번호 · 예금주 셋으로 나눴다. 형식은 은행마다 달라 비어 있지 않은지만 본다.
+ * <p>
+ * 민감한 값이라 {@link #toString}에는 값을 싣지 않는다 — 예외 설명이나 로그로 새지 않게. 같은지는 값으로 본다.
  *
  * @param bankName      은행. 앞뒤 공백을 걷는다.
  * @param accountNumber 계좌번호. 앞뒤 공백을 걷고, 적은 그대로 둔다.
@@ -20,6 +22,11 @@ public record SettlementAccount(String bankName, String accountNumber, String ac
         bankName = requireText(bankName, "은행");
         accountNumber = requireText(accountNumber, "계좌번호");
         accountHolder = requireText(accountHolder, "예금주");
+    }
+
+    @Override
+    public String toString() {
+        return "SettlementAccount[****]";
     }
 
     private static String requireText(String value, String itemLabel) {

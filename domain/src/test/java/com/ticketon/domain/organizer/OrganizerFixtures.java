@@ -26,6 +26,9 @@ final class OrganizerFixtures {
     /** 신청한 운영진 — 박정훈의 운영진 계정 id. */
     static final long JUNGHOON = 1L;
 
+    /** 박정훈이 신청하면서 심사 중으로 만든 주최자 "극단 열두달"의 id. */
+    static final long TWELVE_MONTHS_ORGANIZER = 12L;
+
     private OrganizerFixtures() {
     }
 

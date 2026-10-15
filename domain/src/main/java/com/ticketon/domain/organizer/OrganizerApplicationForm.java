@@ -13,6 +13,9 @@ import java.util.Objects;
  * <p>
  * 심사로 거르려는 것은 <b>실재하지 않거나 연락이 닿지 않는 주최자</b>뿐이다(docs/01 "심사로 거르려는 것"). 그래서 담당자 연락처는 관리자가
  * 실제로 전화해 보고, 링크와 이력으로 실재를 확인한다. 연락처와 정산 계좌는 사람이 아니라 이 신청서(주최자)에 붙는다.
+ * <p>
+ * 담당자 연락처 · 이메일 · 사업자 정보 · 정산 계좌는 민감한 값이라 {@link #toString}에는 주최자 구분 · 이름 · 사업자 여부만 싣는다 —
+ * 예외 설명이나 로그로 새지 않게. 같은지는 모든 항목의 값으로 본다.
  *
  * @param organizerType       주최자 구분 (개인/단체)
  * @param name                이름 또는 단체명
@@ -45,5 +48,11 @@ public record OrganizerApplicationForm(OrganizerType organizerType, OrganizerNam
     /** 사업자 여부. */
     public BusinessStatus businessStatus() {
         return businessDeclaration.businessStatus();
+    }
+
+    @Override
+    public String toString() {
+        return "OrganizerApplicationForm[organizerType=" + organizerType + ", name=" + name.value()
+                + ", businessStatus=" + businessStatus() + "]";
     }
 }

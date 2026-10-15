@@ -140,4 +140,44 @@ class OrganizerApplicationValuesTest {
             assertThatIllegalArgumentException().isThrownBy(() -> RejectionReason.of("  "));
         }
     }
+
+    @Nested
+    @DisplayName("글로 남길 때 — 민감한 값은 싣지 않는다 (예외 설명·로그로 새지 않게)")
+    class Text {
+
+        @Test
+        @DisplayName("정산 계좌·전화번호·사업자 정보·사업자등록번호는 값을 가린다")
+        void sensitiveValuesAreMasked() {
+            SettlementAccount account = new SettlementAccount("국민은행", "123456-78-901234", "박정훈");
+            TelephoneNumber telephone = TelephoneNumber.of("010-2345-6789");
+            BusinessInformation business = OrganizerFixtures.lateSummerBusinessInformation();
+            BusinessRegistrationNumber registrationNumber = BusinessRegistrationNumber.of("123-45-67890");
+
+            assertThat(account.toString()).isEqualTo("SettlementAccount[****]");
+            assertThat(telephone.toString()).isEqualTo("TelephoneNumber[****]");
+            assertThat(business.toString()).isEqualTo("BusinessInformation[****]");
+            assertThat(registrationNumber.toString()).isEqualTo("BusinessRegistrationNumber[****]");
+            assertThat(BusinessDeclaration.business(business).toString())
+                    .doesNotContain("늦여름 레코드", "최여름", "와우산로", "02-123-4567", "1234567890");
+        }
+
+        @Test
+        @DisplayName("신청 내용은 주최자 구분 · 이름 · 사업자 여부만 싣는다 — 연락처·이메일·사업자 정보·계좌·이력은 빠진다")
+        void formShowsOnlyTypeNameAndBusinessStatus() {
+            String text = OrganizerFixtures.lateSummerForm().toString();
+
+            assertThat(text).isEqualTo("OrganizerApplicationForm[organizerType=GROUP, name=늦여름, businessStatus=BUSINESS]");
+        }
+
+        @Test
+        @DisplayName("값을 가려도 같은지는 그대로 값으로 본다")
+        void equalityStillUsesValues() {
+            assertThat(new SettlementAccount("국민은행", "123456-78-901234", "박정훈"))
+                    .isEqualTo(new SettlementAccount(" 국민은행 ", "123456-78-901234", "박정훈"))
+                    .isNotEqualTo(new SettlementAccount("국민은행", "999999-78-901234", "박정훈"));
+            assertThat(TelephoneNumber.of("010-2345-6789")).isNotEqualTo(TelephoneNumber.of("010-2345-0000"));
+            assertThat(OrganizerFixtures.lateSummerForm()).isEqualTo(OrganizerFixtures.lateSummerForm())
+                    .isNotEqualTo(OrganizerFixtures.twelveMonthsForm());
+        }
+    }
 }
