@@ -1,5 +1,6 @@
 package com.ticketon.application.account.port.in;
 
+import com.ticketon.domain.account.OAuthProvider;
 import java.util.List;
 import java.util.Objects;
 
@@ -10,10 +11,10 @@ import java.util.Objects;
  * @param email                이메일(가입할 때 적은 그대로)
  * @param phoneNumber          전화번호 — 숫자만 남긴 11자리
  * @param suspended            이용 정지 중인지. 정지 중에는 새 예매·변경·신고가 막힌다(docs/01 "관객 이용 정지").
- * @param linkedOAuthProviders 연결된 OAuth 제공자 — OAuth 연동(#17)이 채운다. 그 전까지는 늘 비어 있다.
+ * @param linkedOAuthProviders 연결된 카카오·구글 — 제공자 선언 순서(카카오, 구글)대로
  */
 public record GetMyAudienceAccountResult(String name, String email, String phoneNumber, boolean suspended,
-        List<String> linkedOAuthProviders) {
+        List<OAuthProvider> linkedOAuthProviders) {
 
     public GetMyAudienceAccountResult {
         Objects.requireNonNull(name, "name");

@@ -1,5 +1,6 @@
 package com.ticketon.api.account;
 
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -63,7 +64,7 @@ class AudienceLoginApiDocsTest {
     }
 
     @Test
-    @DisplayName("내 계정 조회는 200에 MyAudienceAccountResponse를 돌려주고, 칸 다섯 개가 모두 필수다 — 로그인 주체는 파라미터로 싣지 않는다")
+    @DisplayName("내 계정 조회는 200에 MyAudienceAccountResponse를 돌려주고, 칸 다섯 개가 모두 필수다 — 로그인 주체는 파라미터로 싣지 않고, 연결된 제공자는 KAKAO·GOOGLE 중 하나다")
     void myAccountOperation() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
@@ -71,6 +72,8 @@ class AudienceLoginApiDocsTest {
                         + ".content['application/json'].schema['$ref']").value("#/components/schemas/MyAudienceAccountResponse"))
                 .andExpect(jsonPath("$.paths['/api/audience/account'].get.parameters").doesNotExist())
                 .andExpect(jsonPath("$.components.schemas.MyAudienceAccountResponse.required", containsInAnyOrder(
-                        "name", "email", "phoneNumber", "suspended", "linkedOAuthProviders")));
+                        "name", "email", "phoneNumber", "suspended", "linkedOAuthProviders")))
+                .andExpect(jsonPath("$.components.schemas.MyAudienceAccountResponse.properties.linkedOAuthProviders"
+                        + ".items.enum", contains("KAKAO", "GOOGLE")));
     }
 }

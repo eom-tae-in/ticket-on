@@ -10,6 +10,9 @@ import com.ticketon.application.account.port.in.GetMyAudienceAccountResult;
 import com.ticketon.domain.account.AccountErrorCode;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
+import com.ticketon.domain.account.AudienceOAuthLink;
+import com.ticketon.domain.account.OAuthIdentity;
+import com.ticketon.domain.account.OAuthProvider;
 import com.ticketon.domain.error.RuleViolationException;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -21,7 +24,9 @@ class GetMyAudienceAccountServiceTest {
     private final FakeAudienceAccountRepository accountRepository = new FakeAudienceAccountRepository();
     private final StoredAudienceAccounts accounts = new StoredAudienceAccounts(accountRepository);
 
-    private final GetMyAudienceAccountService service = new GetMyAudienceAccountService(accountRepository);
+    private final FakeAudienceOAuthLinkRepository linkRepository = new FakeAudienceOAuthLinkRepository();
+
+    private final GetMyAudienceAccountService service = new GetMyAudienceAccountService(accountRepository, linkRepository);
 
     @Test
     @DisplayName("이름·이메일(적은 그대로)·전화번호(숫자만)·정지 아님·연결된 OAuth 없음을 돌려준다")
@@ -32,6 +37,19 @@ class GetMyAudienceAccountServiceTest {
 
         assertThat(result).isEqualTo(
                 new GetMyAudienceAccountResult("한서윤", "Seoyun@Example.com", "01012345678", false, List.of()));
+    }
+
+    @Test
+    @DisplayName("연결한 카카오·구글을 연결한 순서와 상관없이 카카오, 구글 순서로 돌려준다")
+    void returnsLinkedProviders() {
+        long id = accounts.withoutPassword("seoyun@example.com", "010-1234-5678");
+        linkRepository.add(new AudienceOAuthLink(id, new OAuthIdentity(OAuthProvider.GOOGLE, "109876543210"),
+                StoredAudienceAccounts.SIGNUP_TIME));
+        linkRepository.add(new AudienceOAuthLink(id, new OAuthIdentity(OAuthProvider.KAKAO, "3141592653"),
+                StoredAudienceAccounts.SIGNUP_TIME.plusSeconds(60)));
+
+        assertThat(service.getMyAccount(queryFor(id)).linkedOAuthProviders())
+                .containsExactly(OAuthProvider.KAKAO, OAuthProvider.GOOGLE);
     }
 
     @Test

@@ -24,7 +24,7 @@ public class AudienceAccountController {
         this.getMyAudienceAccountUseCase = getMyAudienceAccountUseCase;
     }
 
-    @Operation(summary = "내 계정 조회", description = "로그인한 관객의 이름·이메일·전화번호·이용 정지 여부·연결된 OAuth. 이용 정지 중에도 조회된다. "
+    @Operation(summary = "내 계정 조회", description = "로그인한 관객의 이름·이메일·전화번호·이용 정지 여부·연결된 카카오·구글. 이용 정지 중에도 조회된다. "
             + "로그인하지 않았거나 세션이 끝났으면 401, 관객이 아닌 계정이면 403이다.")
     @GetMapping
     public MyAudienceAccountResponse getMyAccount(@CurrentAccount AccountRef account) {
