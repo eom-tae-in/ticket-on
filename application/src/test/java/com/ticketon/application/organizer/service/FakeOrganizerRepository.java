@@ -2,6 +2,9 @@ package com.ticketon.application.organizer.service;
 
 import com.ticketon.application.organizer.port.out.OrganizerRepository;
 import com.ticketon.domain.organizer.Organizer;
+import com.ticketon.domain.organizer.OrganizerName;
+import com.ticketon.domain.organizer.OrganizerPublicProfile;
+import com.ticketon.domain.organizer.OrganizerStatus;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +25,14 @@ final class FakeOrganizerRepository implements OrganizerRepository {
         return saved;
     }
 
+    /** 승인 · 닫기 같은 기능을 거치지 않고 그 상태의 주최자를 바로 둔다. */
+    Organizer store(String name, OrganizerStatus status) {
+        Organizer saved = Organizer.restore(organizers.size() + 1, OrganizerName.of(name), status,
+                OrganizerPublicProfile.empty());
+        organizers.add(saved);
+        return saved;
+    }
+
     List<Organizer> savedOrganizers() {
         return List.copyOf(organizers);
     }
@@ -33,6 +44,6 @@ final class FakeOrganizerRepository implements OrganizerRepository {
 
     @Override
     public void saveApproval(Organizer approvedOrganizer) {
-        throw new UnsupportedOperationException("주최자 신청 제출·주최 홈에서는 승인을 저장하지 않습니다");
+        throw new UnsupportedOperationException("주최자 신청 제출·주최 홈·운영진 권한 확인에서는 승인을 저장하지 않습니다");
     }
 }
