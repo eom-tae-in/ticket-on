@@ -175,10 +175,12 @@ class AudienceLoginControllerTest {
         @CsvSource(delimiter = '|', value = {
                 "email    | ''                  | 이메일을 입력해 주세요.",
                 "email    | '   '               | 이메일을 입력해 주세요.",
+                "email    | '　'            | 이메일을 입력해 주세요.",
+                "email    | ' 　 　 ' | 이메일을 입력해 주세요.",
                 "email    | seoyun              | 이메일 주소를 확인해 주세요.",
                 "email    | seo yun@example.com | 이메일 주소를 확인해 주세요.",
                 "password | ''                  | 비밀번호를 입력해 주세요."})
-        @DisplayName("칸이 비었거나 형식이 틀리면 그 칸과 문구를 알려 주고 유스케이스를 부르지 않는다")
+        @DisplayName("칸이 비었거나(이메일에 전각 공백 같은 유니코드 공백만 넣은 것 포함) 형식이 틀리면 그 칸과 문구를 알려 주고 유스케이스를 부르지 않는다")
         void rejectsInvalidField(String field, String value, String message) throws Exception {
             Map<String, Object> body = body("seoyun@example.com", "seoyun1234");
             body.put(field, value);

@@ -13,7 +13,7 @@ import java.lang.annotation.Target;
 
 /**
  * 이메일 주소 형식 — 도메인 {@link EmailAddress}와 같은 규칙('아이디@도메인' 모양, 254자 이하)으로 본다.
- * 비어 있으면 {@code @NotBlank}가 맡는다.
+ * 비었거나 공백뿐이면 통과한다 — 빈 칸은 {@code @FilledText}가 맡는다(칸 하나에 오류 하나).
  */
 @Documented
 @Target({ElementType.FIELD, ElementType.PARAMETER})

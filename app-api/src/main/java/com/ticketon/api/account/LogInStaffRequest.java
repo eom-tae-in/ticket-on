@@ -3,11 +3,11 @@ package com.ticketon.api.account;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.ticketon.api.validation.FilledText;
 import com.ticketon.application.account.port.in.LogInStaffCommand;
 import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.account.EnteredPassword;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 
 /**
@@ -20,7 +20,7 @@ import jakarta.validation.constraints.NotEmpty;
 public record LogInStaffRequest(
         @Schema(description = "이메일 — 운영진 가입 때 적은 로그인 아이디. 대소문자는 가리지 않는다", example = "junghoon@example.com",
                 requiredMode = REQUIRED)
-        @NotBlank(message = "이메일을 입력해 주세요.")
+        @FilledText(message = "이메일을 입력해 주세요.")
         @EmailAddressFormat
         String email,
 

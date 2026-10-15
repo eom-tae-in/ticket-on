@@ -4,11 +4,11 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.ticketon.api.account.AudienceOAuthSession.PendingSignUp;
+import com.ticketon.api.validation.FilledText;
 import com.ticketon.application.account.port.in.SignUpWithOAuthCommand;
 import com.ticketon.domain.account.AudiencePersonalInformation;
 import com.ticketon.domain.account.OAuthIdentity;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
 import java.time.LocalDate;
@@ -26,7 +26,7 @@ import org.springframework.validation.FieldError;
 @Schema(description = "카카오·구글 가입의 추가 정보 입력")
 public record OAuthSignUpRequest(
         @Schema(description = "이름", example = "한서윤", requiredMode = REQUIRED)
-        @NotBlank(message = "이름을 입력해 주세요.")
+        @FilledText(message = "이름을 입력해 주세요.")
         String name,
 
         @Schema(description = "생년월일", example = "1998-04-02", requiredMode = REQUIRED)
@@ -40,7 +40,7 @@ public record OAuthSignUpRequest(
         String email,
 
         @Schema(description = "휴대폰 번호. 하이픈·공백은 있어도 된다", example = "010-1234-5678", requiredMode = REQUIRED)
-        @NotBlank(message = "전화번호를 입력해 주세요.")
+        @FilledText(message = "전화번호를 입력해 주세요.")
         @PhoneNumberFormat
         String phoneNumber,
 
