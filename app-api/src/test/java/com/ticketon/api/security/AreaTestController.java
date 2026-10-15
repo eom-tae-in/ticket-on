@@ -49,6 +49,11 @@ class AreaTestController {
         return account.principalName();
     }
 
+    @GetMapping("/api/admin/super/test")
+    String superAdminArea(@CurrentAccount AccountRef account) {
+        return account.principalName();
+    }
+
     @GetMapping("/api/checkin/test")
     String checkinArea(@CurrentAccount AccountRef account) {
         return account.principalName();

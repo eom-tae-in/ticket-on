@@ -2,6 +2,7 @@ package com.ticketon.api.security;
 
 import static com.ticketon.api.error.ErrorResponseMatchers.errorBody;
 import static com.ticketon.api.security.TestLogin.loggedInAs;
+import static com.ticketon.api.security.TestLogin.loggedInAsAdmin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -10,7 +11,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ticketon.domain.account.AccountKind;
+import com.ticketon.domain.account.AdminGrade;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -55,7 +58,8 @@ class AreaAccessTest {
     }
 
     @ParameterizedTest(name = "{0}")
-    @ValueSource(strings = {"/api/audience/test", "/api/organizer/test", "/api/admin/test", "/api/checkin/test"})
+    @ValueSource(strings = {"/api/audience/test", "/api/organizer/test", "/api/admin/test", "/api/admin/super/test",
+            "/api/checkin/test"})
     @DisplayName("영역 경로에 로그인 없이 오면 401 UNAUTHENTICATED다")
     void areaPathsRequireLogin(String path) throws Exception {
         mockMvc.perform(get(path))
@@ -96,6 +100,51 @@ class AreaAccessTest {
         mockMvc.perform(get(path).with(loggedInAs(kind, 7)))
                 .andExpect(status().isForbidden())
                 .andExpect(errorBody("ACCESS_DENIED", ACCESS_DENIED_MESSAGE));
+    }
+
+    @Nested
+    @DisplayName("최고 관리자 전용 경로(/api/admin/super) — 관리자 영역 안에서 등급으로 가른다 (docs/01 \"관리자 2등급\")")
+    class SuperAdminArea {
+
+        @Test
+        @DisplayName("최고 관리자는 관리자 영역과 최고 관리자 전용 경로에 모두 들어간다")
+        void superAdminEntersBoth() throws Exception {
+            mockMvc.perform(get("/api/admin/test").with(loggedInAsAdmin(1, AdminGrade.SUPER_ADMIN)))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string("ADMIN:1"));
+            mockMvc.perform(get("/api/admin/super/test").with(loggedInAsAdmin(1, AdminGrade.SUPER_ADMIN)))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string("ADMIN:1"));
+        }
+
+        @Test
+        @DisplayName("관리자는 관리자 영역에 들어가지만, 최고 관리자 전용 경로는 403 ACCESS_DENIED다")
+        void adminIsDeniedSuperAdminPath() throws Exception {
+            mockMvc.perform(get("/api/admin/test").with(loggedInAsAdmin(2, AdminGrade.ADMIN)))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string("ADMIN:2"));
+            mockMvc.perform(get("/api/admin/super/test").with(loggedInAsAdmin(2, AdminGrade.ADMIN)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(errorBody("ACCESS_DENIED", ACCESS_DENIED_MESSAGE));
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @EnumSource(AccountKind.class)
+        @DisplayName("등급 없이 로그인한 주체는 어느 종류든 최고 관리자 전용 경로가 403이다 — 관리자 종류만으로는 열리지 않는다")
+        void accountWithoutGradeIsDenied(AccountKind kind) throws Exception {
+            mockMvc.perform(get("/api/admin/super/test").with(loggedInAs(kind, 7)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(errorBody("ACCESS_DENIED", ACCESS_DENIED_MESSAGE));
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @ValueSource(strings = {"/api/audience/test", "/api/organizer/test", "/api/checkin/test"})
+        @DisplayName("최고 관리자도 다른 계정 종류의 영역에는 들어가지 않는다")
+        void superAdminIsDeniedOtherAreas(String path) throws Exception {
+            mockMvc.perform(get(path).with(loggedInAsAdmin(1, AdminGrade.SUPER_ADMIN)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(errorBody("ACCESS_DENIED", ACCESS_DENIED_MESSAGE));
+        }
     }
 
     @Test
