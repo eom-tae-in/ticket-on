@@ -1,5 +1,6 @@
 package com.ticketon.persistence.notification;
 
+import static com.ticketon.persistence.jooq.Tables.STAFF_ACCOUNT;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ticketon.common.KoreanTime;
@@ -11,6 +12,7 @@ import com.ticketon.domain.organizer.StaffRole;
 import com.ticketon.persistence.organizer.OrganizerRows;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import org.flywaydb.core.Flyway;
 import org.jooq.CloseableDSLContext;
 import org.jooq.impl.DSL;
@@ -106,6 +108,24 @@ class OrganizerStaffContactPersistenceAdapterTest {
     }
 
     @Test
+    @DisplayName("운영진 로그인을 탈퇴한 사람(이메일 파기)은 지금 소속 줄이 남아 있어도 빼고, 나머지 운영진에게는 그대로 간다")
+    void skipsWithdrawnStaff() {
+        long twelveMonths = rows.organizer("극단 열두달", OrganizerStatus.ACTIVE);
+        long junghoon = rows.staffAccount("junghoon@example.com");
+        long planner = rows.staffAccount("planner@example.com");
+        long withdrawn = rows.staffAccount("withdrawn@example.com");
+        rows.currentMembership(twelveMonths, junghoon, StaffRole.OWNER, APPROVED_AT);
+        rows.currentMembership(twelveMonths, withdrawn, StaffRole.OPERATOR, APPROVED_AT.plusSeconds(60));
+        rows.currentMembership(twelveMonths, planner, StaffRole.OPERATOR, APPROVED_AT.plusSeconds(120));
+        markWithdrawn(withdrawn);
+
+        OrganizerStaffContacts contacts = adapter.findStaffContacts(twelveMonths).orElseThrow();
+
+        assertThat(contacts.owner()).isEqualTo(EmailAddress.of("junghoon@example.com"));
+        assertThat(contacts.operators()).containsExactly(EmailAddress.of("planner@example.com"));
+    }
+
+    @Test
     @DisplayName("다른 주최자의 운영진은 섞이지 않는다")
     void onlyThatOrganizer() {
         long twelveMonths = rows.organizer("극단 열두달", OrganizerStatus.ACTIVE);
@@ -144,5 +164,19 @@ class OrganizerStaffContactPersistenceAdapterTest {
     @DisplayName("없는 주최자면 비어 있다")
     void unknownOrganizer() {
         assertThat(adapter.findStaffContacts(999)).isEmpty();
+    }
+
+    /** 탈퇴한 모양(개인정보 없음, 탈퇴 일시)으로 바꾼다 — 탈퇴 기능을 거치지 않아 지금 소속 줄은 그대로 남는다. */
+    private static void markWithdrawn(long staffAccountId) {
+        dsl.update(STAFF_ACCOUNT)
+                .set(STAFF_ACCOUNT.STATUS, "WITHDRAWN")
+                .set(STAFF_ACCOUNT.WITHDRAWN_AT, APPROVED_AT.plusSeconds(86_400).atOffset(ZoneOffset.UTC))
+                .setNull(STAFF_ACCOUNT.NAME)
+                .setNull(STAFF_ACCOUNT.EMAIL)
+                .setNull(STAFF_ACCOUNT.EMAIL_LOWERCASE)
+                .setNull(STAFF_ACCOUNT.PASSWORD_HASH)
+                .setNull(STAFF_ACCOUNT.EMAIL_VERIFIED_AT)
+                .where(STAFF_ACCOUNT.ID.eq(staffAccountId))
+                .execute();
     }
 }
