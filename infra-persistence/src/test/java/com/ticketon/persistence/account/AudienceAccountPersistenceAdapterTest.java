@@ -14,6 +14,7 @@ import com.ticketon.domain.account.ConsentItem;
 import com.ticketon.domain.account.ConsentRecord;
 import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.account.EmailAvailability;
+import com.ticketon.domain.account.OAuthProvider;
 import com.ticketon.domain.account.PasswordHash;
 import com.ticketon.domain.account.PhoneNumber;
 import com.ticketon.domain.account.PhoneNumberAvailability;
@@ -46,7 +47,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL에 마이그레이션(V2 관객 계정)을 올리고 관객 계정 저장·조회·번호/이메일 확인·동시 가입 경합을 본다.
+ * 진짜 PostgreSQL에 마이그레이션(V2 관객 계정, V7 비밀번호 선택값)을 올리고 관객 계정 저장·조회·번호/이메일 확인·동시 가입 경합을 본다.
  * Docker가 없는 환경에서는 건너뛴다.
  */
 @Testcontainers(disabledWithoutDocker = true)
@@ -368,6 +369,39 @@ class AudienceAccountPersistenceAdapterTest {
     }
 
     @Nested
+    @DisplayName("카카오·구글로 가입한 계정 — 비밀번호 없음 (V7)")
+    class WithoutPassword {
+
+        @Test
+        @DisplayName("비밀번호 없이 저장되고, 다시 읽어도 비밀번호가 없다")
+        void savesAccountWithoutPassword() {
+            AudienceAccount saved = adapter.add(oauthAccountVerifiedByProvider());
+
+            AudienceAccount found = adapter.findById(saved.id().getAsLong()).orElseThrow();
+            assertThat(found.passwordHash()).isEmpty();
+            assertThat(dsl.select(AUDIENCE_ACCOUNT.PASSWORD_HASH).from(AUDIENCE_ACCOUNT).fetchSingle().value1()).isNull();
+        }
+
+        @Test
+        @DisplayName("제공자가 확인한 이메일이라 가입하며 인증을 마친 계정은 저장할 때부터 활동 상태다")
+        void savesVerifiedAtSignUp() {
+            AudienceAccount saved = adapter.add(oauthAccountVerifiedByProvider());
+
+            AudienceAccount found = adapter.findById(saved.id().getAsLong()).orElseThrow();
+            assertThat(found.status()).isEqualTo(AudienceAccountStatus.ACTIVE);
+            assertThat(found.emailVerifiedAt()).contains(SIGNUP_TIME);
+        }
+
+        @Test
+        @DisplayName("비밀번호를 정하지 않은 계정은 비밀번호 저장으로 넘기지 않는다")
+        void rejectsSavingMissingPassword() {
+            AudienceAccount saved = adapter.add(oauthAccountVerifiedByProvider());
+
+            assertThatExceptionOfType(IllegalArgumentException.class).isThrownBy(() -> adapter.savePassword(saved));
+        }
+    }
+
+    @Nested
     @DisplayName("비밀번호 저장 — 비밀번호 찾기")
     class PasswordSave {
 
@@ -414,6 +448,18 @@ class AudienceAccountPersistenceAdapterTest {
             assertThat(adapter.findById(id).orElseThrow().passwordHash()).contains(PASSWORD_HASH);
         }
 
+        @Test
+        @DisplayName("비밀번호 없이 카카오·구글로 가입한 계정이 처음 정한 비밀번호도 저장한다 (#16·#17)")
+        void savesFirstPasswordOfOAuthAccount() {
+            AudienceAccount account = adapter.add(oauthAccountVerifiedByProvider());
+            long id = account.id().getAsLong();
+            account.resetPassword(NEW_PASSWORD_HASH);
+
+            adapter.savePassword(account);
+
+            assertThat(adapter.findById(id).orElseThrow().passwordHash()).contains(NEW_PASSWORD_HASH);
+        }
+
         /** 가입하고 이메일 인증까지 마친 계정을 저장하고 id를 돌려준다. */
         private long activeAccount() {
             AudienceAccount account = adapter.add(newAccount(SEOYUN_PHONE, SEOYUN_EMAIL, false));
@@ -421,6 +467,17 @@ class AudienceAccountPersistenceAdapterTest {
             adapter.saveEmailVerification(account);
             return account.id().getAsLong();
         }
+    }
+
+    /** 구글로 비밀번호 없이 가입하고, 구글이 확인한 이메일이라 가입하며 바로 인증을 마친 계정(저장 전). */
+    private static AudienceAccount oauthAccountVerifiedByProvider() {
+        AudiencePersonalInformation personalInformation = AudiencePersonalInformation.of("한서윤",
+                LocalDate.of(1998, 4, 2), SEOYUN_EMAIL, SEOYUN_PHONE);
+        AudienceAccount account = AudienceAccount.signUpThroughOAuth(OAuthProvider.GOOGLE, personalInformation,
+                SignupConsentChoices.agreeingToAllRequired(false), PhoneNumberAvailability.AVAILABLE,
+                EmailAvailability.AVAILABLE, SIGNUP_TIME);
+        account.verifyEmail(SIGNUP_TIME);
+        return account;
     }
 
     private static AudienceAccount newAccount(String phoneNumber, String email, boolean marketingAgreed) {
