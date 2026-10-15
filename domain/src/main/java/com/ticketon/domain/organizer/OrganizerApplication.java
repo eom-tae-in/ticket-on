@@ -76,7 +76,7 @@ public final class OrganizerApplication {
     }
 
     /**
-     * 승인한다. 승인되면 신청한 사람이 그 주최자의 소유자가 된다.
+     * 승인한다. 승인되면 신청한 사람이 그 주최자의 소유자가 된다({@link OrganizerStaff#startWithOwner}).
      *
      * @throws RuleViolationException 이미 승인·반려한 신청서면({@link OrganizerErrorCode#APPLICATION_ALREADY_REVIEWED})
      */
