@@ -14,3 +14,8 @@ ticketon:
   web:
     # 화면(웹) 기준 주소 — 메일·문자 속 링크가 이 주소로 시작한다. API 서버와 같은 값을 쓴다
     base-url: ${WEB_BASE_URL:http://localhost:3000}
+  # 파일 로컬 저장 — API 서버와 같은 저장 위치 · 공개 기준 주소를 쓴다(infra-storage)
+  storage:
+    local:
+      directory: ${LOCAL_STORAGE_DIRECTORY:${user.home}/.ticket-on/storage}
+      public-base-url: ${LOCAL_STORAGE_PUBLIC_BASE_URL:http://localhost:8080/api/public/files}

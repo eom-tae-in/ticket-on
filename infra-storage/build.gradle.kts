@@ -8,4 +8,7 @@ dependencies {
     implementation(project(":domain"))
     implementation(project(":common"))
     implementation("org.springframework:spring-context")
+
+    // 저장 어댑터 테스트에서 로고로 받을 수 있는 그림 파일을 만든다 (TestImages)
+    testImplementation(testFixtures(project(":common")))
 }
