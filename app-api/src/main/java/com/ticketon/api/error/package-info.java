@@ -12,6 +12,9 @@
  *       <td>INVALID_INPUT + fieldErrors(칸 이름·문구)</td></tr>
  *   <tr><td>읽을 수 없는 본문(깨진 JSON, 칸 타입이 맞지 않는 본문)</td><td>400</td>
  *       <td>INVALID_INPUT, fieldErrors는 빈 배열 — 칸을 특정하지 않는다</td></tr>
+ *   <tr><td>빠진 파일 칸(multipart의 한 부분)</td><td>400</td><td>INVALID_INPUT + 그 칸 이름</td></tr>
+ *   <tr><td>읽을 수 없는 파일 올리기 본문(요청 크기의 바깥 울타리를 넘음 — 413이 아니다, 깨진 multipart)</td><td>400</td>
+ *       <td>INVALID_INPUT, fieldErrors는 빈 배열 — 끝까지 읽기 전에 끊으므로 칸을 특정하지 않는다</td></tr>
  *   <tr><td>{@link com.ticketon.api.error.UnauthenticatedException 미인증}</td><td>401</td><td>UNAUTHENTICATED</td></tr>
  *   <tr><td>{@link com.ticketon.domain.error.PermissionDeniedException 권한 없음}</td><td>403</td><td>도메인 오류 코드</td></tr>
  *   <tr><td>{@link com.ticketon.domain.error.NotFoundException 찾을 수 없음}</td><td>404</td><td>도메인 오류 코드</td></tr>

@@ -133,6 +133,15 @@ public final class ProposedPolicy {
     public static final Set<ImageFormat> ORGANIZER_LOGO_ACCEPTED_FORMATS =
             Collections.unmodifiableSet(EnumSet.of(ImageFormat.PNG, ImageFormat.JPEG));
 
+    /**
+     * 확인 필요 (#29, 문서에 없음 — 기술값) — 파일 올리기 요청 하나의 바깥 울타리. 서버는 이보다 큰 파일 · 요청을 끝까지 읽지 않고 끊는다(400).
+     * 파일마다의 상한(로고 {@link #ORGANIZER_LOGO_MAXIMUM_SIZE})은 그 안에서 따로 본다.
+     * 10MB를 제안한다: 파일마다의 상한(로고 2MB, 포스터 제안 5MB — #40)보다 넉넉해, 상한을 조금 넘은 파일도 끝까지 받아 "2MB 이하로 올려 주세요"처럼
+     * 까닭을 칸 옆에 알려 줄 수 있다. 그보다 훨씬 큰 요청(휴대폰 원본 동영상 등)은 읽기 전에 끊어 서버 디스크 · 메모리를 아낀다. Spring 기본값(1MB)은
+     * 로고 상한보다 작아 그대로 둘 수 없다.
+     */
+    public static final FileSize UPLOAD_REQUEST_MAXIMUM_SIZE = FileSize.ofMegabytes(10);
+
     private ProposedPolicy() {
     }
 }

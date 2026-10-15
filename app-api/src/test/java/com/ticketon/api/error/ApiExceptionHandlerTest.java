@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -22,6 +23,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultMatcher;
 
@@ -111,6 +113,32 @@ class ApiExceptionHandlerTest {
         mockMvc.perform(post("/test/errors/body").contentType(MediaType.APPLICATION_JSON).content("{\"name\":"))
                 .andExpect(status().isBadRequest())
                 .andExpect(errorBody("INVALID_INPUT", "입력한 내용을 다시 확인해 주세요."));
+    }
+
+    @Test
+    @DisplayName("파일 올리기 요청이 바깥 울타리를 넘으면 413이 아니라 400이고, 칸을 특정하지 않는다")
+    void tooLargeUploadIs400() throws Exception {
+        mockMvc.perform(post("/test/errors/upload-too-large"))
+                .andExpect(status().isBadRequest())
+                .andExpect(errorBody("INVALID_INPUT", "입력한 내용을 다시 확인해 주세요."));
+    }
+
+    @Test
+    @DisplayName("깨진 파일 올리기 본문은 500이 아니라 400이다")
+    void brokenMultipartIs400() throws Exception {
+        mockMvc.perform(post("/test/errors/broken-multipart"))
+                .andExpect(status().isBadRequest())
+                .andExpect(errorBody("INVALID_INPUT", "입력한 내용을 다시 확인해 주세요."));
+    }
+
+    @Test
+    @DisplayName("빠진 파일 칸은 400이고, 칸 이름을 담는다")
+    void missingFilePartIs400() throws Exception {
+        mockMvc.perform(multipart("/test/errors/file").file(new MockMultipartFile("other", new byte[] {1})))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                .andExpect(jsonPath("$.fieldErrors.length()").value(1))
+                .andExpect(fieldError("attachment", "필수 항목입니다."));
     }
 
     @Test

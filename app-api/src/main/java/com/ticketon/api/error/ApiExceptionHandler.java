@@ -23,6 +23,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 /**
  * 컨트롤러에서 나온 예외를 {@link ErrorResponse}와 정해진 상태 코드로 바꾼다. 상태 코드 규칙은 package-info에 있다.
@@ -81,6 +83,25 @@ public class ApiExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleMissingParameter(MissingServletRequestParameterException exception) {
         return invalidInput(ValidationErrors.missing(exception.getParameterName()));
+    }
+
+    /** 꼭 있어야 할 파일 칸(multipart의 한 부분)이 빠졌다. */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleMissingPart(MissingServletRequestPartException exception) {
+        return invalidInput(ValidationErrors.missing(exception.getRequestPartName()));
+    }
+
+    /**
+     * 파일 올리기(multipart) 본문을 읽지 못했다 — 요청 크기의 바깥 울타리(정책 숫자 모음, MultipartConfiguration)를 넘었거나 본문이 깨졌다.
+     * 크기를 넘은 것도 413 대신 400으로 답한다 — 파일마다의 상한을 넘은 파일(400)과 같은 입력 오류로 다룬다. 요청을 끝까지 읽기 전에 끊으므로
+     * 어느 칸인지 특정하지 않고 fieldErrors는 비운다.
+     */
+    @ExceptionHandler(MultipartException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleUnreadableMultipart(MultipartException exception) {
+        log.debug("파일 올리기 본문을 읽지 못함: {}", exception.getMessage());
+        return ErrorResponse.of(ApiErrorCode.INVALID_INPUT);
     }
 
     /** JSON이 깨졌거나 칸 타입이 맞지 않아 본문을 읽지 못했다. 어느 칸인지 특정하지 않으므로 fieldErrors는 비운다. */
