@@ -97,6 +97,15 @@ public enum OrganizerErrorCode implements ErrorCode {
      */
     OWNERSHIP_CHANGE_NOT_CONFIRMABLE("소유자 이전 신청을 승인해 바꾼 소유자 변경은 따로 확인하지 않습니다."),
 
+    /** 없는 주최자명 변경 이력을 관리자가 확인하려 했다. */
+    ORGANIZER_NAME_CHANGE_NOT_FOUND("주최자명 변경 기록을 찾을 수 없습니다."),
+
+    /**
+     * 이미 확인한 주최자명 변경을 관리자가 다시 확인하려 했다. 확인은 한 번이다({@link OrganizerNameChangeEntry#confirm}). 두 관리자가 거의
+     * 동시에 같은 변경을 확인해 한쪽이 먼저 처리한 경우도 이 코드다.
+     */
+    ORGANIZER_NAME_CHANGE_ALREADY_CONFIRMED("이미 확인한 주최자명 변경입니다."),
+
     /**
      * 소유자가 소유자 이전을 신청하려 했다 — 이전 신청은 소유자와 연락이 끊겨 넘겨줄 사람이 없을 때 운영자가 하는 것이다(docs/01 "소유자와
      * 연락이 끊긴 경우", docs/13 "소유자 이전 신청 ※ 운영자"). 소유자는 운영자에게 직접 넘긴다.

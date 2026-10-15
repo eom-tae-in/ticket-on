@@ -27,7 +27,13 @@ public enum AdminOperationKind {
     APPROVE_OWNERSHIP_CLAIM(AdminOperationTargetKind.OWNERSHIP_CLAIM),
 
     /** 소유자 이전 신청 반려 — 사유를 남긴다. 소유자는 그대로다. 대상은 반려한 신청이다. */
-    REJECT_OWNERSHIP_CLAIM(AdminOperationTargetKind.OWNERSHIP_CLAIM);
+    REJECT_OWNERSHIP_CLAIM(AdminOperationTargetKind.OWNERSHIP_CLAIM),
+
+    /**
+     * 주최자명 변경 사후 확인 — 처리 목록에서 빠진다(docs/12 "관리자 대상 — 주최자명 변경 (사후 확인용)"). 이름은 되돌리지 않는다. 대상은 확인한
+     * 주최자명 변경 이력이다.
+     */
+    CONFIRM_ORGANIZER_NAME_CHANGE(AdminOperationTargetKind.ORGANIZER_NAME_CHANGE);
 
     private final AdminOperationTargetKind targetKind;
 
