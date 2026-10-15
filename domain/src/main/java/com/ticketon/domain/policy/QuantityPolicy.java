@@ -54,6 +54,13 @@ public final class QuantityPolicy {
      */
     public static final int MINIMUM_SIGNUP_AGE = 14;
 
+    /**
+     * 첫 글자 표시의 색 가짓수 — 8가지. 로고가 없는 주최자는 이름 첫 글자 + 주최자마다 정해진 색, 운영진 프로필은 닉네임 첫 글자 + 사람마다
+     * 정해진 색으로 보이고, 둘이 같은 팔레트를 쓴다. 99 C 표에는 없지만 docs/01에 적힌 값이다.
+     * docs/01 "공개 페이지 — 로고", "운영진 프로필 — 표시", docs/99 D "주최자 로고"
+     */
+    public static final int INITIAL_AVATAR_COLOR_COUNT = 8;
+
     private QuantityPolicy() {
     }
 }
