@@ -5,6 +5,7 @@ import static com.ticketon.persistence.jooq.Tables.ORGANIZER_APPLICATION;
 import static com.ticketon.persistence.jooq.Tables.ORGANIZER_APPLICATION_LINK;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ticketon.common.KoreanTime;
@@ -54,7 +55,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL에 마이그레이션(V8 주최자 신청서)을 올리고 신청서 저장·되살리기, 심사 중 신청 확인, 같은 사람의 동시 신청 경합을 본다.
+ * 진짜 PostgreSQL에 마이그레이션(V8 주최자 신청서)을 올리고 신청서 저장·되살리기, 심사 중 신청 확인, 같은 사람의 동시 신청 경합,
+ * 심사 결과(승인·반려) 저장과 두 관리자의 동시 심사 경합을 본다.
  * 신청서는 docs/15의 두 주최자 — 극단 "열두달"(비사업자 단체)과 "늦여름"(사업자) — 다. Docker가 없는 환경에서는 건너뛴다.
  */
 @Testcontainers(disabledWithoutDocker = true)
@@ -250,6 +252,120 @@ class OrganizerApplicationPersistenceAdapterTest {
     }
 
     @Nested
+    @DisplayName("심사 결과 저장 — 표에서 아직 심사 중일 때만 바꾼다")
+    class SaveReview {
+
+        @Test
+        @DisplayName("승인하면 승인 상태와 처리 일시가 남고 사유는 비어 있다")
+        void savesApproval() {
+            long id = submitTwelveMonths();
+            OrganizerApplication application = adapter.findById(id).orElseThrow();
+            application.approve(organizerOf(application), REVIEWED_AT);
+
+            adapter.saveReview(application);
+
+            OrganizerApplication found = adapter.findById(id).orElseThrow();
+            assertThat(found.status()).isEqualTo(OrganizerApplicationStatus.APPROVED);
+            assertThat(found.reviewedAt()).contains(REVIEWED_AT);
+            assertThat(found.rejectionReason()).isEmpty();
+            assertThat(adapter.reviewStateOf(junghoon)).isEqualTo(ApplicantReviewState.NO_APPLICATION_UNDER_REVIEW);
+        }
+
+        @Test
+        @DisplayName("반려하면 반려 상태와 처리 일시·사유가 남는다 — 신청 항목은 그대로다")
+        void savesRejection() {
+            long id = submitTwelveMonths();
+            OrganizerApplication application = adapter.findById(id).orElseThrow();
+            application.reject(RejectionReason.of("정보가 부족함"), REVIEWED_AT);
+
+            adapter.saveReview(application);
+
+            OrganizerApplication found = adapter.findById(id).orElseThrow();
+            assertThat(found.status()).isEqualTo(OrganizerApplicationStatus.REJECTED);
+            assertThat(found.reviewedAt()).contains(REVIEWED_AT);
+            assertThat(found.rejectionReason()).contains(RejectionReason.of("정보가 부족함"));
+            assertThat(found.form()).isEqualTo(twelveMonthsForm());
+        }
+
+        @Test
+        @DisplayName("읽은 뒤 다른 처리가 먼저 마쳤으면 충돌이고 표는 먼저 마친 그대로다")
+        void alreadyReviewedIsConflict() {
+            long id = submitTwelveMonths();
+            OrganizerApplication application = adapter.findById(id).orElseThrow();
+            reject(id, "연락이 닿지 않음");
+            application.approve(organizerOf(application), REVIEWED_AT);
+
+            assertThatExceptionOfType(ConflictException.class)
+                    .isThrownBy(() -> adapter.saveReview(application))
+                    .satisfies(conflict -> assertThat(conflict.errorCode())
+                            .isEqualTo(OrganizerErrorCode.APPLICATION_ALREADY_REVIEWED));
+            OrganizerApplication found = adapter.findById(id).orElseThrow();
+            assertThat(found.status()).isEqualTo(OrganizerApplicationStatus.REJECTED);
+            assertThat(found.rejectionReason()).contains(RejectionReason.of("연락이 닿지 않음"));
+        }
+
+        @Test
+        @DisplayName("처리하지 않은 신청서나 저장 전 신청서는 저장하지 않는다")
+        void requiresReviewedSavedApplication() {
+            long id = submitTwelveMonths();
+            OrganizerApplication underReview = adapter.findById(id).orElseThrow();
+            OrganizerApplication unsaved = OrganizerApplication.submit(underReview.organizerId(), junghoon,
+                    twelveMonthsForm(), SUBMITTED_AT);
+            unsaved.reject(RejectionReason.of("정보가 부족함"), REVIEWED_AT);
+
+            assertThatIllegalArgumentException().isThrownBy(() -> adapter.saveReview(underReview));
+            assertThatIllegalArgumentException().isThrownBy(() -> adapter.saveReview(unsaved));
+            assertThat(adapter.findById(id).orElseThrow().status()).isEqualTo(OrganizerApplicationStatus.UNDER_REVIEW);
+        }
+
+        @Test
+        @DisplayName("두 관리자가 두 트랜잭션에서 동시에 승인·반려하면 하나만 저장되고, 진 쪽은 충돌로 되돌려진다")
+        void concurrentReviewsLeaveOne() throws Exception {
+            long id = submitTwelveMonths();
+            CyclicBarrier bothRead = new CyclicBarrier(2);
+
+            List<Object> outcomes = runConcurrently(
+                    () -> reviewInOwnTransaction(id, bothRead, true),
+                    () -> reviewInOwnTransaction(id, bothRead, false));
+
+            assertThat(outcomes).filteredOn(Long.class::isInstance).hasSize(1);
+            assertThat(outcomes).filteredOn(ConflictException.class::isInstance).singleElement()
+                    .satisfies(conflict -> assertThat(((ConflictException) conflict).errorCode())
+                            .isEqualTo(OrganizerErrorCode.APPLICATION_ALREADY_REVIEWED));
+            OrganizerApplication found = adapter.findById(id).orElseThrow();
+            assertThat(found.status()).isIn(OrganizerApplicationStatus.APPROVED, OrganizerApplicationStatus.REJECTED);
+            assertThat(found.rejectionReason().isPresent())
+                    .isEqualTo(found.status() == OrganizerApplicationStatus.REJECTED);
+        }
+
+        /** 제 연결·트랜잭션에서 심사 중인 신청서를 읽고, 상대도 읽을 때까지 기다렸다가 승인하거나 반려해 저장한다. */
+        private long reviewInOwnTransaction(long applicationId, CyclicBarrier bothRead, boolean approve) {
+            try (CloseableDSLContext ownConnection = DSL.using(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                    POSTGRES.getPassword())) {
+                return ownConnection.transactionResult(transaction -> {
+                    OrganizerApplicationPersistenceAdapter transactionAdapter =
+                            new OrganizerApplicationPersistenceAdapter(transaction.dsl());
+                    OrganizerApplication application = transactionAdapter.findById(applicationId).orElseThrow();
+                    assertThat(application.status()).isEqualTo(OrganizerApplicationStatus.UNDER_REVIEW);
+                    bothRead.await(10, TimeUnit.SECONDS);
+                    if (approve) {
+                        application.approve(new OrganizerPersistenceAdapter(transaction.dsl())
+                                .findById(application.organizerId()).orElseThrow(), REVIEWED_AT);
+                    } else {
+                        application.reject(RejectionReason.of("연락이 닿지 않음"), REVIEWED_AT);
+                    }
+                    transactionAdapter.saveReview(application);
+                    return applicationId;
+                });
+            }
+        }
+
+        private Organizer organizerOf(OrganizerApplication application) {
+            return new OrganizerPersistenceAdapter(dsl).findById(application.organizerId()).orElseThrow();
+        }
+    }
+
+    @Nested
     @DisplayName("표의 약속")
     class TableConstraints {
 
@@ -288,7 +404,7 @@ class OrganizerApplicationPersistenceAdapterTest {
                 .id().getAsLong();
     }
 
-    /** 관리자가 반려한 것처럼 표를 바꾼다 — 반려 유스케이스는 #23이 만든다. */
+    /** 관리자가 반려한 것처럼 표를 바로 바꾼다 — 읽은 뒤 다른 관리자가 먼저 처리한 상황을 만들 때도 쓴다. */
     private static void reject(long applicationId, String reason) {
         dsl.update(ORGANIZER_APPLICATION)
                 .set(ORGANIZER_APPLICATION.STATUS, OrganizerApplicationStatus.REJECTED.name())

@@ -26,7 +26,7 @@ final class FakeOrganizerApplicationRepository implements OrganizerApplicationRe
         anotherSubmissionWinsNextAdd = true;
     }
 
-    /** 관리자가 반려한 것처럼 바꿔 둔다 — 반려 유스케이스는 #23이 만든다. */
+    /** 관리자가 반려한 것처럼 바꿔 둔다 — 반려 유스케이스는 관리자 심사(admin)의 일이고 그 테스트가 본다. */
     void reject(long applicationId, String reason, Instant reviewedAt) {
         OrganizerApplication application = findById(applicationId).orElseThrow();
         application.reject(RejectionReason.of(reason), reviewedAt);
@@ -63,6 +63,11 @@ final class FakeOrganizerApplicationRepository implements OrganizerApplicationRe
     @Override
     public Optional<OrganizerApplication> findById(long id) {
         return Optional.ofNullable(applications.get(id));
+    }
+
+    @Override
+    public void saveReview(OrganizerApplication reviewedApplication) {
+        throw new UnsupportedOperationException("주최자 신청 제출·주최 홈에서는 심사 결과를 저장하지 않습니다");
     }
 
     private boolean hasUnderReview(long applicantStaffAccountId) {

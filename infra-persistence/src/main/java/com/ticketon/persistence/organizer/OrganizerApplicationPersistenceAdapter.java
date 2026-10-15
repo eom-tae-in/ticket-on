@@ -40,6 +40,11 @@ import org.springframework.stereotype.Component;
  * 않으면 진 쪽이라 {@link ConflictException}(409)이 된다. 먼저 들어온 쪽이 아직 커밋하지 않았으면 PostgreSQL이 그 결과를 기다렸다가
  * 판정하므로 둘 다 들어가는 일은 없다. 진 쪽의 트랜잭션은 되돌려져, 함께 만든 심사 중 주최자도 남지 않는다.
  *
+ * <h2>같은 신청을 두 관리자가 동시에 처리 — 심사 경합</h2>
+ * 승인·반려는 "신청서를 읽어 심사 중인지 확인 → 저장" 두 단계라, 두 관리자가 거의 동시에 처리하면 둘 다 확인을 통과할 수 있다. 그래서 저장은
+ * {@code UPDATE … WHERE status = 'UNDER_REVIEW'}로 하고, 바뀐 줄이 없으면 진 쪽이라 {@link ConflictException}(409)이 된다. 먼저 바꾼
+ * 쪽이 아직 커밋하지 않았으면 PostgreSQL이 그 줄의 잠금을 기다렸다가 바뀐 상태로 조건을 다시 보므로 둘 다 바뀌는 일은 없다.
+ *
  * <h2>민감한 값</h2>
  * 담당자 연락처 · 사업자 정보 · 정산 계좌는 오류 설명에도 넣지 않는다. 신청서는 id와 신청한 운영진 id로만 가리킨다.
  */
@@ -78,6 +83,28 @@ public class OrganizerApplicationPersistenceAdapter implements OrganizerApplicat
                 .where(ORGANIZER_APPLICATION.ID.eq(id))
                 .fetchOptional()
                 .map(application -> toApplication(application, linksOf(id)));
+    }
+
+    @Override
+    public void saveReview(OrganizerApplication reviewedApplication) {
+        long id = reviewedApplication.id()
+                .orElseThrow(() -> new IllegalArgumentException("저장 전 신청서는 심사 결과를 저장할 수 없습니다"));
+        if (reviewedApplication.status() == OrganizerApplicationStatus.UNDER_REVIEW) {
+            throw new IllegalArgumentException("아직 심사 중인 신청서입니다: " + id);
+        }
+        int updated = dsl.update(ORGANIZER_APPLICATION)
+                .set(ORGANIZER_APPLICATION.STATUS, reviewedApplication.status().name())
+                .set(ORGANIZER_APPLICATION.REVIEWED_AT,
+                        reviewedApplication.reviewedAt().map(this::toDatabaseTime).orElseThrow())
+                .set(ORGANIZER_APPLICATION.REJECTION_REASON,
+                        reviewedApplication.rejectionReason().map(RejectionReason::text).orElse(null))
+                .where(ORGANIZER_APPLICATION.ID.eq(id))
+                .and(ORGANIZER_APPLICATION.STATUS.eq(OrganizerApplicationStatus.UNDER_REVIEW.name()))
+                .execute();
+        if (updated == 0) {
+            throw new ConflictException(OrganizerErrorCode.APPLICATION_ALREADY_REVIEWED,
+                    "심사 경합 — 신청서 " + id + "를 다른 처리가 먼저 마침");
+        }
     }
 
     private Optional<Long> insertApplication(OrganizerApplication application) {
