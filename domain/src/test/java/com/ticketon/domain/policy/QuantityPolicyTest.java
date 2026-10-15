@@ -73,4 +73,10 @@ class QuantityPolicyTest {
     void minimumSignupAge() {
         assertThat(QuantityPolicy.MINIMUM_SIGNUP_AGE).isEqualTo(14);
     }
+
+    @Test
+    @DisplayName("첫 글자 표시의 색은 8가지다 — 주최자 로고와 운영진 프로필이 같은 팔레트 (docs/01)")
+    void initialAvatarColorCount() {
+        assertThat(QuantityPolicy.INITIAL_AVATAR_COLOR_COUNT).isEqualTo(8);
+    }
 }

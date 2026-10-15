@@ -20,7 +20,16 @@ public enum OrganizerErrorCode implements ErrorCode {
     BUSINESS_INFORMATION_FOR_NON_BUSINESS("비사업자는 사업자 정보를 입력하지 않습니다. 사업자 여부를 확인해 주세요."),
 
     /** 이미 승인 또는 반려한 신청서를 다시 처리하려 했다. 반려된 뒤에는 새로 신청한다(docs/01 "반려 — 재신청은 제한 없이 허용"). */
-    APPLICATION_ALREADY_REVIEWED("이미 심사를 마친 신청입니다.");
+    APPLICATION_ALREADY_REVIEWED("이미 심사를 마친 신청입니다."),
+
+    /** 심사 중이 아닌 주최자를 승인하려 했다. 승인은 심사 중인 주최자를 활동으로 바꾸는 일이다. */
+    ORGANIZER_NOT_UNDER_REVIEW("심사 중인 주최자가 아닙니다."),
+
+    /**
+     * 활동 중이 아닌 주최자(심사 중 · 닫힘 · 영구 정지)의 정보를 바꾸려 했다. 주최자명과 공개 정보는 승인된 주최자의 운영진이 바꾸고, 닫히거나
+     * 영구 정지된 주최자에는 운영진이 남지 않는다(docs/01 "탈퇴와 주최자 닫기", "정지 4단계").
+     */
+    ORGANIZER_NOT_ACTIVE("활동 중인 주최자가 아닙니다.");
 
     private final String message;
 
