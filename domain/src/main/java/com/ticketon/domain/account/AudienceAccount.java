@@ -34,8 +34,8 @@ import java.util.Set;
  * (docs/13 마이페이지 "계정 정보 — 전화번호 변경", "알림 설정 · 마케팅 수신"). 번호를 바꿀 때도 번호 하나에 계정 하나를 똑같이 지키고,
  * 동의를 바꿀 때는 동의 기록에 새 줄을 더한다.
  * <p>
- * <b>관객에게 거는 제재는 이용 정지 하나뿐이다</b>({@link #suspend}, {@link #lift}). 정지 중에는 새 예매·변경·신고만 막히고
- * 로그인·기존 티켓 보기·QR·취소는 된다({@link #can}).
+ * <b>관객에게 거는 제재는 이용 정지 하나뿐이다</b>({@link #suspend}, {@link #lift}). 정지 중에는 새 예매·변경·신고와, 정지를 피하는 길이
+ * 되는 전화번호 변경이 막히고 로그인·기존 티켓 보기·QR·취소는 된다({@link #can}).
  * <p>
  * 저장소에서 다시 읽을 때는 {@link #restore}를 쓴다. 저장 전 계정은 id가 없다.
  */
@@ -236,12 +236,14 @@ public final class AudienceAccount {
      * 번호는 인증하지 않는다 — 관객이 본인 번호를 정확히 적는다고 가정한다(docs/01, docs/12 "전화번호는 인증하지 않습니다").
      * 지금 번호와 같으면 아무것도 바꾸지 않는다 — 그 번호는 이 계정이 쥐고 있어 저장소는 가입된 번호라고 답하지만, 겹치는 것은 아니다.
      * <p>
-     * 로그인할 수 있는 계정({@link AudienceAction#CHANGE_PHONE_NUMBER} — 활동·이용 정지)만 바꾼다. 이용 정지로 막히는 것은 새 예매·변경·신고뿐이다.
+     * <b>활동 중인 계정만 바꾼다.</b> 이용 정지 중에는 막는다 — 번호를 바꾼 뒤 탈퇴하면 진짜 번호가 차단 목록에 남지 않아 같은 번호로 다시 가입해
+     * 정지를 피할 수 있다({@link AudienceAction#CHANGE_PHONE_NUMBER}, docs/01 "관객 이용 정지").
      *
      * @param newPhoneNumber          새 번호 — 숫자만 남긴 값({@link PhoneNumber#of})
      * @param phoneNumberAvailability 새 번호를 쓸 수 있는지 — 저장소가 확인한 값
      * @return 번호가 바뀌었으면 true, 지금 번호와 같아 그대로면 false
      * @throws RuleViolationException 다른 계정이 쓰는 번호 또는 차단된 번호({@link AccountErrorCode#PHONE_NUMBER_ALREADY_REGISTERED}),
+     *                                이용 정지 중({@link AccountErrorCode#AUDIENCE_SUSPENDED}),
      *                                인증 대기·탈퇴 계정({@link AccountErrorCode#AUDIENCE_NOT_ACTIVE})
      */
     public boolean changePhoneNumber(PhoneNumber newPhoneNumber, PhoneNumberAvailability phoneNumberAvailability) {
@@ -291,7 +293,7 @@ public final class AudienceAccount {
     /**
      * 지금 상태에서 그 일을 할 수 있는지.
      * <p>
-     * 활동 중이면 전부 된다. 이용 정지면 새 예매·변경·신고만 막히고 로그인·기존 티켓 보기·QR·취소는 된다 — 산 표는 뺏지 않는다
+     * 활동 중이면 전부 된다. 이용 정지면 새 예매·변경·신고·전화번호 변경이 막히고 로그인·기존 티켓 보기·QR·취소는 된다 — 산 표는 뺏지 않는다
      * (docs/01 "관객 이용 정지"). 인증 대기와 탈퇴는 로그인부터 할 수 없으므로 아무것도 할 수 없다.
      */
     public boolean can(AudienceAction action) {
@@ -377,14 +379,15 @@ public final class AudienceAccount {
     }
 
     /**
-     * 지금 상태에서 그 일을 할 수 있어야 한다({@link #can}). 정지 중에도 되는 일(계정 정보 바꾸기)에만 쓴다 — 막히는 것은 인증 대기·탈퇴뿐이고,
-     * 로그인 세션은 있는데 그런 상태인 경우라 계정 정보 보기와 같은 코드로 알린다. 정지로 막히는 일(새 예매 등)은 정지 문구가 따로 필요하다.
+     * 지금 상태에서 그 일을 할 수 있어야 한다({@link #can}). 이용 정지로 막히는 일이면 정지 문구({@link AccountErrorCode#AUDIENCE_SUSPENDED})로,
+     * 인증 대기·탈퇴면 — 로그인 세션은 있는데 그런 상태인 경우라 — 계정 정보 보기와 같은 코드({@link AccountErrorCode#AUDIENCE_NOT_ACTIVE})로 알린다.
      */
     private void requireAllowed(AudienceAction action) {
-        if (!can(action)) {
-            throw new RuleViolationException(AccountErrorCode.AUDIENCE_NOT_ACTIVE,
-                    "계정 " + id + " " + action + " 할 수 없는 상태: " + status);
+        if (can(action)) {
+            return;
         }
+        AccountErrorCode errorCode = isSuspended() ? AccountErrorCode.AUDIENCE_SUSPENDED : AccountErrorCode.AUDIENCE_NOT_ACTIVE;
+        throw new RuleViolationException(errorCode, "계정 " + id + " " + action + " 할 수 없는 상태: " + status);
     }
 
     private static void requireMinimumAge(LocalDate birthDate, Instant now) {

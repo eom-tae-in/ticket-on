@@ -96,12 +96,22 @@ class ChangeAudiencePhoneNumberServiceTest {
     }
 
     @Test
-    @DisplayName("이용 정지 중에도 바꿀 수 있다 — 정지로 막히는 것은 새 예매·변경·신고뿐이다 (docs/01)")
-    void suspendedAccountCanChange() {
+    @DisplayName("이용 정지 중에는 바꿀 수 없고 저장하지 않는다 — 정지 회피를 막는다 (docs/01 \"관객 이용 정지\")")
+    void suspendedAccountCannotChange() {
         long id = accounts.suspended(SEOYUN_EMAIL, SEOYUN_PHONE);
 
+        assertRejected(id, NEW_PHONE, AccountErrorCode.AUDIENCE_SUSPENDED);
+        assertThat(accountRepository.accountWrites()).isEmpty();
+        assertThat(accountRepository.findById(id).orElseThrow().personalInformation().phoneNumber())
+                .isEqualTo(PhoneNumber.of(SEOYUN_PHONE));
+    }
+
+    @Test
+    @DisplayName("정지가 풀린 계정은 다시 바꿀 수 있다")
+    void liftedAccountCanChange() {
+        long id = accounts.lifted(SEOYUN_EMAIL, SEOYUN_PHONE);
+
         assertThat(service.changePhoneNumber(command(id, NEW_PHONE)).phoneNumber()).isEqualTo("01098765432");
-        assertThat(accountRepository.findById(id).orElseThrow().isSuspended()).isTrue();
     }
 
     @Test

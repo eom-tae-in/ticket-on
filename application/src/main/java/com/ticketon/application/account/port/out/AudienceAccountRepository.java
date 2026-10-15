@@ -74,14 +74,14 @@ public interface AudienceAccountRepository {
     void savePassword(AudienceAccount changedAccount);
 
     /**
-     * 바꾼 전화번호를 저장한다. 저장소의 계정이 번호를 바꿀 수 있는 상태(활동·이용 정지)일 때만 바꾼다.
+     * 바꾼 전화번호를 저장한다. 저장소의 계정이 활동 중일 때만 바꾼다 — 이용 정지 중에는 번호를 바꿀 수 없다.
      * <p>
      * 확인({@link #phoneNumberAvailability})과 저장 사이에 같은 번호로 다른 가입이나 다른 계정의 번호 변경이 먼저 저장될 수 있으므로,
      * 저장할 때 다시 막는다 — 가입한 계정 사이에서 번호는 하나다.
      *
      * @param changedAccount {@link AudienceAccount#changePhoneNumber}로 번호를 바꾼 계정
      * @throws ConflictException 확인한 뒤 다른 계정이 같은 번호를 먼저 저장했거나({@code PHONE_NUMBER_ALREADY_REGISTERED}),
-     *                           그 사이 계정이 탈퇴했으면({@code AUDIENCE_NOT_ACTIVE})
+     *                           그 사이 이용 정지됐거나({@code AUDIENCE_SUSPENDED}) 탈퇴했으면({@code AUDIENCE_NOT_ACTIVE})
      */
     void savePhoneNumber(AudienceAccount changedAccount);
 

@@ -57,6 +57,12 @@ public enum AccountErrorCode implements ErrorCode {
     AUDIENCE_NOT_SUSPENDED("이용 정지된 계정이 아닙니다."),
 
     /**
+     * 이용 정지 중에는 막히는 일을 하려 했다 — 새 예매·변경·신고·전화번호 변경({@link AudienceAction#isRestrictedWhileSuspended},
+     * docs/01 "관객 이용 정지"). 로그인·기존 티켓 보기·QR·취소는 된다.
+     */
+    AUDIENCE_SUSPENDED("이용 정지 중에는 이용할 수 없는 기능입니다."),
+
+    /**
      * 같은 이메일의 운영진 로그인이 있다. 이메일이 운영진 로그인 아이디다. 같은 이메일의 관객 계정은 상관없다 — 따로 만들 수 있다
      * (docs/01 "같은 이메일로 양쪽 가입"). 문구는 관객 쪽과 같다.
      */

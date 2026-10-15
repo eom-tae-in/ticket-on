@@ -26,7 +26,7 @@ public record MyAudienceAccountResponse(
         @Schema(description = "전화번호 — 숫자만 남긴 11자리", example = "01012345678", requiredMode = REQUIRED)
         String phoneNumber,
 
-        @Schema(description = "이용 정지 중인지. 정지 중에는 새 예매·변경·신고가 막히고, 로그인·기존 티켓 보기·QR·취소는 된다",
+        @Schema(description = "이용 정지 중인지. 정지 중에는 새 예매·변경·신고·전화번호 변경이 막히고, 로그인·기존 티켓 보기·QR·취소는 된다",
                 requiredMode = REQUIRED)
         boolean suspended,
 

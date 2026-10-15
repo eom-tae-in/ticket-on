@@ -169,7 +169,7 @@ public class AudienceAccountPersistenceAdapter implements AudienceAccountReposit
         long id = changedAccount.id().orElseThrow(() -> new IllegalArgumentException("저장하지 않은 계정입니다"));
         int updatedRows = updatePhoneNumber(id, changedAccount.personalInformation().phoneNumber());
         if (updatedRows == 0) {
-            throw new ConflictException(AccountErrorCode.AUDIENCE_NOT_ACTIVE, "전화번호를 바꿀 수 없게 된 계정: " + id);
+            throw phoneNumberNoLongerChangeable(id);
         }
     }
 
@@ -179,15 +179,15 @@ public class AudienceAccountPersistenceAdapter implements AudienceAccountReposit
     }
 
     /**
-     * 활동·이용 정지 계정의 번호만 바꾼다. 번호 유일 색인에 막히면 번호 문구의 충돌로 바꾼다 — 바꾸는 칸이 번호 하나라 겹친 칸을 다시 볼
-     * 필요가 없다. 그 밖의 오류는 그대로 내보낸다.
+     * 활동 중인 계정의 번호만 바꾼다 — 이용 정지 중에는 바꿀 수 없다(정지 회피 방지, docs/01 "관객 이용 정지"). 번호 유일 색인에 막히면 번호
+     * 문구의 충돌로 바꾼다 — 바꾸는 칸이 번호 하나라 겹친 칸을 다시 볼 필요가 없다. 그 밖의 오류는 그대로 내보낸다.
      */
     private int updatePhoneNumber(long id, PhoneNumber phoneNumber) {
         try {
             return dsl.update(AUDIENCE_ACCOUNT)
                     .set(AUDIENCE_ACCOUNT.PHONE_NUMBER, phoneNumber.digits())
                     .where(AUDIENCE_ACCOUNT.ID.eq(id))
-                    .and(AUDIENCE_ACCOUNT.STATUS.in(AudienceAccountStatus.ACTIVE.name(), AudienceAccountStatus.SUSPENDED.name()))
+                    .and(AUDIENCE_ACCOUNT.STATUS.eq(AudienceAccountStatus.ACTIVE.name()))
                     .execute();
         } catch (RuntimeException exception) {
             if (UniqueViolation.isCauseOf(exception)) {
@@ -196,6 +196,18 @@ public class AudienceAccountPersistenceAdapter implements AudienceAccountReposit
             }
             throw exception;
         }
+    }
+
+    /**
+     * 번호를 바꾸지 못한 까닭 — 그 사이 이용 정지됐으면 정지 문구, 탈퇴했으면 활동 중이 아니라는 문구. 막힌 것은 조건부 UPDATE가 0줄을 바꾼
+     * 것이지 문장이 거부된 것이 아니라 다시 조회할 수 있다.
+     */
+    private ConflictException phoneNumberNoLongerChangeable(long id) {
+        String storedStatus = dsl.select(AUDIENCE_ACCOUNT.STATUS).from(AUDIENCE_ACCOUNT).where(AUDIENCE_ACCOUNT.ID.eq(id))
+                .fetchOptional(AUDIENCE_ACCOUNT.STATUS).orElse(WITHDRAWN);
+        AccountErrorCode errorCode = AudienceAccountStatus.SUSPENDED.name().equals(storedStatus)
+                ? AccountErrorCode.AUDIENCE_SUSPENDED : AccountErrorCode.AUDIENCE_NOT_ACTIVE;
+        return new ConflictException(errorCode, "전화번호를 바꿀 수 없게 된 계정: " + id + " (" + storedStatus + ")");
     }
 
     private boolean isRegistered(PhoneNumber phoneNumber) {

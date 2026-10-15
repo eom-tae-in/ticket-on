@@ -102,6 +102,17 @@ class AudienceAccountControllerTest {
                 .andExpect(errorBody("PHONE_NUMBER_ALREADY_REGISTERED", ALREADY_REGISTERED_MESSAGE));
     }
 
+    @Test
+    @DisplayName("이용 정지 중이면 409 AUDIENCE_SUSPENDED다 — 정지 회피를 막는다")
+    void suspendedAudienceIsConflict() throws Exception {
+        given(changeAudiencePhoneNumberUseCase.changePhoneNumber(any()))
+                .willThrow(new RuleViolationException(AccountErrorCode.AUDIENCE_SUSPENDED));
+
+        mockMvc.perform(change("{\"phoneNumber\": \"010-9876-5432\"}").with(loggedInAs(SEOYUN)))
+                .andExpect(status().isConflict())
+                .andExpect(errorBody("AUDIENCE_SUSPENDED", "이용 정지 중에는 이용할 수 없는 기능입니다."));
+    }
+
     @ParameterizedTest(name = "\"{0}\"")
     @ValueSource(strings = {"02-123-4567", "010-1234-567", "abc"})
     @DisplayName("010으로 시작하는 11자리가 아니면 400이고 유스케이스를 부르지 않는다")

@@ -498,17 +498,16 @@ class AudienceAccountPersistenceAdapterTest {
         }
 
         @Test
-        @DisplayName("이용 정지 중인 계정도 저장한다 — 정지 중에도 번호를 바꿀 수 있다 (docs/01)")
-        void savesForSuspendedAccount() {
+        @DisplayName("그 사이 이용 정지됐으면 저장하지 않고 정지 문구의 충돌이다 — 정지 중에는 번호를 바꿀 수 없다 (docs/01)")
+        void conflictsWhenSuspended() {
             long id = savedActiveAccount(SEOYUN_PHONE, SEOYUN_EMAIL);
             AudienceAccount account = adapter.findById(id).orElseThrow();
             account.changePhoneNumber(PhoneNumber.of(NEW_PHONE), PhoneNumberAvailability.AVAILABLE);
             markStatus(id, AudienceAccountStatus.SUSPENDED);
 
-            adapter.savePhoneNumber(account);
-
+            assertConflict(() -> adapter.savePhoneNumber(account), AccountErrorCode.AUDIENCE_SUSPENDED);
             assertThat(dsl.select(AUDIENCE_ACCOUNT.PHONE_NUMBER).from(AUDIENCE_ACCOUNT).fetchSingle().value1())
-                    .isEqualTo("01098765432");
+                    .isEqualTo("01012345678");
         }
 
         @Test

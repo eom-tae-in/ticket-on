@@ -39,7 +39,7 @@ public class AudienceAccountController {
     }
 
     @Operation(summary = "전화번호 변경", description = "로그인한 관객의 전화번호를 바꾼다. 인증번호는 받지 않는다. 지금 번호와 같으면 그대로 돌려준다. "
-            + "이용 정지 중에도 바꿀 수 있다. 다른 계정이 쓰는 번호나 차단된 번호면 409 PHONE_NUMBER_ALREADY_REGISTERED "
+            + "이용 정지 중이면 409 AUDIENCE_SUSPENDED(정지 회피 방지). 다른 계정이 쓰는 번호나 차단된 번호면 409 PHONE_NUMBER_ALREADY_REGISTERED "
             + "(\"이미 가입된 번호입니다. 본인 번호가 맞다면 문의해 주세요.\"), 형식이 틀리면 400이다. "
             + "로그인하지 않았거나 세션이 끝났으면 401, 관객이 아닌 계정이면 403이다.")
     @PutMapping("/phone-number")

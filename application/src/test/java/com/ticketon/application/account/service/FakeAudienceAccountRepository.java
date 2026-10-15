@@ -21,7 +21,8 @@ import java.util.Set;
 
 /**
  * 메모리 관객 계정 저장소 — 저장소 약속을 표처럼 지킨다: 탈퇴하지 않은 계정 사이에서 번호·이메일(대소문자 무시)이 하나,
- * 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만, 비밀번호·전화번호 저장은 활동·이용 정지일 때만,
+ * 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만, 비밀번호 저장은 활동·이용 정지일 때만, 전화번호 저장은
+ * 활동 중일 때만,
  * 이메일로 찾을 때 탈퇴한 계정은 빼고. 동의 기록은 더하기만 한다.
  * <p>
  * 잠그고 읽기({@link #findByIdForUpdate})는 메모리라 기다릴 일이 없어 그냥 읽고, 쓰기 기록에 잠금을 남긴다. 진짜 DB에서 두 요청이 차례를
@@ -153,7 +154,10 @@ final class FakeAudienceAccountRepository implements AudienceAccountRepository {
             throw new ConflictException(AccountErrorCode.PHONE_NUMBER_ALREADY_REGISTERED, "전화번호 변경 경합(흉내)");
         }
         AudienceAccountStatus storedStatus = accounts.get(id).status();
-        if (storedStatus != AudienceAccountStatus.ACTIVE && storedStatus != AudienceAccountStatus.SUSPENDED) {
+        if (storedStatus == AudienceAccountStatus.SUSPENDED) {
+            throw new ConflictException(AccountErrorCode.AUDIENCE_SUSPENDED);
+        }
+        if (storedStatus != AudienceAccountStatus.ACTIVE) {
             throw new ConflictException(AccountErrorCode.AUDIENCE_NOT_ACTIVE);
         }
         PhoneNumber newPhoneNumber = changedAccount.personalInformation().phoneNumber();

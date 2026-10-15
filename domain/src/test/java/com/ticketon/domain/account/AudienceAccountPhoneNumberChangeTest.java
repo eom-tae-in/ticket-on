@@ -62,16 +62,26 @@ class AudienceAccountPhoneNumberChangeTest {
     }
 
     @Test
-    @DisplayName("이용 정지 중에도 바꿀 수 있다 — 정지로 막히는 것은 새 예매·변경·신고뿐이다 (docs/01 \"관객 이용 정지\")")
-    void suspendedAccountCanChange() {
+    @DisplayName("이용 정지 중에는 바꿀 수 없다 — 번호를 바꾸고 탈퇴해 진짜 번호를 풀면 다시 가입해 정지를 피할 수 있다 (docs/01 \"관객 이용 정지\")")
+    void suspendedAccountCannotChange() {
         AudienceAccount account = activeAccount();
         account.suspend("번호를 바꿔가며 1인 매수 제한을 넘는 예매", koreanTime(2026, 11, 2, 14, 0));
 
-        boolean changed = account.changePhoneNumber(NEW_NUMBER, PhoneNumberAvailability.AVAILABLE);
+        assertRejected(() -> account.changePhoneNumber(NEW_NUMBER, PhoneNumberAvailability.AVAILABLE),
+                AccountErrorCode.AUDIENCE_SUSPENDED);
+        assertThat(account.personalInformation().phoneNumber()).isEqualTo(SIGNUP_NUMBER);
+        assertThat(AccountErrorCode.AUDIENCE_SUSPENDED.message()).isEqualTo("이용 정지 중에는 이용할 수 없는 기능입니다.");
+    }
 
-        assertThat(changed).isTrue();
+    @Test
+    @DisplayName("정지가 풀리면 다시 바꿀 수 있다")
+    void liftedAccountCanChangeAgain() {
+        AudienceAccount account = activeAccount();
+        account.suspend("번호를 바꿔가며 1인 매수 제한을 넘는 예매", koreanTime(2026, 11, 2, 14, 0));
+        account.lift(koreanTime(2026, 12, 1, 9, 30));
+
+        assertThat(account.changePhoneNumber(NEW_NUMBER, PhoneNumberAvailability.AVAILABLE)).isTrue();
         assertThat(account.personalInformation().phoneNumber()).isEqualTo(NEW_NUMBER);
-        assertThat(account.isSuspended()).isTrue();
     }
 
     @Test
