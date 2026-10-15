@@ -1,0 +1,133 @@
+package com.ticketon.domain.admin;
+
+import com.ticketon.domain.account.AccountKind;
+import com.ticketon.domain.account.AccountRef;
+import com.ticketon.domain.account.AdminGrade;
+import com.ticketon.domain.account.EmailAddress;
+import java.time.Instant;
+import java.util.Objects;
+import java.util.Optional;
+
+/**
+ * 관리자 조작 기록 한 줄 — 누가(관리자) · 언제 · 무엇을(조작 종류) · 무엇에(대상 종류·id) · 요약 · 사유.
+ * <p>
+ * <b>관리자의 모든 조작에 남긴다</b>(docs/01 "관리자 2등급", docs/13 "5. 플랫폼 관리자"). 되돌릴 수 없는 조작을 추적하려면 필요하다.
+ * 조작과 같은 트랜잭션에서 남겨, 조작이 이뤄졌는데 기록이 없는 일이 없게 한다(application의 관리자 조작 기록기).
+ * <p>
+ * 요약은 사람이 목록에서 읽는 한 줄이다(운영진 쪽 예: "초대권 10장 발권 · 운영자 김○○", docs/01). 조작마다 만드는 방법을 이 클래스의
+ * 정적 메서드로 둔다({@link #adminAccountIssued}). 사유는 관리자가 적은 사유가 있는 조작(정지 사유, 반려 사유 등)만 남기고, 없으면 비어 있다.
+ * <p>
+ * 보관 기간은 문서에 정해져 있지 않아 지우지 않는다(docs/11 "데이터 보관"에 없음 — 정해지면 파기 작업을 더한다).
+ */
+public final class AdminOperationRecord {
+
+    private final AccountRef operator;
+    private final Instant operatedAt;
+    private final AdminOperationKind kind;
+    private final long targetId;
+    private final String summary;
+    private final String reason;
+
+    private AdminOperationRecord(AccountRef operator, Instant operatedAt, AdminOperationKind kind, long targetId,
+            String summary, String reason) {
+        this.operator = operator;
+        this.operatedAt = operatedAt;
+        this.kind = kind;
+        this.targetId = targetId;
+        this.summary = summary;
+        this.reason = reason;
+    }
+
+    /**
+     * 조작 기록 한 줄을 만든다.
+     *
+     * @param operator   조작한 관리자 — 관리자(ADMIN) 주체
+     * @param kind       조작 종류. 대상 종류는 조작 종류가 정한다.
+     * @param targetId   대상 id (1 이상)
+     * @param summary    요약 — 앞뒤 공백을 걷고, 비어 있으면 안 된다
+     * @param reason     관리자가 적은 사유 — 앞뒤 공백을 걷는다. 사유가 없는 조작이면 null.
+     * @param operatedAt 조작 일시
+     * @throws IllegalArgumentException 관리자가 아닌 주체, 1보다 작은 대상 id, 빈 요약, 공백뿐인 사유
+     */
+    public static AdminOperationRecord of(AccountRef operator, AdminOperationKind kind, long targetId, String summary,
+            String reason, Instant operatedAt) {
+        Objects.requireNonNull(operator, "operator");
+        Objects.requireNonNull(kind, "kind");
+        Objects.requireNonNull(summary, "summary");
+        Objects.requireNonNull(operatedAt, "operatedAt");
+        if (operator.kind() != AccountKind.ADMIN) {
+            throw new IllegalArgumentException("관리자 조작 기록은 관리자 주체만 남깁니다: " + operator.principalName());
+        }
+        if (targetId < 1) {
+            throw new IllegalArgumentException("대상 id는 1 이상이어야 합니다: " + targetId);
+        }
+        String strippedSummary = summary.strip();
+        if (strippedSummary.isEmpty()) {
+            throw new IllegalArgumentException("관리자 조작 기록의 요약이 비어 있습니다");
+        }
+        return new AdminOperationRecord(operator, operatedAt, kind, targetId, strippedSummary, strippedReason(reason));
+    }
+
+    /**
+     * 관리자 계정 발급 기록 — 대상은 발급한 계정이고, 요약은 "관리자 계정 발급 — 이메일 (등급)"이다. 사유는 없다.
+     *
+     * @param issuer          발급한 최고 관리자
+     * @param issuedAccountId 발급한 관리자 계정 id
+     * @param email           발급한 계정의 이메일
+     * @param grade           발급한 계정의 등급
+     */
+    public static AdminOperationRecord adminAccountIssued(AccountRef issuer, long issuedAccountId, EmailAddress email,
+            AdminGrade grade, Instant issuedAt) {
+        Objects.requireNonNull(email, "email");
+        Objects.requireNonNull(grade, "grade");
+        return of(issuer, AdminOperationKind.ISSUE_ADMIN_ACCOUNT, issuedAccountId,
+                "관리자 계정 발급 — " + email.value() + " (" + grade.displayName() + ")", null, issuedAt);
+    }
+
+    /** 조작한 관리자. */
+    public AccountRef operator() {
+        return operator;
+    }
+
+    /** 조작한 관리자의 계정 id. */
+    public long adminAccountId() {
+        return operator.id();
+    }
+
+    public Instant operatedAt() {
+        return operatedAt;
+    }
+
+    public AdminOperationKind kind() {
+        return kind;
+    }
+
+    /** 대상 종류 — 조작 종류가 정한다. */
+    public AdminOperationTargetKind targetKind() {
+        return kind.targetKind();
+    }
+
+    public long targetId() {
+        return targetId;
+    }
+
+    public String summary() {
+        return summary;
+    }
+
+    /** 관리자가 적은 사유. 사유가 없는 조작이면 비어 있다. */
+    public Optional<String> reason() {
+        return Optional.ofNullable(reason);
+    }
+
+    private static String strippedReason(String reason) {
+        if (reason == null) {
+            return null;
+        }
+        String stripped = reason.strip();
+        if (stripped.isEmpty()) {
+            throw new IllegalArgumentException("사유가 공백뿐입니다. 사유가 없는 조작이면 null로 넘깁니다");
+        }
+        return stripped;
+    }
+}
