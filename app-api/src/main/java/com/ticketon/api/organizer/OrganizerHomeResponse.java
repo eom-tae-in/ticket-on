@@ -39,7 +39,8 @@ public record OrganizerHomeResponse(
                 requiredMode = NOT_REQUIRED, nullable = true)
         RejectedOrganizerApplication rejectedApplication,
 
-        @Schema(description = "받은 운영자 초대. 없으면 빈 목록 (운영자 초대 기능이 생기기 전까지 늘 빈 목록)", requiredMode = REQUIRED)
+        @Schema(description = "받은 운영자 초대 — 운영진 로그인 이메일로 와서 답을 기다리고 유효 기간이 남은 것, 보낸 순서. "
+                + "소속이 없으면 \"새 주최자 신청\"과 함께 보인다. 없으면 빈 목록", requiredMode = REQUIRED)
         List<ReceivedOrganizerInvitation> receivedInvitations,
 
         @Schema(description = "다시 열기를 신청할 수 있는 닫힌 주최자 — 닫힌 주최자의 소유자였던 경우. 없으면 빈 목록 "
@@ -56,7 +57,7 @@ public record OrganizerHomeResponse(
                         : OrganizerApplicationUnderReviewResponse.from(result.applicationUnderReview()),
                 result.rejectedApplication() == null ? null : RejectedOrganizerApplication.from(result.rejectedApplication()),
                 result.receivedInvitations().stream()
-                        .map(invitation -> new ReceivedOrganizerInvitation(invitation.organizerId(), invitation.organizerName()))
+                        .map(ReceivedOrganizerInvitation::from)
                         .toList(),
                 result.reopenableOrganizers().stream()
                         .map(organizer -> new ReopenableOrganizer(organizer.organizerId(), organizer.organizerName()))
@@ -117,16 +118,34 @@ public record OrganizerHomeResponse(
     }
 
     /**
+     * @param invitationId  초대 id
      * @param organizerId   초대한 주최자 id
      * @param organizerName 초대한 주최자명
+     * @param invitedAt     보낸 일시 — 한국 시각
+     * @param expiresAt     유효 기간이 끝나는 일시 — 한국 시각
      */
-    @Schema(description = "받은 운영자 초대 하나")
+    @Schema(description = "받은 운영자 초대 하나 — 수락하면 그 주최자의 운영자가 된다")
     public record ReceivedOrganizerInvitation(
+            @Schema(description = "초대 id — 수락 · 거절할 때 쓴다", example = "51", requiredMode = REQUIRED)
+            long invitationId,
+
             @Schema(description = "초대한 주최자 id", example = "30", requiredMode = REQUIRED)
             long organizerId,
 
             @Schema(description = "초대한 주최자명", example = "늦여름", requiredMode = REQUIRED)
-            String organizerName) {
+            String organizerName,
+
+            @Schema(description = "보낸 일시 — 한국 시각(+09:00)", example = "2026-10-15T10:00:00+09:00", requiredMode = REQUIRED)
+            OffsetDateTime invitedAt,
+
+            @Schema(description = "유효 기간이 끝나는 일시 — 한국 시각(+09:00). 이 순간부터 수락 · 거절할 수 없다",
+                    example = "2026-10-22T10:00:00+09:00", requiredMode = REQUIRED)
+            OffsetDateTime expiresAt) {
+
+        static ReceivedOrganizerInvitation from(OrganizerHomeResult.ReceivedInvitation invitation) {
+            return new ReceivedOrganizerInvitation(invitation.invitationId(), invitation.organizerId(),
+                    invitation.organizerName(), koreanTime(invitation.invitedAt()), koreanTime(invitation.expiresAt()));
+        }
     }
 
     /**

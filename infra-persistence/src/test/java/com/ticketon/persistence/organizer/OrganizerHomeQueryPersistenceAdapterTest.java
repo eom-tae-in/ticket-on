@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ticketon.application.organizer.query.CurrentAffiliation;
 import com.ticketon.application.organizer.query.LatestOrganizerApplication;
+import com.ticketon.application.organizer.query.ReceivedOrganizerInvitation;
 import com.ticketon.common.KoreanTime;
 import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.organizer.BusinessDeclaration;
@@ -15,8 +16,10 @@ import com.ticketon.domain.organizer.OrganizerName;
 import com.ticketon.domain.organizer.OrganizerStatus;
 import com.ticketon.domain.organizer.OrganizerType;
 import com.ticketon.domain.organizer.SettlementAccount;
+import com.ticketon.domain.organizer.StaffInvitationStatus;
 import com.ticketon.domain.organizer.StaffRole;
 import com.ticketon.domain.organizer.TelephoneNumber;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -82,7 +85,7 @@ class OrganizerHomeQueryPersistenceAdapterTest {
     void nothingYet() {
         assertThat(adapter.currentAffiliationsOf(junghoon)).isEmpty();
         assertThat(adapter.latestApplicationOf(junghoon)).isEmpty();
-        assertThat(adapter.receivedInvitationsOf(junghoon)).isEmpty();
+        assertThat(adapter.receivedInvitationsOf(junghoon, REVIEWED_AT)).isEmpty();
         assertThat(adapter.reopenableOrganizersOf(junghoon)).isEmpty();
     }
 
@@ -134,6 +137,38 @@ class OrganizerHomeQueryPersistenceAdapterTest {
         submit(SUBMITTED_AT);
 
         assertThat(adapter.latestApplicationOf(dohyun)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("받은 초대는 운영진 로그인 이메일(대소문자 무시)로 와서 답을 기다리고 유효 기간이 남은 것만, 활동 중인 주최자의 것만 보낸 순서로 나온다")
+    void receivedInvitations() {
+        long dohyun = rows.staffAccount("dohyun@example.com");
+        long twelveMonths = rows.organizer("극단 열두달", OrganizerStatus.ACTIVE);
+        long lateSummer = rows.organizer("늦여름", OrganizerStatus.ACTIVE);
+        long closed = rows.organizer("극단 봄날", OrganizerStatus.CLOSED);
+        long newTroupe = rows.organizer("새 극단", OrganizerStatus.ACTIVE);
+        long anotherTroupe = rows.organizer("다른 극단", OrganizerStatus.ACTIVE);
+        Instant now = SUBMITTED_AT.plus(Duration.ofDays(3));
+        Instant lateSummerInvitedAt = SUBMITTED_AT.plus(Duration.ofDays(1));
+        long fromLateSummer = rows.invitation(lateSummer, "JungHoon@Example.com", dohyun, lateSummerInvitedAt,
+                lateSummerInvitedAt.plus(Duration.ofDays(7)), StaffInvitationStatus.PENDING);
+        long fromTwelveMonths = rows.invitation(twelveMonths, "junghoon@example.com", dohyun, SUBMITTED_AT,
+                SUBMITTED_AT.plus(Duration.ofDays(7)), StaffInvitationStatus.PENDING);
+        rows.invitation(closed, "junghoon@example.com", dohyun, SUBMITTED_AT, SUBMITTED_AT.plus(Duration.ofDays(7)),
+                StaffInvitationStatus.PENDING);
+        rows.invitation(newTroupe, "junghoon@example.com", dohyun, now.minus(Duration.ofDays(7)), now,
+                StaffInvitationStatus.PENDING);
+        rows.invitation(anotherTroupe, "junghoon@example.com", dohyun, SUBMITTED_AT, SUBMITTED_AT.plus(Duration.ofDays(7)),
+                StaffInvitationStatus.DECLINED);
+        rows.invitation(anotherTroupe, "someone-else@example.com", dohyun, SUBMITTED_AT,
+                SUBMITTED_AT.plus(Duration.ofDays(7)), StaffInvitationStatus.PENDING);
+
+        assertThat(adapter.receivedInvitationsOf(junghoon, now)).containsExactly(
+                new ReceivedOrganizerInvitation(fromTwelveMonths, twelveMonths, "극단 열두달", SUBMITTED_AT,
+                        SUBMITTED_AT.plus(Duration.ofDays(7))),
+                new ReceivedOrganizerInvitation(fromLateSummer, lateSummer, "늦여름", lateSummerInvitedAt,
+                        lateSummerInvitedAt.plus(Duration.ofDays(7))));
+        assertThat(adapter.receivedInvitationsOf(dohyun, now)).isEmpty();
     }
 
     /** 박정훈이 극단 열두달을 심사 중 주최자로 만들어 신청서를 낸다. */

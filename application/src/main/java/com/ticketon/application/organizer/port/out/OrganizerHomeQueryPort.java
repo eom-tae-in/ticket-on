@@ -4,6 +4,7 @@ import com.ticketon.application.organizer.query.CurrentAffiliation;
 import com.ticketon.application.organizer.query.LatestOrganizerApplication;
 import com.ticketon.application.organizer.query.ReceivedOrganizerInvitation;
 import com.ticketon.application.organizer.query.ReopenableClosedOrganizer;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,8 +19,13 @@ public interface OrganizerHomeQueryPort {
     /** 그 사람이 가장 최근에 낸 주최자 신청. 낸 적이 없으면 비어 있다. */
     Optional<LatestOrganizerApplication> latestApplicationOf(long staffAccountId);
 
-    /** 그 사람이 받고 아직 답하지 않은 운영자 초대. */
-    List<ReceivedOrganizerInvitation> receivedInvitationsOf(long staffAccountId);
+    /**
+     * 그 사람이 받고 아직 답하지 않은 운영자 초대 — 그 사람의 운영진 로그인 이메일(대소문자 무시)로 왔고, 그 순간에 유효 기간이 남았고, 초대한
+     * 주최자가 활동 중인 것만. 보낸 순서.
+     *
+     * @param now 유효 기간을 볼 시각
+     */
+    List<ReceivedOrganizerInvitation> receivedInvitationsOf(long staffAccountId, Instant now);
 
     /** 그 사람이 다시 열기를 신청할 수 있는 닫힌 주최자. */
     List<ReopenableClosedOrganizer> reopenableOrganizersOf(long staffAccountId);
