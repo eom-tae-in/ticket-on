@@ -28,6 +28,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -532,6 +533,36 @@ class StaffAccountPersistenceAdapterTest {
             assertThat(adapter.findById(id).orElseThrow().isWithdrawn()).isTrue();
         }
 
+        @Test
+        @DisplayName("잠그고 읽으면 다른 트랜잭션이 잠근 계정은 그쪽이 커밋할 때까지 기다렸다가 커밋된 값(탈퇴함)을 읽는다")
+        void lockedReadWaitsForCommittedWithdrawal() throws Exception {
+            long id = activeAccount(JUNGHOON_EMAIL, WHALE);
+            CountDownLatch firstWithdrew = new CountDownLatch(1);
+            CountDownLatch secondStarted = new CountDownLatch(1);
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            try {
+                Future<Boolean> first = executor.submit(() -> inOwnTransaction(transactionAdapter -> {
+                    StaffAccount account = transactionAdapter.findByIdForUpdate(id).orElseThrow();
+                    account.withdraw(WITHDRAWN_AT);
+                    transactionAdapter.saveWithdrawal(account);
+                    firstWithdrew.countDown();
+                    assertThat(secondStarted.await(10, TimeUnit.SECONDS)).isTrue();
+                    Thread.sleep(300);
+                    return account.isWithdrawn();
+                }));
+                assertThat(firstWithdrew.await(10, TimeUnit.SECONDS)).isTrue();
+                Future<Boolean> second = executor.submit(() -> inOwnTransaction(transactionAdapter -> {
+                    secondStarted.countDown();
+                    return transactionAdapter.findByIdForUpdate(id).orElseThrow().isWithdrawn();
+                }));
+
+                assertThat(first.get(30, TimeUnit.SECONDS)).isTrue();
+                assertThat(second.get(30, TimeUnit.SECONDS)).isTrue();
+            } finally {
+                executor.shutdownNow();
+            }
+        }
+
         /** 제 연결·트랜잭션에서 계정을 읽고, 상대도 읽을 때까지 기다렸다가 탈퇴시켜 저장한다. */
         private long withdrawInOwnTransaction(long accountId, CyclicBarrier bothRead) {
             try (CloseableDSLContext ownConnection = DSL.using(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
@@ -584,6 +615,21 @@ class StaffAccountPersistenceAdapterTest {
                 .setNull(STAFF_ACCOUNT.EMAIL_VERIFIED_AT)
                 .where(STAFF_ACCOUNT.ID.eq(id))
                 .execute();
+    }
+
+    /** 제 연결 · 트랜잭션에서 저장소를 써서 일하고 커밋한다 — 두 트랜잭션의 잠금을 보려고 연결을 따로 연다. */
+    private static <T> T inOwnTransaction(TransactionWork<T> work) {
+        try (CloseableDSLContext ownConnection = DSL.using(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword())) {
+            return ownConnection.transactionResult(
+                    transaction -> work.run(new StaffAccountPersistenceAdapter(transaction.dsl())));
+        }
+    }
+
+    @FunctionalInterface
+    private interface TransactionWork<T> {
+
+        T run(StaffAccountPersistenceAdapter transactionAdapter) throws Exception;
     }
 
     /** 두 작업을 동시에 돌리고, 각각의 결과(돌려준 값 또는 던진 예외)를 순서대로 모은다. */

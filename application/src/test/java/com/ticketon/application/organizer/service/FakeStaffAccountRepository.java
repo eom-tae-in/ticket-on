@@ -12,15 +12,17 @@ import com.ticketon.domain.account.StaffAccountStatus;
 import com.ticketon.domain.account.StaffPersonalInformation;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 /**
- * 메모리 운영진 계정 저장소 — 운영자 초대 · 내보내기가 쓰는 찾기(id · 이메일)만 한다. 가입 · 인증 · 닉네임 · 비밀번호 저장은 계정 유스케이스의
+ * 메모리 운영진 계정 저장소 — 운영자 초대 · 수락 · 내보내기 · 소유자 넘기기가 쓰는 찾기(id · 잠그고 찾기 · 이메일)만 한다. 가입 · 인증 · 닉네임 · 비밀번호 저장은 계정 유스케이스의
  * 테스트가 본다.
  */
 final class FakeStaffAccountRepository implements StaffAccountRepository {
@@ -28,6 +30,8 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
     private static final Instant SIGNED_UP_AT = KoreanTime.toInstant(LocalDateTime.of(2019, 3, 1, 10, 0));
 
     private final Map<Long, StaffAccount> accounts = new LinkedHashMap<>();
+    private final List<Long> lockedAccountIds = new ArrayList<>();
+    private Runnable nextLockAction;
 
     /** 이메일 인증을 마친 운영진 로그인을 그 id로 바로 둔다. */
     void storeActive(long id, String name, String nickname, String email) {
@@ -45,6 +49,31 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
     @Override
     public Optional<StaffAccount> findById(long id) {
         return Optional.ofNullable(accounts.get(id));
+    }
+
+    /**
+     * 메모리 저장소에는 다른 트랜잭션이 없어 잠글 것이 없다 — 잠근 계정 id를 부른 차례대로 남기고 지금 저장된 값을 돌려준다(잠금 순서를 보려고).
+     * 다음 잠금에 할 일을 맡겨 두었으면 먼저 한다 — 잠금을 기다리는 사이 다른 트랜잭션이 커밋한 것을 흉내 낸다.
+     */
+    @Override
+    public Optional<StaffAccount> findByIdForUpdate(long id) {
+        Runnable whileWaiting = nextLockAction;
+        nextLockAction = null;
+        if (whileWaiting != null) {
+            whileWaiting.run();
+        }
+        lockedAccountIds.add(id);
+        return findById(id);
+    }
+
+    /** 다음 계정 잠금 바로 전에 할 일 — 잠금을 기다리는 사이 다른 트랜잭션이 먼저 커밋한 일을 흉내 낸다. */
+    void runOnNextLock(Runnable action) {
+        nextLockAction = action;
+    }
+
+    /** 잠근 계정 id — 부른 차례대로. */
+    List<Long> lockedAccountIds() {
+        return List.copyOf(lockedAccountIds);
     }
 
     @Override

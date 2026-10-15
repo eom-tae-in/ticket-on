@@ -92,7 +92,8 @@ final class OrganizerStaffScene {
     }
 
     LeaveOrganizerService leaveOrganizerService() {
-        return new LeaveOrganizerService(checkStaffPermissionService, recordStaffOperationService, staffRepository, clock);
+        return new LeaveOrganizerService(checkStaffPermissionService, recordStaffOperationService, staffRepository,
+                staffAccountRepository, clock);
     }
 
     TransferOwnershipService transferOwnershipService() {

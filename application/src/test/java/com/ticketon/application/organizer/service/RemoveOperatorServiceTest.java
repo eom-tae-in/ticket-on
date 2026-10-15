@@ -72,6 +72,24 @@ class RemoveOperatorServiceTest {
     }
 
     @Test
+    @DisplayName("내보내는 소유자와 내보낼 사람의 계정 줄을 id 순서로 먼저 잠근다 — 잠금 순서 계정 줄 → 소속 줄")
+    void locksBothAccountsInIdOrder() {
+        remove(JUNGHOON, PLANNER);
+
+        assertThat(scene.staffAccountRepository.lockedAccountIds()).containsExactly(JUNGHOON, PLANNER);
+    }
+
+    @Test
+    @DisplayName("운영진 로그인을 탈퇴한 사람은 운영자가 아니라 내보내지 못한다 (409 NOT_AN_OPERATOR) — 파기한 이메일로 메일을 보내지 않는다")
+    void withdrawnStaffIsNotAnOperator() {
+        scene.staffAccountRepository.markWithdrawn(PLANNER);
+
+        assertRejectedWith(RuleViolationException.class, OrganizerErrorCode.NOT_AN_OPERATOR, () -> remove(JUNGHOON, PLANNER));
+        assertThat(scene.recordRepository.records()).isEmpty();
+        assertThat(scene.sendNotificationUseCase.sentCommands()).isEmpty();
+    }
+
+    @Test
     @DisplayName("내보내진 사람은 그 주최자의 주최 관리에서 403 NOT_ORGANIZER_STAFF다")
     void removedOperatorLosesAccess() {
         remove(JUNGHOON, PLANNER);

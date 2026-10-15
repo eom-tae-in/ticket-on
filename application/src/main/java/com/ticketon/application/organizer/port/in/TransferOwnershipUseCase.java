@@ -22,8 +22,8 @@ public interface TransferOwnershipUseCase {
      * @throws PermissionDeniedException 넘기는 사람이 그 주최자의 소유자가 아니거나 주최자가 활동 중이 아니면
      *                                   ({@link OrganizerErrorCode#NOT_ORGANIZER_STAFF}, {@link OrganizerErrorCode#OWNER_ONLY_ACTION},
      *                                   {@link OrganizerErrorCode#ORGANIZER_NOT_ACTIVE})
-     * @throws RuleViolationException    받을 사람이 그 주최자의 운영자가 아니면 — 소유자 자신, 바깥 사람, 이미 나간 사람
-     *                                   ({@link OrganizerErrorCode#OWNERSHIP_RECEIVER_NOT_OPERATOR})
+     * @throws RuleViolationException    받을 사람이 그 주최자의 운영자가 아니면 — 소유자 자신, 바깥 사람, 이미 나간 사람, 운영진 로그인을
+     *                                   탈퇴한 사람({@link OrganizerErrorCode#OWNERSHIP_RECEIVER_NOT_OPERATOR})
      * @throws ConflictException         그 사이 같은 소유자가 먼저 넘겼거나({@link OrganizerErrorCode#OWNERSHIP_ALREADY_TRANSFERRED}),
      *                                   받을 사람이 먼저 나갔으면({@link OrganizerErrorCode#MEMBERSHIP_ALREADY_ENDED})
      */

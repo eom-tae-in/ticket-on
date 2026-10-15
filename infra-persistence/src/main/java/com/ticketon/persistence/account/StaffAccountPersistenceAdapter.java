@@ -116,6 +116,16 @@ public class StaffAccountPersistenceAdapter implements StaffAccountRepository {
                 .map(this::toAccount);
     }
 
+    /** {@code SELECT … FOR UPDATE}로 그 계정 줄을 트랜잭션이 끝날 때까지 잠근다. */
+    @Override
+    public Optional<StaffAccount> findByIdForUpdate(long id) {
+        return dsl.selectFrom(STAFF_ACCOUNT)
+                .where(STAFF_ACCOUNT.ID.eq(id))
+                .forUpdate()
+                .fetchOptional()
+                .map(this::toAccount);
+    }
+
     /** 유일 색인(탈퇴하지 않은 계정 사이에서 소문자 이메일이 하나)이 있어 많아야 한 줄이다. */
     @Override
     public Optional<StaffAccount> findRegisteredByEmail(EmailAddress email) {

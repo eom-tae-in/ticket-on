@@ -54,7 +54,7 @@ public class StaffAccountController {
     @Operation(summary = "운영진 로그인 탈퇴", description = "로그인한 운영진이 탈퇴한다. 운영자로 소속된 주최자에서는 모두 빠지고(소속 이력은 남는다), "
             + "이름 · 이메일 · 비밀번호는 바로 파기되며 닉네임은 남는다. 그 계정의 로그인 세션은 다른 기기까지 모두 바로 끊긴다. 같은 이메일로 다시 "
             + "가입할 수 있다. 소유자로 남은 주최자가 있으면 409 OWNER_MUST_HAND_OVER_FIRST(먼저 소유자를 넘기거나 주최자를 닫아야 한다), "
-            + "탈퇴하는 사이 소속이 먼저 끝났으면 409 MEMBERSHIP_ALREADY_ENDED, 이미 탈퇴했으면 409 STAFF_WITHDRAWN. 로그인하지 않았거나 "
+            + "이미 탈퇴했으면 409 STAFF_WITHDRAWN, 거의 동시에 소속이 먼저 끝나 저장에서 지면 409 MEMBERSHIP_ALREADY_ENDED. 로그인하지 않았거나 "
             + "세션이 끝났으면 401, 운영진이 아닌 계정이면 403이다. 주최자마다 운영진 조작 기록에 남는다.")
     @PostMapping("/withdrawal")
     @ResponseStatus(HttpStatus.NO_CONTENT)

@@ -13,6 +13,7 @@ import com.ticketon.application.notification.port.in.SendNotificationCommand;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionQuery;
 import com.ticketon.application.organizer.port.in.LeaveOrganizerCommand;
 import com.ticketon.application.organizer.port.in.TransferOwnershipCommand;
+import com.ticketon.domain.error.ConflictException;
 import com.ticketon.domain.error.DomainException;
 import com.ticketon.domain.error.PermissionDeniedException;
 import com.ticketon.domain.error.RuleViolationException;
@@ -151,6 +152,45 @@ class TransferOwnershipServiceTest {
                 () -> transfer(DOHYUN, PLANNER));
 
         assertNothingChanged();
+    }
+
+    @Test
+    @DisplayName("넘기는 사람과 받는 사람의 계정 줄을 id 순서로 먼저 잠근다 — 잠금 순서 계정 줄 → 소속 줄")
+    void locksBothAccountsInIdOrder() {
+        transfer(JUNGHOON, PLANNER);
+        transfer(PLANNER, JUNGHOON);
+
+        assertThat(scene.staffAccountRepository.lockedAccountIds()).containsExactly(JUNGHOON, PLANNER, JUNGHOON, PLANNER);
+    }
+
+    @Test
+    @DisplayName("운영진 로그인을 탈퇴한 사람에게는 넘기지 못한다 (409 OWNERSHIP_RECEIVER_NOT_OPERATOR)")
+    void rejectsWithdrawnReceiver() {
+        scene.staffAccountRepository.markWithdrawn(PLANNER);
+
+        assertRejectedWith(RuleViolationException.class, OrganizerErrorCode.OWNERSHIP_RECEIVER_NOT_OPERATOR,
+                () -> transfer(JUNGHOON, PLANNER));
+        assertThat(scene.staffRepository.findByOrganizerId(scene.twelveMonths).currentOwner()).hasValue(JUNGHOON);
+        assertThat(scene.ownershipChangeRepository.savedChanges()).isEmpty();
+        assertThat(scene.sendNotificationUseCase.sentCommands()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("계정 잠금을 기다리는 사이 같은 소유자의 다른 넘기기가 먼저 커밋됐으면 409 OWNERSHIP_ALREADY_TRANSFERRED다 — 소유자는 먼저 넘긴 쪽 그대로다")
+    void concurrentTransferLosesWithConflict() {
+        scene.staffAccountRepository.storeActive(5, "정홍보", "구름", "promoter@example.com");
+        OrganizerStaff staff = scene.staffRepository.findByOrganizerId(scene.twelveMonths);
+        staff.addOperator(5, APPROVED_AT.plusSeconds(172_800));
+        scene.staffRepository.store(staff);
+        scene.staffAccountRepository.runOnNextLock(() -> scene.staffRepository.saveOwnershipTransfer(
+                scene.staffRepository.findByOrganizerId(scene.twelveMonths).transferOwnership(JUNGHOON, 5, NOW)));
+
+        assertRejectedWith(ConflictException.class, OrganizerErrorCode.OWNERSHIP_ALREADY_TRANSFERRED,
+                () -> transfer(JUNGHOON, PLANNER));
+        assertThat(scene.staffRepository.findByOrganizerId(scene.twelveMonths).currentOwner()).hasValue(5L);
+        assertThat(scene.ownershipChangeRepository.savedChanges()).isEmpty();
+        assertThat(scene.recordRepository.records()).isEmpty();
+        assertThat(scene.sendNotificationUseCase.sentCommands()).isEmpty();
     }
 
     @Test

@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import com.ticketon.application.organizer.port.in.AcceptStaffInvitationResult;
 import com.ticketon.application.organizer.port.in.InviteOperatorCommand;
+import com.ticketon.domain.account.AccountErrorCode;
 import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.error.DomainException;
 import com.ticketon.domain.error.NotFoundException;
@@ -26,6 +27,8 @@ import com.ticketon.domain.organizer.StaffOperationTargetKind;
 import com.ticketon.domain.organizer.StaffRole;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.OptionalLong;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
@@ -91,6 +94,34 @@ class AcceptStaffInvitationServiceTest {
         assertRejectedWith(RuleViolationException.class, OrganizerErrorCode.STAFF_INVITATION_ALREADY_ANSWERED,
                 () -> service.accept(answer(DOHYUN, invitationId)));
         assertThat(scene.invitationRepository.lockedReads()).containsExactly(invitationId, invitationId);
+    }
+
+    @Test
+    @DisplayName("수락하는 사람의 계정 줄을 초대 줄보다 먼저 잠근다 — 잠금 순서 계정 줄 → 초대 줄 → 소속 줄")
+    void locksAccountBeforeInvitation() {
+        List<Long> invitationLocksWhenAccountLocked = new ArrayList<>();
+        scene.staffAccountRepository.runOnNextLock(
+                () -> invitationLocksWhenAccountLocked.addAll(scene.invitationRepository.lockedReads()));
+
+        service.accept(answer(DOHYUN, invitationId));
+
+        assertThat(scene.staffAccountRepository.lockedAccountIds()).containsExactly(DOHYUN);
+        assertThat(invitationLocksWhenAccountLocked).isEmpty();
+        assertThat(scene.invitationRepository.lockedReads()).containsExactly(invitationId);
+    }
+
+    @Test
+    @DisplayName("계정 잠금을 기다리는 사이 탈퇴가 커밋됐으면 탈퇴한 계정을 읽고 STAFF_WITHDRAWN으로 멈춘다 — 소속이 생기지 않고 초대도 그대로다")
+    void withdrawnWhileWaitingCannotAccept() {
+        scene.staffAccountRepository.runOnNextLock(() -> scene.staffAccountRepository.markWithdrawn(DOHYUN));
+
+        assertThatExceptionOfType(RuleViolationException.class)
+                .isThrownBy(() -> service.accept(answer(DOHYUN, invitationId)))
+                .satisfies(exception -> assertThat(exception.errorCode()).isEqualTo(AccountErrorCode.STAFF_WITHDRAWN));
+        assertThat(scene.staffRepository.findByOrganizerId(scene.twelveMonths).roleOf(DOHYUN)).isEmpty();
+        assertThat(scene.invitationRepository.findById(invitationId).orElseThrow().status())
+                .isEqualTo(StaffInvitationStatus.PENDING);
+        assertThat(scene.invitationRepository.lockedReads()).isEmpty();
     }
 
     @Test

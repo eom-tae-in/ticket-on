@@ -19,11 +19,15 @@ import com.ticketon.domain.organizer.OrganizerErrorCode;
 public interface WithdrawStaffAccountUseCase {
 
     /**
-     * @throws RuleViolationException 소유자인 주최자가 남아 있으면({@link OrganizerErrorCode#OWNER_MUST_HAND_OVER_FIRST}),
-     *                                이미 탈퇴한 계정이면({@link AccountErrorCode#STAFF_WITHDRAWN})
-     * @throws ConflictException      같은 계정의 탈퇴가 거의 동시에 두 번 들어와 한쪽이 먼저 탈퇴시켰으면({@link AccountErrorCode#STAFF_WITHDRAWN}),
-     *                                탈퇴하는 사이 그 소속이 먼저 끝났으면 — 소유자가 내보냈거나 소유자를 넘겨받는 중
-     *                                ({@link OrganizerErrorCode#MEMBERSHIP_ALREADY_ENDED})
+     * 계정 줄을 맨 먼저 잠근다. 소속 줄을 바꾸는 다른 흐름(초대 수락, 소유자 넘기기, 내보내기, 나가기, 주최자 신청 승인)도 관련된 사람의 계정 줄을
+     * 먼저 잠그므로 탈퇴와 차례로 처리된다 — 그쪽이 먼저면 탈퇴는 바뀐 소속을 보고(넘겨받았으면 소유자라 막힘, 내보내졌으면 그 주최자는 이미
+     * 끝남), 탈퇴가 먼저면 그쪽이 탈퇴한 계정을 보고 멈춘다.
+     *
+     * @throws RuleViolationException 소유자인 주최자가 남아 있으면 — 그 사이 소유자를 넘겨받은 경우 포함
+     *                                ({@link OrganizerErrorCode#OWNER_MUST_HAND_OVER_FIRST}), 이미 탈퇴한 계정이면 — 같은 계정의 탈퇴가 거의
+     *                                동시에 두 번 들어와 한쪽이 먼저 탈퇴시킨 경우 포함({@link AccountErrorCode#STAFF_WITHDRAWN})
+     * @throws ConflictException      계정 줄을 잠그지 않고 소속이나 계정을 바꾸는 흐름이 그 사이 먼저 바꿨으면 — 마지막 장치인 조건부 저장이
+     *                                막는다({@link OrganizerErrorCode#MEMBERSHIP_ALREADY_ENDED}, {@link AccountErrorCode#STAFF_WITHDRAWN})
      */
     void withdraw(WithdrawStaffAccountCommand command);
 }

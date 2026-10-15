@@ -45,6 +45,17 @@ public interface StaffAccountRepository {
     Optional<StaffAccount> findById(long id);
 
     /**
+     * 그 계정 줄을 이 트랜잭션이 끝날 때까지 잠그고 읽는다. 다른 트랜잭션이 잠가 두었으면 그쪽이 끝날 때까지 기다렸다가 끝난 뒤의 값(예: 탈퇴함)을
+     * 돌려준다. 없으면 비어 있다.
+     * <p>
+     * <b>잠금 순서 — 계정 줄 → 초대 줄 → 소속 줄.</b> 운영진의 소속 줄을 바꾸는 흐름(초대 수락 · 거절, 소유자 넘기기, 내보내기, 나가기, 주최자
+     * 신청 승인, 운영진 로그인 탈퇴)은 무엇이든 바꾸기 전에 관련된 사람의 계정 줄을 이것으로 맨 먼저 잠근다. 여러 사람이면 id가 작은 쪽부터
+     * 잠근다. 그래서 같은 사람의 탈퇴와 소속을 바꾸는 일이 엇갈려 탈퇴한 계정에 지금 소속이 남거나, 서로 반대 순서로 줄을 잠가 교착(PostgreSQL
+     * 40P01)하는 일이 없다. 비밀번호 재설정 링크 저장소의 계정 잠금({@link PasswordResetTokenRepository#lockAccount})과 같은 줄을 잠근다.
+     */
+    Optional<StaffAccount> findByIdForUpdate(long id);
+
+    /**
      * 그 이메일로 가입한 운영진 로그인 — 로그인 아이디로 찾는다. 대소문자를 가리지 않는다. 없으면 비어 있다.
      * <p>
      * 탈퇴한 계정은 찾지 않는다. 인증 대기 계정은 찾는다 — 로그인할 수 있는지는 계정이 판단한다({@link StaffAccount#canLogIn}).
