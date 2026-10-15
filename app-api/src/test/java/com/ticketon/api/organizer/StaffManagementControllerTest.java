@@ -27,6 +27,8 @@ import com.ticketon.application.organizer.port.in.LeaveOrganizerUseCase;
 import com.ticketon.application.organizer.port.in.RemoveOperatorCommand;
 import com.ticketon.application.organizer.port.in.RemoveOperatorUseCase;
 import com.ticketon.application.organizer.port.in.StaffListResult;
+import com.ticketon.application.organizer.port.in.TransferOwnershipCommand;
+import com.ticketon.application.organizer.port.in.TransferOwnershipUseCase;
 import com.ticketon.common.KoreanTime;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
@@ -85,6 +87,9 @@ class StaffManagementControllerTest {
 
     @MockitoBean
     private LeaveOrganizerUseCase leaveOrganizerUseCase;
+
+    @MockitoBean
+    private TransferOwnershipUseCase transferOwnershipUseCase;
 
     @Test
     @DisplayName("운영진 목록을 닉네임 · 역할 이름 · 한국 시각으로 돌려준다")
@@ -196,6 +201,56 @@ class StaffManagementControllerTest {
         mockMvc.perform(post(ORGANIZER_PATH + "/staff/4/removal").with(csrf()).with(loggedInAs(JUNGHOON)))
                 .andExpect(status().isConflict())
                 .andExpect(errorBody("MEMBERSHIP_ALREADY_ENDED", "이미 운영진에서 빠졌습니다."));
+    }
+
+    @Test
+    @DisplayName("소유자를 넘기면 204이고 경로의 주최자 · 받을 운영진 계정 id를 그대로 넘긴다")
+    void transfersOwnership() throws Exception {
+        mockMvc.perform(post(ORGANIZER_PATH + "/staff/2/ownership-transfer").with(csrf()).with(loggedInAs(JUNGHOON)))
+                .andExpect(status().isNoContent());
+
+        verify(transferOwnershipUseCase).transfer(new TransferOwnershipCommand(JUNGHOON_IN_TWELVE_MONTHS, 2));
+    }
+
+    @ParameterizedTest(name = "\"{0}\"")
+    @ValueSource(strings = {"0", "-1", "two"})
+    @DisplayName("받을 운영진 계정 id가 1 이상의 정수가 아니면 400 INVALID_INPUT이고 유스케이스를 부르지 않는다")
+    void rejectsInvalidNewOwnerId(String staffAccountId) throws Exception {
+        mockMvc.perform(post(ORGANIZER_PATH + "/staff/" + staffAccountId + "/ownership-transfer").with(csrf())
+                        .with(loggedInAs(JUNGHOON)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verifyNoInteractions(transferOwnershipUseCase);
+    }
+
+    @Test
+    @DisplayName("운영자가 아닌 사람에게 넘기려 하면 409 OWNERSHIP_RECEIVER_NOT_OPERATOR, 운영자가 넘기려 하면 403 OWNER_ONLY_ACTION이다")
+    void transferRejections() throws Exception {
+        willThrow(new RuleViolationException(OrganizerErrorCode.OWNERSHIP_RECEIVER_NOT_OPERATOR))
+                .given(transferOwnershipUseCase).transfer(new TransferOwnershipCommand(JUNGHOON_IN_TWELVE_MONTHS, 4));
+        mockMvc.perform(post(ORGANIZER_PATH + "/staff/4/ownership-transfer").with(csrf()).with(loggedInAs(JUNGHOON)))
+                .andExpect(status().isConflict())
+                .andExpect(errorBody("OWNERSHIP_RECEIVER_NOT_OPERATOR",
+                        "소유자는 이 주최자의 운영자에게만 넘길 수 있습니다. 바깥 사람이면 먼저 운영자로 초대해 주세요."));
+
+        AccountRef planner = AccountRef.of(AccountKind.STAFF, 2);
+        willThrow(new PermissionDeniedException(OrganizerErrorCode.OWNER_ONLY_ACTION))
+                .given(transferOwnershipUseCase).transfer(new TransferOwnershipCommand(new ActingStaff(planner, 12), 1));
+        mockMvc.perform(post(ORGANIZER_PATH + "/staff/1/ownership-transfer").with(csrf()).with(loggedInAs(planner)))
+                .andExpect(status().isForbidden())
+                .andExpect(errorBody("OWNER_ONLY_ACTION", "소유자만 할 수 있는 일입니다."));
+    }
+
+    @Test
+    @DisplayName("그 사이 같은 소유자가 먼저 넘겼으면 409 OWNERSHIP_ALREADY_TRANSFERRED다")
+    void concurrentTransferIsConflict() throws Exception {
+        willThrow(new ConflictException(OrganizerErrorCode.OWNERSHIP_ALREADY_TRANSFERRED))
+                .given(transferOwnershipUseCase).transfer(any());
+
+        mockMvc.perform(post(ORGANIZER_PATH + "/staff/2/ownership-transfer").with(csrf()).with(loggedInAs(JUNGHOON)))
+                .andExpect(status().isConflict())
+                .andExpect(errorBody("OWNERSHIP_ALREADY_TRANSFERRED", "이미 소유자가 바뀌었습니다."));
     }
 
     @Test

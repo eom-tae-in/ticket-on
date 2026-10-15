@@ -15,6 +15,9 @@ public enum StaffOperationTargetKind {
     /** 운영자 초대 — 초대를 보내거나 수락한 조작. 대상 id는 초대({@link StaffInvitation})의 id다. */
     STAFF_INVITATION,
 
-    /** 운영진 한 사람 — 내보내거나 스스로 나간 조작. 대상 id는 그 사람의 운영진 계정 id다(소속 이력도 그 사람을 가리킨다). */
+    /**
+     * 운영진 한 사람 — 내보내거나 스스로 나가거나 소유자를 넘겨준 조작. 대상 id는 그 사람(나간 사람, 소유자를 받은
+     * 사람)의 운영진 계정 id다(소속 이력도 그 사람을 가리킨다).
+     */
     STAFF_MEMBER
 }
