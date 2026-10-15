@@ -4,6 +4,7 @@ import com.ticketon.application.organizer.port.in.ActingStaff;
 import com.ticketon.application.organizer.port.in.AnswerStaffInvitationCommand;
 import com.ticketon.common.KoreanTime;
 import com.ticketon.common.MutableClock;
+import com.ticketon.common.TokenGenerator;
 import com.ticketon.common.WebAddress;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
@@ -13,7 +14,8 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 
 /**
- * 운영자 초대 · 수락 · 거절 · 내보내기 · 나가기 · 소유자 넘기기 · 소유자 이전 신청 유스케이스 테스트가 함께 쓰는 장면 — docs/15의 두 주최자와 세 사람.
+ * 운영자 초대 · 수락 · 거절 · 내보내기 · 나가기 · 소유자 넘기기 · 소유자 이전 신청 · 공개 정보 편집 유스케이스 테스트가 함께 쓰는 장면 — docs/15의
+ * 두 주최자와 세 사람.
  * <ul>
  *   <li>극단 열두달 — 대표 박정훈이 소유자, 기획 단원이 운영자. 활동 중.</li>
  *   <li>늦여름 — 최여름이 소유자, 이도현이 운영자. 활동 중. 이도현은 열두달에는 바깥 사람이다.</li>
@@ -46,6 +48,7 @@ final class OrganizerStaffScene {
     final FakeOwnershipClaimRepository ownershipClaimRepository = new FakeOwnershipClaimRepository();
     final RecordingStaffOperationRecordRepository recordRepository = new RecordingStaffOperationRecordRepository();
     final RecordingSendNotificationUseCase sendNotificationUseCase = new RecordingSendNotificationUseCase();
+    final FakeOrganizerLogoStorage logoStorage = new FakeOrganizerLogoStorage();
     final CheckStaffPermissionService checkStaffPermissionService =
             new CheckStaffPermissionService(organizerRepository, staffRepository);
     final RecordStaffOperationService recordStaffOperationService = new RecordStaffOperationService(recordRepository);
@@ -105,6 +108,25 @@ final class OrganizerStaffScene {
     SubmitOwnershipClaimService submitOwnershipClaimService() {
         return new SubmitOwnershipClaimService(checkStaffPermissionService, recordStaffOperationService, staffRepository,
                 ownershipClaimRepository, staffAccountRepository, clock);
+    }
+
+    GetOrganizerPublicProfileService getOrganizerPublicProfileService() {
+        return new GetOrganizerPublicProfileService(checkStaffPermissionService, organizerRepository, logoStorage);
+    }
+
+    ChangeOrganizerPublicProfileService changeOrganizerPublicProfileService() {
+        return new ChangeOrganizerPublicProfileService(checkStaffPermissionService, recordStaffOperationService,
+                organizerRepository, logoStorage, clock);
+    }
+
+    UploadOrganizerLogoService uploadOrganizerLogoService(TokenGenerator tokenGenerator) {
+        return new UploadOrganizerLogoService(checkStaffPermissionService, recordStaffOperationService,
+                organizerRepository, logoStorage, tokenGenerator, clock);
+    }
+
+    RemoveOrganizerLogoService removeOrganizerLogoService() {
+        return new RemoveOrganizerLogoService(checkStaffPermissionService, recordStaffOperationService,
+                organizerRepository, logoStorage, clock);
     }
 
     static ActingStaff acting(long staffAccountId, long organizerId) {

@@ -1,6 +1,10 @@
 package com.ticketon.domain.policy;
 
+import com.ticketon.common.ImageFormat;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.Set;
 
 /**
  * '확인 필요' 구역 — 문서에 없어 제안값으로 둔 기본값·기술값.
@@ -108,6 +112,35 @@ public final class ProposedPolicy {
      * 동아리 단원도 다음 주말 전에 답할 수 있다. 문서에는 "소유자가 이메일로 초대"만 있고 기간이 없다(docs/01 "운영자 초대").
      */
     public static final Duration STAFF_INVITATION_VALIDITY = Duration.ofDays(7);
+
+    /**
+     * 확인 필요 (#29, 문서에 없음) — 주최자 로고 파일 용량 상한. 이보다 큰 로고는 받지 않는다(1MB = 1,048,576바이트,
+     * {@link FileSize}).
+     * 2MB를 제안한다: 로고는 화면에서 정사각형으로 잘라 올리는 작은 그림이고(docs/01 "공개 페이지 — 로고"), 주최자 페이지 머리에 작게 보여 수백
+     * 픽셀이면 충분하다. 휴대폰 사진을 잘라 그대로 올려도 대개 들어가는 크기다. 포스터(#40, 제안 5MB)는 목록 카드와 상세 페이지에 크게 보여 더
+     * 넉넉히 둔다. 로고는 "포스터처럼 크롭 도구"로 올리므로(docs/01) 포스터의 "업로드 후 크롭 도구를 제공하고 용량 상한을 둡니다"(docs/03
+     * "기본 정보")를 로고에도 같은 방식으로 적용했다.
+     */
+    public static final FileSize ORGANIZER_LOGO_MAXIMUM_SIZE = FileSize.ofMegabytes(2);
+
+    /**
+     * 확인 필요 (#29, 문서에 없음) — 주최자 로고로 받는 그림 형식. 이 밖의 형식은 받지 않는다. 형식은 올린 쪽이 적은 형식과 파일 첫머리의 실제
+     * 시그니처가 모두 맞아야 한다(확장자는 보지 않는다).
+     * PNG · JPEG를 제안한다: 화면의 크롭 도구가 잘라 낸 그림을 내보내는 형식이고(브라우저 캔버스는 PNG · JPEG로 내보낸다), 로고에 흔한 투명
+     * 배경은 PNG가 담는다. SVG는 받지 않는다 — 그림 파일 안에 스크립트를 넣을 수 있어, 누구나 로그인 없이 여는 공개 주소로 내주기 위험하다.
+     * GIF · WebP는 JDK ImageIO가 크기를 읽지 못하거나(WebP) 움직이는 그림이라(GIF) 뺐다.
+     */
+    public static final Set<ImageFormat> ORGANIZER_LOGO_ACCEPTED_FORMATS =
+            Collections.unmodifiableSet(EnumSet.of(ImageFormat.PNG, ImageFormat.JPEG));
+
+    /**
+     * 확인 필요 (#29, 문서에 없음 — 기술값) — 파일 올리기 요청 하나의 바깥 울타리. 서버는 이보다 큰 파일 · 요청을 끝까지 읽지 않고 끊는다(400).
+     * 파일마다의 상한(로고 {@link #ORGANIZER_LOGO_MAXIMUM_SIZE})은 그 안에서 따로 본다.
+     * 10MB를 제안한다: 파일마다의 상한(로고 2MB, 포스터 제안 5MB — #40)보다 넉넉해, 상한을 조금 넘은 파일도 끝까지 받아 "2MB 이하로 올려 주세요"처럼
+     * 까닭을 칸 옆에 알려 줄 수 있다. 그보다 훨씬 큰 요청(휴대폰 원본 동영상 등)은 읽기 전에 끊어 서버 디스크 · 메모리를 아낀다. Spring 기본값(1MB)은
+     * 로고 상한보다 작아 그대로 둘 수 없다.
+     */
+    public static final FileSize UPLOAD_REQUEST_MAXIMUM_SIZE = FileSize.ofMegabytes(10);
 
     private ProposedPolicy() {
     }

@@ -6,4 +6,7 @@ plugins {
 
 dependencies {
     implementation(project(":common"))
+
+    // 로고 그림 규칙 테스트에서 그 크기·형식의 그림 파일을 만든다 (TestImages)
+    testImplementation(testFixtures(project(":common")))
 }

@@ -23,7 +23,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 시험 전용 컨트롤러 — 주소마다 예외 하나를 던진다.
@@ -96,6 +100,22 @@ class ErrorTestController {
     /** 파라미터 제약이 있어 메서드 검증이 걸린다 — {@code @Valid} 본문도 메서드 검증에서 함께 검사된다. */
     @PostMapping("/body-with-param")
     void bodyWithParam(@RequestParam @Min(1) int count, @Valid @RequestBody SampleRequest request) {
+    }
+
+    /** 파일 올리기 요청이 바깥 울타리를 넘었다 — 실제 서버에서는 multipart를 읽다가 이 예외가 난다. */
+    @PostMapping("/upload-too-large")
+    void uploadTooLarge() {
+        throw new MaxUploadSizeExceededException(10L * 1024 * 1024);
+    }
+
+    /** 깨진 multipart 본문 — 실제 서버에서는 multipart를 읽다가 이 예외가 난다. */
+    @PostMapping("/broken-multipart")
+    void brokenMultipart() {
+        throw new MultipartException("Failed to parse multipart servlet request");
+    }
+
+    @PostMapping("/file")
+    void file(@RequestPart("attachment") MultipartFile attachment) {
     }
 
     /** 제약 문구를 직접 적은 칸(name, row)과 기본 문구를 쓰는 칸(quantity)을 함께 둔다. */

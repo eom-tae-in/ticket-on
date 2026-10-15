@@ -21,8 +21,16 @@ class OrganizerTest {
     private static final OrganizerName TWELVE_MONTHS = OrganizerName.of("극단 열두달");
     private static final long TWELVE_MONTHS_ID = 12L;
 
+    private static final OrganizerLogo LOGO = new OrganizerLogo("twelveMonthsLogoAAAAAAAAAAAAAAAA.png");
+    private static final OrganizerLogo OTHER_LOGO = new OrganizerLogo("twelveMonthsLogoBBBBBBBBBBBBBBBB.jpg");
+
     private static Organizer activeTwelveMonths() {
         return Organizer.restore(TWELVE_MONTHS_ID, TWELVE_MONTHS, OrganizerStatus.ACTIVE, OrganizerPublicProfile.empty());
+    }
+
+    private static Organizer withLogo(Organizer organizer, OrganizerLogo logo) {
+        organizer.changeLogo(logo);
+        return organizer;
     }
 
     @Nested
@@ -143,27 +151,91 @@ class OrganizerTest {
         }
 
         @Test
-        @DisplayName("활동 중인 주최자의 공개 정보를 바꾼다")
-        void changesPublicProfile() {
-            Organizer organizer = activeTwelveMonths();
-            OrganizerPublicProfile profile = new OrganizerPublicProfile(" 2019년부터 활동한 소극장 극단 ",
-                    List.of(ExternalLink.of("https://www.instagram.com/twelve_months_theater")),
-                    new OrganizerLogo("organizer-logo/12.png"));
+        @DisplayName("소개 · SNS 링크를 바꾸면 소개는 앞뒤 공백을 걷고, 링크는 적은 순서대로 남고, 로고는 그대로다")
+        void changesIntroductionAndSnsLinks() {
+            Organizer organizer = withLogo(activeTwelveMonths(), LOGO);
+            List<ExternalLink> links = List.of(ExternalLink.of("https://www.instagram.com/twelve_months_theater"),
+                    ExternalLink.of("https://blog.example.com/twelve-months"));
 
-            organizer.changePublicProfile(profile);
+            boolean changed = organizer.changeIntroductionAndSnsLinks(" 2019년부터 활동한 소극장 극단 ", links);
 
+            assertThat(changed).isTrue();
             assertThat(organizer.publicProfile().introduction()).isEqualTo("2019년부터 활동한 소극장 극단");
-            assertThat(organizer.publicProfile().hasLogo()).isTrue();
+            assertThat(organizer.publicProfile().snsLinks()).containsExactlyElementsOf(links);
+            assertThat(organizer.publicProfile().logo()).isEqualTo(LOGO);
         }
 
         @Test
-        @DisplayName("활동 중이 아닌 주최자의 공개 정보는 바꿀 수 없다")
-        void onlyActiveCanChangePublicProfile() {
-            Organizer closed = Organizer.restore(TWELVE_MONTHS_ID, TWELVE_MONTHS, OrganizerStatus.CLOSED,
-                    OrganizerPublicProfile.empty());
+        @DisplayName("소개를 비우고 링크를 빼면 없는 것으로 둔다")
+        void clearsIntroductionAndSnsLinks() {
+            Organizer organizer = activeTwelveMonths();
+            organizer.changeIntroductionAndSnsLinks("2019년부터 활동한 소극장 극단",
+                    List.of(ExternalLink.of("https://www.instagram.com/twelve_months_theater")));
 
-            assertRejected(() -> closed.changePublicProfile(new OrganizerPublicProfile("소개", List.of(), null)),
+            boolean changed = organizer.changeIntroductionAndSnsLinks("\u3000", null);
+
+            assertThat(changed).isTrue();
+            assertThat(organizer.publicProfile()).isEqualTo(OrganizerPublicProfile.empty());
+        }
+
+        @Test
+        @DisplayName("지금과 같은 소개 · 링크로 바꾸면 아무것도 바뀌지 않는다")
+        void sameIntroductionAndSnsLinksIsNoChange() {
+            Organizer organizer = activeTwelveMonths();
+            List<ExternalLink> links = List.of(ExternalLink.of("https://www.instagram.com/twelve_months_theater"));
+            organizer.changeIntroductionAndSnsLinks("2019년부터 활동한 소극장 극단", links);
+
+            assertThat(organizer.changeIntroductionAndSnsLinks(" 2019년부터 활동한 소극장 극단", links)).isFalse();
+        }
+
+        @Test
+        @DisplayName("처음 올린 로고는 바꾸기 전 로고가 없고, 다시 올리면 바꾸기 전 로고를 돌려준다 — 소개 · 링크는 그대로다")
+        void changesLogo() {
+            Organizer organizer = activeTwelveMonths();
+            organizer.changeIntroductionAndSnsLinks("2019년부터 활동한 소극장 극단", List.of());
+
+            assertThat(organizer.changeLogo(LOGO)).isEmpty();
+            assertThat(organizer.changeLogo(OTHER_LOGO)).contains(LOGO);
+
+            assertThat(organizer.publicProfile().logo()).isEqualTo(OTHER_LOGO);
+            assertThat(organizer.publicProfile().introduction()).isEqualTo("2019년부터 활동한 소극장 극단");
+        }
+
+        @Test
+        @DisplayName("로고를 지우면 지운 로고를 돌려주고, 로고 자리에 다시 이름 첫 글자 + 정해진 색이 보인다")
+        void removingLogoFallsBackToInitialAvatar() {
+            Organizer organizer = withLogo(activeTwelveMonths(), LOGO);
+            assertThat(organizer.publicProfile().hasLogo()).isTrue();
+
+            assertThat(organizer.removeLogo()).contains(LOGO);
+
+            assertThat(organizer.publicProfile().hasLogo()).isFalse();
+            assertThat(organizer.publicProfile().logo()).isNull();
+            assertThat(organizer.initialAvatar())
+                    .isEqualTo(new InitialAvatar("극", InitialAvatar.paletteIndexOf(TWELVE_MONTHS_ID)));
+        }
+
+        @Test
+        @DisplayName("로고가 없을 때 지우면 아무것도 바뀌지 않는다")
+        void removingAbsentLogoIsNoChange() {
+            Organizer organizer = activeTwelveMonths();
+
+            assertThat(organizer.removeLogo()).isEmpty();
+            assertThat(organizer.publicProfile()).isEqualTo(OrganizerPublicProfile.empty());
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @DisplayName("활동 중이 아닌 주최자의 공개 정보 · 로고는 바꿀 수 없다")
+        @EnumSource(value = OrganizerStatus.class, names = "ACTIVE", mode = EnumSource.Mode.EXCLUDE)
+        void onlyActiveCanChangePublicProfile(OrganizerStatus status) {
+            OrganizerPublicProfile profile = new OrganizerPublicProfile("소개", List.of(), LOGO);
+            Organizer organizer = Organizer.restore(TWELVE_MONTHS_ID, TWELVE_MONTHS, status, profile);
+
+            assertRejected(() -> organizer.changeIntroductionAndSnsLinks("새 소개", List.of()),
                     OrganizerErrorCode.ORGANIZER_NOT_ACTIVE);
+            assertRejected(() -> organizer.changeLogo(OTHER_LOGO), OrganizerErrorCode.ORGANIZER_NOT_ACTIVE);
+            assertRejected(organizer::removeLogo, OrganizerErrorCode.ORGANIZER_NOT_ACTIVE);
+            assertThat(organizer.publicProfile()).isEqualTo(profile);
         }
 
         @Test

@@ -163,7 +163,13 @@ public enum OrganizerErrorCode implements ErrorCode {
      * 운영진 프로필이 없다 — 없는 운영진 로그인이거나, 주최자에 소속된 적이 없어 아직 운영진이 아니거나, 탈퇴했다({@link StaffPublicProfile#of}).
      * 공개 페이지라 어느 경우인지 가려 알려 주지 않는다 — 누가 운영진 로그인을 만들었는지, 탈퇴했는지가 드러나지 않게.
      */
-    STAFF_PROFILE_NOT_FOUND("운영진 프로필을 찾을 수 없습니다.");
+    STAFF_PROFILE_NOT_FOUND("운영진 프로필을 찾을 수 없습니다."),
+
+    /**
+     * 공개 주소로 연 로고 파일이 없다 — 로고 열쇠의 꼴이 아니거나, 바꾸거나 지워 파일이 없어졌다. 공개 주소라 어느 경우인지 가려 알려 주지
+     * 않는다.
+     */
+    ORGANIZER_LOGO_NOT_FOUND("로고를 찾을 수 없습니다.");
 
     private final String message;
 
