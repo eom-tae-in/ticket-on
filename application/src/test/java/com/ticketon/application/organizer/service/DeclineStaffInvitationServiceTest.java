@@ -64,6 +64,7 @@ class DeclineStaffInvitationServiceTest {
         });
         assertThat(scene.staffRepository.findByOrganizerId(scene.twelveMonths).roleOf(DOHYUN)).isEmpty();
         assertThat(scene.recordRepository.records()).hasSize(1);
+        assertThat(scene.invitationRepository.lockedReads()).containsExactly(invitationId);
     }
 
     @Test

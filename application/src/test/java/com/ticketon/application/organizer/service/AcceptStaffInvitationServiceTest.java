@@ -84,6 +84,16 @@ class AcceptStaffInvitationServiceTest {
     }
 
     @Test
+    @DisplayName("초대 줄을 잠그고 읽는다 — 같은 초대를 동시에 수락한 늦은 쪽은 먼저 수락한 결과를 보고 409 STAFF_INVITATION_ALREADY_ANSWERED다")
+    void readsInvitationWithLock() {
+        service.accept(answer(DOHYUN, invitationId));
+
+        assertRejectedWith(RuleViolationException.class, OrganizerErrorCode.STAFF_INVITATION_ALREADY_ANSWERED,
+                () -> service.accept(answer(DOHYUN, invitationId)));
+        assertThat(scene.invitationRepository.lockedReads()).containsExactly(invitationId, invitationId);
+    }
+
+    @Test
     @DisplayName("다른 이메일의 운영진 로그인으로 수락하면 404 STAFF_INVITATION_NOT_FOUND이고 아무것도 바뀌지 않는다 — 없는 초대와 같은 답")
     void anotherEmailCannotAccept() {
         assertRejectedWith(NotFoundException.class, OrganizerErrorCode.STAFF_INVITATION_NOT_FOUND,

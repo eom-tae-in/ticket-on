@@ -14,6 +14,9 @@ import java.util.Objects;
  * <p>
  * 로그인한 운영진 로그인의 이메일로 온 초대만 찾는다({@link StaffInvitation#isAddressedTo}). 없는 초대와 남의 이메일로 온 초대는 같은 답
  * ({@link OrganizerErrorCode#STAFF_INVITATION_NOT_FOUND})을 준다 — 초대 id를 바꿔 넣어 보며 남의 초대가 있는지 알아낼 수 없게.
+ * <p>
+ * 초대는 줄을 잠그고 읽는다({@link StaffInvitationRepository#findByIdForUpdate}). 답하는 흐름에서 맨 먼저 잡는 잠금이라, 같은 초대에 거의
+ * 동시에 답하면 늦은 쪽은 먼저 답한 쪽이 커밋한 뒤의 초대(이미 답함)와 그 뒤의 명단을 읽는다.
  *
  * @param staffAccountId 답하는 사람의 운영진 계정 id
  * @param email          답하는 사람의 운영진 로그인 이메일
@@ -36,7 +39,7 @@ record AnsweringInvitee(long staffAccountId, EmailAddress email, StaffInvitation
                 .orElseThrow(() -> new IllegalStateException("로그인한 주체의 운영진 계정이 없습니다: " + staffAccountId))
                 .personalInformation()
                 .email();
-        StaffInvitation invitation = invitationRepository.findById(command.invitationId())
+        StaffInvitation invitation = invitationRepository.findByIdForUpdate(command.invitationId())
                 .filter(found -> found.isAddressedTo(email))
                 .orElseThrow(() -> new NotFoundException(OrganizerErrorCode.STAFF_INVITATION_NOT_FOUND,
                         "초대 " + command.invitationId() + ", 운영진 " + staffAccountId));

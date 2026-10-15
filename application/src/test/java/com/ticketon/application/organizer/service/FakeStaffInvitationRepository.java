@@ -21,6 +21,7 @@ import java.util.Optional;
 final class FakeStaffInvitationRepository implements StaffInvitationRepository {
 
     private final Map<Long, StaffInvitation> invitations = new LinkedHashMap<>();
+    private final List<Long> lockedReads = new ArrayList<>();
     private long nextId = 1;
 
     List<StaffInvitation> savedInvitations() {
@@ -44,6 +45,21 @@ final class FakeStaffInvitationRepository implements StaffInvitationRepository {
     @Override
     public Optional<StaffInvitation> findById(long id) {
         return Optional.ofNullable(invitations.get(id)).map(FakeStaffInvitationRepository::copyOf);
+    }
+
+    /**
+     * 메모리 저장소에는 다른 트랜잭션이 없어 잠글 것이 없다 — 잠금을 기다린 뒤 커밋된 값을 읽는 것과 같게, 지금 저장된 값을 돌려준다. 잠금을
+     * 거쳐 읽었는지는 {@link #lockedReads}로 본다.
+     */
+    @Override
+    public Optional<StaffInvitation> findByIdForUpdate(long id) {
+        lockedReads.add(id);
+        return findById(id);
+    }
+
+    /** 잠그고 읽은 초대 id — 읽은 순서대로. */
+    List<Long> lockedReads() {
+        return List.copyOf(lockedReads);
     }
 
     @Override

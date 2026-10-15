@@ -27,9 +27,14 @@ import org.springframework.stereotype.Component;
  * {@link ConflictException}(409)이 된다.
  *
  * <h2>같은 초대에 거의 동시에 두 번 답 — 수락 경합</h2>
- * 답은 {@code UPDATE … WHERE status = 'PENDING'}으로 저장하고, 바뀐 줄이 없으면 진 쪽이라 {@link ConflictException}(409)이 된다. 먼저 바꾼
- * 쪽이 아직 커밋하지 않았으면 PostgreSQL이 그 줄의 잠금을 기다렸다가 바뀐 상태로 조건을 다시 보므로 둘 다 바뀌는 일은 없다. 다시 보내기도 같다
+ * 답하는 흐름은 맨 먼저 초대 줄을 {@code SELECT … FOR UPDATE}로 잠그고 읽는다({@link #findByIdForUpdate}). 늦은 쪽은 먼저 잠근 쪽이 커밋할
+ * 때까지 기다렸다가 커밋된 값(이미 답함)을 읽으므로 늘 "이미 답한 초대"로 멈춘다. 답은 {@code UPDATE … WHERE status = 'PENDING'}으로
+ * 저장해, 잠그지 않고 읽은 쪽이 있더라도 바뀐 줄이 없으면 진 쪽이라 {@link ConflictException}(409)이 된다. 다시 보내기도 조건부로 저장한다
  * — 표에서 아직 답을 기다리고 유효 기간이 지나 있을 때만 바꾼다.
+ *
+ * <h2>잠금 순서</h2>
+ * 수락은 초대 줄 → 소속 줄 넣기 순서로만 잠근다. 거절 · 다시 보내기는 초대 줄 하나만, 내보내기 · 나가기는 소속 줄 하나만 잠그고, 소속 줄을
+ * 잡은 채 초대 줄을 잠그는 흐름은 없으므로 서로 교착하지 않는다.
  * <p>
  * 이메일의 대소문자는 운영진 로그인(V5)과 같이 SQL의 {@code lower()}로 맞춘 칸으로 비교한다.
  */
@@ -71,6 +76,16 @@ public class StaffInvitationPersistenceAdapter implements StaffInvitationReposit
     public Optional<StaffInvitation> findById(long id) {
         return dsl.selectFrom(STAFF_INVITATION)
                 .where(STAFF_INVITATION.ID.eq(id))
+                .fetchOptional()
+                .map(StaffInvitationPersistenceAdapter::toInvitation);
+    }
+
+    /** {@code SELECT … FOR UPDATE} — 다른 트랜잭션이 잠갔으면 그쪽 커밋을 기다렸다가 바뀐 줄을 읽는다(READ COMMITTED). */
+    @Override
+    public Optional<StaffInvitation> findByIdForUpdate(long id) {
+        return dsl.selectFrom(STAFF_INVITATION)
+                .where(STAFF_INVITATION.ID.eq(id))
+                .forUpdate()
                 .fetchOptional()
                 .map(StaffInvitationPersistenceAdapter::toInvitation);
     }

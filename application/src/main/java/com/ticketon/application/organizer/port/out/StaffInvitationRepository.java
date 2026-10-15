@@ -25,6 +25,16 @@ public interface StaffInvitationRepository {
 
     Optional<StaffInvitation> findById(long id);
 
+    /**
+     * 그 초대를 읽고, 부른 트랜잭션이 끝날 때까지 그 줄을 잠근다 — 받은 초대에 답하는(수락 · 거절) 흐름이 맨 먼저 부른다.
+     * <p>
+     * 다른 트랜잭션이 그 줄을 잠그고 있으면 그쪽이 끝날 때까지 기다렸다가 끝난 뒤의 값(예: 이미 수락됨)을 돌려준다. 같은 초대에 거의 동시에
+     * 답하면 늦은 쪽은 늘 먼저 답한 결과를 보고 "이미 답한 초대"로 멈춘다 — 먼저 수락한 쪽이 만든 소속을 보고 다른 이유로 멈추는 일이 없다.
+     *
+     * @return 없는 초대면 비어 있다
+     */
+    Optional<StaffInvitation> findByIdForUpdate(long id);
+
     /** 그 주최자가 그 이메일로 보내 답을 기다리는 초대 — 유효 기간이 지났어도 찾는다. 이메일의 대소문자는 가리지 않는다. 없으면 비어 있다. */
     Optional<StaffInvitation> findPending(long organizerId, EmailAddress inviteeEmail);
 

@@ -20,6 +20,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.OptionalLong;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.flywaydb.core.Flyway;
 import org.jooq.CloseableDSLContext;
@@ -99,6 +104,21 @@ class StaffInvitationPersistenceAdapterTest {
     private Organizer twelveMonthsOrganizer() {
         return Organizer.restore(twelveMonths, OrganizerName.of("극단 열두달"), OrganizerStatus.ACTIVE,
                 OrganizerPublicProfile.empty());
+    }
+
+    /** 제 연결 · 트랜잭션에서 저장소를 써서 일하고 커밋한다 — 두 트랜잭션의 잠금을 보려고 연결을 따로 연다. */
+    private static <T> T inOwnTransaction(TransactionWork<T> work) {
+        try (CloseableDSLContext ownConnection = DSL.using(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword())) {
+            return ownConnection.transactionResult(
+                    transaction -> work.run(new StaffInvitationPersistenceAdapter(transaction.dsl())));
+        }
+    }
+
+    @FunctionalInterface
+    private interface TransactionWork<T> {
+
+        T run(StaffInvitationPersistenceAdapter transactionAdapter) throws Exception;
     }
 
     private static void assertConflict(ThrowingCallable action, OrganizerErrorCode expectedCode) {
@@ -194,6 +214,37 @@ class StaffInvitationPersistenceAdapterTest {
 
         assertConflict(() -> adapter.saveAnswer(readSecond), OrganizerErrorCode.STAFF_INVITATION_ALREADY_ANSWERED);
         assertThat(adapter.findById(id).orElseThrow().status()).isEqualTo(StaffInvitationStatus.ACCEPTED);
+    }
+
+    @Test
+    @DisplayName("잠그고 읽으면 다른 트랜잭션이 잠근 초대는 그쪽이 커밋할 때까지 기다렸다가 커밋된 답을 읽는다 — 늦은 수락은 늘 '이미 답함'을 본다")
+    void lockedReadWaitsForCommittedAnswer() throws Exception {
+        long id = adapter.add(invitation("dohyun@example.com", INVITED_AT)).id().orElseThrow();
+        CountDownLatch firstAnswered = new CountDownLatch(1);
+        CountDownLatch secondStarted = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<StaffInvitationStatus> first = executor.submit(() -> inOwnTransaction(transactionAdapter -> {
+                StaffInvitation locked = transactionAdapter.findByIdForUpdate(id).orElseThrow();
+                locked.accept(dohyun, EmailAddress.of("dohyun@example.com"), twelveMonthsOrganizer(), twelveMonthsStaff,
+                        INVITED_AT.plusSeconds(60));
+                transactionAdapter.saveAnswer(locked);
+                firstAnswered.countDown();
+                assertThat(secondStarted.await(10, TimeUnit.SECONDS)).isTrue();
+                Thread.sleep(300);
+                return locked.status();
+            }));
+            assertThat(firstAnswered.await(10, TimeUnit.SECONDS)).isTrue();
+            Future<StaffInvitationStatus> second = executor.submit(() -> inOwnTransaction(transactionAdapter -> {
+                secondStarted.countDown();
+                return transactionAdapter.findByIdForUpdate(id).orElseThrow().status();
+            }));
+
+            assertThat(first.get(30, TimeUnit.SECONDS)).isEqualTo(StaffInvitationStatus.ACCEPTED);
+            assertThat(second.get(30, TimeUnit.SECONDS)).isEqualTo(StaffInvitationStatus.ACCEPTED);
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test
