@@ -77,6 +77,16 @@ class GetAdminWorkQueueServiceTest {
                 AdminWorkKind.OWNERSHIP_CHANGE, 9, "극단 열두달 · 조용한고래 → 푸른바람", transferredAt, false));
     }
 
+    @Test
+    @DisplayName("소유자 이전 신청은 문서에 정한 처리 기한이 없어 오래돼도 강조하지 않는다")
+    void ownershipClaimIsNotHighlighted() {
+        Instant submittedAt = KoreanTime.toInstant(LocalDateTime.of(2026, 10, 1, 10, 0));
+        queryPort.add(new PendingAdminWork(AdminWorkKind.OWNERSHIP_CLAIM, 4, "극단 열두달 · 푸른바람", submittedAt));
+
+        assertThat(service.getWorkQueue().items()).containsExactly(new AdminWorkQueueResult.Item(
+                AdminWorkKind.OWNERSHIP_CLAIM, 4, "극단 열두달 · 푸른바람", submittedAt, false));
+    }
+
     private static PendingAdminWork application(long applicationId, String name, LocalDateTime submittedAtKorea) {
         return new PendingAdminWork(AdminWorkKind.ORGANIZER_APPLICATION, applicationId, name,
                 KoreanTime.toInstant(submittedAtKorea));

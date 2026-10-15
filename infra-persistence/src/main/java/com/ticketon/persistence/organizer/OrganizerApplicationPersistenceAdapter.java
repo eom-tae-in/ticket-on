@@ -86,6 +86,18 @@ public class OrganizerApplicationPersistenceAdapter implements OrganizerApplicat
     }
 
     @Override
+    public Optional<OrganizerApplication> findLatestApprovedOf(long organizerId) {
+        return dsl.select(ORGANIZER_APPLICATION.ID)
+                .from(ORGANIZER_APPLICATION)
+                .where(ORGANIZER_APPLICATION.ORGANIZER_ID.eq(organizerId))
+                .and(ORGANIZER_APPLICATION.STATUS.eq(OrganizerApplicationStatus.APPROVED.name()))
+                .orderBy(ORGANIZER_APPLICATION.REVIEWED_AT.desc(), ORGANIZER_APPLICATION.ID.desc())
+                .limit(1)
+                .fetchOptional(Record1::value1)
+                .flatMap(this::findById);
+    }
+
+    @Override
     public void saveReview(OrganizerApplication reviewedApplication) {
         long id = reviewedApplication.id()
                 .orElseThrow(() -> new IllegalArgumentException("저장 전 신청서는 심사 결과를 저장할 수 없습니다"));

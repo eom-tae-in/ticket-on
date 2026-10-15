@@ -6,6 +6,7 @@ import com.ticketon.domain.error.RuleViolationException;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 /**
  * 소유자 변경 이력 한 건 — 어느 주최자에서 누가 누구에게 언제 소유자를 넘겼는지({@link OwnershipTransfer})와, 관리자가 사후 확인했는지.
@@ -17,24 +18,33 @@ import java.util.Optional;
  * 소유자 넘기기는 관리자를 거치지 않고 이미 끝난 일이라(docs/01 "소유자 넘기기") 관리자는 승인하지 않고 <b>사후 확인</b>만 한다
  * ({@link #confirm}). 확인하면 처리 목록에서 빠진다. 확인은 한 번뿐이다. 문제가 있으면 신고·정지 같은 다른 조치로 처리한다.
  * <p>
+ * <b>어떻게 바뀌었나</b>({@link OwnershipChangeMethod})도 남긴다. 소유자와 연락이 끊겨 운영자의 소유자 이전 신청을 관리자가 승인해 바꾼 건
+ * ({@link OwnershipChangeMethod#CLAIM_APPROVAL}, {@link #restoreClaimApproval})은 관리자가 확인한 뒤 바꾼 것이라 사후 확인 대상이 아니다 —
+ * 처리 목록 '소유자 변경'에 쌓이지 않고 확인할 수도 없다. 그 신청을 가리킨다({@link #ownershipClaimId}).
+ * <p>
  * 이력은 지우지 않는다 — 관리자 주최자 상세의 "소유자 변경 이력"이 된다(docs/13 "5. 플랫폼 관리자 — 주최자 목록"). 시각은 인자로 받는다.
  */
 public final class OwnershipChange {
 
     private final long id;
     private final OwnershipTransfer transfer;
+    private final OwnershipChangeMethod method;
+    private final Long ownershipClaimId;
     private Instant confirmedAt;
     private AccountRef confirmedBy;
 
-    private OwnershipChange(long id, OwnershipTransfer transfer, Instant confirmedAt, AccountRef confirmedBy) {
+    private OwnershipChange(long id, OwnershipTransfer transfer, OwnershipChangeMethod method, Long ownershipClaimId,
+            Instant confirmedAt, AccountRef confirmedBy) {
         this.id = id;
         this.transfer = transfer;
+        this.method = method;
+        this.ownershipClaimId = ownershipClaimId;
         this.confirmedAt = confirmedAt;
         this.confirmedBy = confirmedBy;
     }
 
     /**
-     * 저장소에서 읽은 값으로 되살린다.
+     * 저장소에서 읽은 소유자 넘기기({@link OwnershipChangeMethod#OWNER_HANDOVER}) 이력을 되살린다.
      *
      * @param confirmedAt 관리자가 확인한 일시. 확인 전이면 null.
      * @param confirmedBy 확인한 관리자. 확인 전이면 null.
@@ -51,7 +61,23 @@ public final class OwnershipChange {
         if (confirmedAt != null) {
             requireConfirmable(transfer, confirmedBy, confirmedAt);
         }
-        return new OwnershipChange(id, transfer, confirmedAt, confirmedBy);
+        return new OwnershipChange(id, transfer, OwnershipChangeMethod.OWNER_HANDOVER, null, confirmedAt, confirmedBy);
+    }
+
+    /**
+     * 저장소에서 읽은 소유자 이전 신청 승인({@link OwnershipChangeMethod#CLAIM_APPROVAL}) 이력을 되살린다. 관리자가 확인한 뒤 바꾼 것이라 사후
+     * 확인이 없다.
+     *
+     * @param ownershipClaimId 승인한 소유자 이전 신청 id
+     * @throws IllegalArgumentException 1보다 작은 id
+     */
+    public static OwnershipChange restoreClaimApproval(long id, OwnershipTransfer transfer, long ownershipClaimId) {
+        if (id < 1 || ownershipClaimId < 1) {
+            throw new IllegalArgumentException("소유자 변경 id와 소유자 이전 신청 id는 1 이상이어야 합니다: " + id + ", "
+                    + ownershipClaimId);
+        }
+        Objects.requireNonNull(transfer, "transfer");
+        return new OwnershipChange(id, transfer, OwnershipChangeMethod.CLAIM_APPROVAL, ownershipClaimId, null, null);
     }
 
     /**
@@ -59,12 +85,17 @@ public final class OwnershipChange {
      *
      * @param admin 확인하는 관리자
      * @param now   확인 일시
-     * @throws RuleViolationException   이미 확인했으면({@link OrganizerErrorCode#OWNERSHIP_CHANGE_ALREADY_CONFIRMED})
+     * @throws RuleViolationException   소유자 이전 신청을 승인해 바꾼 건이면({@link OrganizerErrorCode#OWNERSHIP_CHANGE_NOT_CONFIRMABLE}),
+     *                                  이미 확인했으면({@link OrganizerErrorCode#OWNERSHIP_CHANGE_ALREADY_CONFIRMED})
      * @throws IllegalArgumentException 관리자가 아닌 주체이거나, 넘긴 일시보다 앞선 시각이면
      */
     public void confirm(AccountRef admin, Instant now) {
         Objects.requireNonNull(admin, "admin");
         Objects.requireNonNull(now, "now");
+        if (!method.needsAdminConfirmation()) {
+            throw new RuleViolationException(OrganizerErrorCode.OWNERSHIP_CHANGE_NOT_CONFIRMABLE,
+                    "소유자 변경 " + id + ", 승인한 소유자 이전 신청 " + ownershipClaimId);
+        }
         if (isConfirmed()) {
             throw new RuleViolationException(OrganizerErrorCode.OWNERSHIP_CHANGE_ALREADY_CONFIRMED,
                     "소유자 변경 " + id + ", 확인한 관리자 " + confirmedBy.principalName());
@@ -83,7 +114,17 @@ public final class OwnershipChange {
         return transfer;
     }
 
-    /** 관리자가 확인했는지. 확인 전이면 처리 목록에 남아 있다. */
+    /** 어떻게 바뀌었나 — 소유자 넘기기 또는 소유자 이전 신청 승인. */
+    public OwnershipChangeMethod method() {
+        return method;
+    }
+
+    /** 승인한 소유자 이전 신청 id. 소유자 넘기기면 비어 있다. */
+    public OptionalLong ownershipClaimId() {
+        return ownershipClaimId == null ? OptionalLong.empty() : OptionalLong.of(ownershipClaimId);
+    }
+
+    /** 관리자가 확인했는지. 소유자 넘기기는 확인 전이면 처리 목록에 남아 있다. 소유자 이전 신청 승인은 확인하지 않아 늘 거짓이다. */
     public boolean isConfirmed() {
         return confirmedAt != null;
     }

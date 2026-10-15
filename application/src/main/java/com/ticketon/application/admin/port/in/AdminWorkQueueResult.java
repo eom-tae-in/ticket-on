@@ -20,8 +20,10 @@ public record AdminWorkQueueResult(List<Item> items) {
      * 처리 목록의 요청 하나.
      *
      * @param kind        종류
-     * @param targetId    대상 id — 종류마다 가리키는 것이 다르다(주최자 신청이면 신청서 id, 소유자 변경이면 소유자 변경 이력 id)
-     * @param title       제목 — 주최자 신청이면 신청한 이름 또는 단체명, 소유자 변경이면 "주최자명 · 넘긴 사람 → 받은 사람" 닉네임
+     * @param targetId    대상 id — 종류마다 가리키는 것이 다르다(주최자 신청이면 신청서 id, 소유자 변경이면 소유자 변경 이력 id, 소유자
+     *                    이전 신청이면 신청 id)
+     * @param title       제목 — 주최자 신청이면 신청한 이름 또는 단체명, 소유자 변경이면 "주최자명 · 넘긴 사람 → 받은 사람" 닉네임, 소유자
+     *                    이전 신청이면 "주최자명 · 신청한 사람" 닉네임
      * @param receivedAt  접수 일시
      * @param highlighted 강조할지 — 기한이 다가왔다(주최자 신청이면 심사 목표일)
      */

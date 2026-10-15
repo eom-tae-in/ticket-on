@@ -9,6 +9,7 @@ import com.ticketon.domain.organizer.OrganizerApplicationStatus;
 import com.ticketon.domain.organizer.OrganizerErrorCode;
 import com.ticketon.domain.organizer.RejectionReason;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -28,6 +29,15 @@ final class FakeOrganizerApplicationRepository implements OrganizerApplicationRe
         long id = nextId++;
         applications.put(id, OrganizerApplication.restore(id, organizerId, applicantStaffAccountId, form, submittedAt,
                 OrganizerApplicationStatus.UNDER_REVIEW, null, null));
+        return id;
+    }
+
+    /** 승인된 신청서를 표에 바로 넣는다 — 소유자 이전 신청 심사가 주최자 신청 때 받은 연락처를 볼 때 쓴다. */
+    long storeApproved(long organizerId, long applicantStaffAccountId, OrganizerApplicationForm form, Instant submittedAt,
+            Instant reviewedAt) {
+        long id = nextId++;
+        applications.put(id, OrganizerApplication.restore(id, organizerId, applicantStaffAccountId, form, submittedAt,
+                OrganizerApplicationStatus.APPROVED, reviewedAt, null));
         return id;
     }
 
@@ -56,6 +66,17 @@ final class FakeOrganizerApplicationRepository implements OrganizerApplicationRe
     @Override
     public Optional<OrganizerApplication> findById(long id) {
         return Optional.ofNullable(applications.get(id)).map(FakeOrganizerApplicationRepository::copyOf);
+    }
+
+    /** 처리 일시가 늦은 것, 같으면 id가 큰 것 — 표의 정렬과 같다. */
+    @Override
+    public Optional<OrganizerApplication> findLatestApprovedOf(long organizerId) {
+        return applications.values().stream()
+                .filter(application -> application.organizerId() == organizerId
+                        && application.status() == OrganizerApplicationStatus.APPROVED)
+                .max(Comparator.comparing((OrganizerApplication application) -> application.reviewedAt().orElseThrow())
+                        .thenComparingLong(application -> application.id().orElseThrow()))
+                .map(FakeOrganizerApplicationRepository::copyOf);
     }
 
     @Override

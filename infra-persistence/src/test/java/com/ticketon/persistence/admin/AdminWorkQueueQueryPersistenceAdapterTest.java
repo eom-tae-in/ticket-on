@@ -14,9 +14,13 @@ import com.ticketon.domain.organizer.OrganizerApplication;
 import com.ticketon.domain.organizer.OrganizerApplicationForm;
 import com.ticketon.domain.organizer.OrganizerApplicationStatus;
 import com.ticketon.domain.organizer.OrganizerName;
+import com.ticketon.domain.organizer.OrganizerStaff;
 import com.ticketon.domain.organizer.OrganizerStatus;
 import com.ticketon.domain.organizer.OrganizerType;
 import com.ticketon.domain.organizer.OwnershipChange;
+import com.ticketon.domain.organizer.OwnershipClaim;
+import com.ticketon.domain.organizer.OwnershipClaimReason;
+import com.ticketon.domain.organizer.OwnershipClaimStatus;
 import com.ticketon.domain.organizer.OwnershipTransfer;
 import com.ticketon.domain.organizer.RejectionReason;
 import com.ticketon.domain.organizer.SettlementAccount;
@@ -24,6 +28,7 @@ import com.ticketon.domain.organizer.TelephoneNumber;
 import com.ticketon.persistence.organizer.OrganizerApplicationPersistenceAdapter;
 import com.ticketon.persistence.organizer.OrganizerRows;
 import com.ticketon.persistence.organizer.OwnershipChangePersistenceAdapter;
+import com.ticketon.persistence.organizer.OwnershipClaimPersistenceAdapter;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -41,7 +46,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL에 마이그레이션 전체를 올리고 관리자 처리 목록 조회를 본다 — 지금 원천은 심사 중인 주최자 신청과 확인 전인 소유자 변경이다.
+ * 진짜 PostgreSQL에 마이그레이션 전체를 올리고 관리자 처리 목록 조회를 본다 — 지금 원천은 심사 중인 주최자 신청, 확인 전인 소유자 넘기기, 심사
+ * 중인 소유자 이전 신청이다.
  * Docker가 없는 환경에서는 건너뛴다.
  */
 @Testcontainers(disabledWithoutDocker = true)
@@ -140,6 +146,54 @@ class AdminWorkQueueQueryPersistenceAdapterTest {
         changes.saveConfirmation(change);
 
         assertThat(adapter.pendingWork()).extracting(PendingAdminWork::targetId).containsExactly(unconfirmed);
+    }
+
+    @Test
+    @DisplayName("소유자 이전 신청을 승인해 바꾼 소유자 변경은 '소유자 변경'(사후 확인)에 쌓이지 않고, 승인한 신청도 빠진다")
+    void claimApprovalChangesStayOutOfTheQueue() {
+        long organizerId = rows.organizer("극단 열두달", OrganizerStatus.ACTIVE);
+        long owner = rows.staffAccount("junghoon@example.com");
+        long claimant = rows.staffAccount("planner@example.com");
+        OrganizerStaff staff = OrganizerStaff.startWithOwner(organizerId, owner, MONDAY_MORNING.minusSeconds(86_400));
+        staff.addOperator(claimant, MONDAY_MORNING.minusSeconds(86_400));
+        OwnershipClaimReason reason = OwnershipClaimReason.of("전 대표와 연락이 끊겼습니다.");
+        OwnershipClaimPersistenceAdapter claims = new OwnershipClaimPersistenceAdapter(dsl);
+        long claimId = claims.add(OwnershipClaim.submit(staff, claimant, reason, false, MONDAY_MORNING)).id().orElseThrow();
+        claims.saveReview(OwnershipClaim.restore(claimId, organizerId, claimant, owner, reason, MONDAY_MORNING,
+                OwnershipClaimStatus.APPROVED, MONDAY_MORNING.plusSeconds(3_600), null));
+        new OwnershipChangePersistenceAdapter(dsl).addClaimApproval(
+                new OwnershipTransfer(organizerId, owner, claimant, MONDAY_MORNING.plusSeconds(3_600)), claimId);
+
+        assertThat(adapter.pendingWork()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("심사 중인 소유자 이전 신청이 접수 순서로 쌓이고 — 대상은 신청 id, 제목은 '주최자명 · 신청한 사람' 닉네임 — 처리하면 빠진다")
+    void pendingOwnershipClaimsJoinTheQueue() {
+        long organizerId = rows.organizer("극단 열두달", OrganizerStatus.ACTIVE);
+        long owner = rows.staffAccount("junghoon@example.com");
+        long planner = rows.staffAccount("planner@example.com");
+        long promoter = rows.staffAccount("promoter@example.com");
+        OrganizerStaff staff = OrganizerStaff.startWithOwner(organizerId, owner, MONDAY_MORNING.minusSeconds(86_400));
+        staff.addOperator(planner, MONDAY_MORNING.minusSeconds(86_400));
+        staff.addOperator(promoter, MONDAY_MORNING.minusSeconds(86_400));
+        OwnershipClaimReason reason = OwnershipClaimReason.of("전 대표와 연락이 끊겼습니다.");
+        OwnershipClaimPersistenceAdapter claims = new OwnershipClaimPersistenceAdapter(dsl);
+        long plannerClaim = claims.add(OwnershipClaim.submit(staff, planner, reason, false, MONDAY_MORNING.plusSeconds(60)))
+                .id().orElseThrow();
+        long promoterClaim = claims.add(OwnershipClaim.submit(staff, promoter, reason, false, MONDAY_MORNING))
+                .id().orElseThrow();
+
+        assertThat(adapter.pendingWork()).containsExactly(
+                new PendingAdminWork(AdminWorkKind.OWNERSHIP_CLAIM, promoterClaim, "극단 열두달 · promoter", MONDAY_MORNING),
+                new PendingAdminWork(AdminWorkKind.OWNERSHIP_CLAIM, plannerClaim, "극단 열두달 · planner",
+                        MONDAY_MORNING.plusSeconds(60)));
+
+        OwnershipClaim rejected = claims.findById(promoterClaim).orElseThrow();
+        rejected.reject(RejectionReason.of("정보가 부족함"), MONDAY_MORNING.plusSeconds(3_600));
+        claims.saveReview(rejected);
+
+        assertThat(adapter.pendingWork()).extracting(PendingAdminWork::targetId).containsExactly(plannerClaim);
     }
 
     /** 활동 중인 주최자에서 소유자가 운영자에게 넘긴 한 건을 이력으로 저장한다 — 소속은 이 조회와 상관없어 넣지 않는다. */

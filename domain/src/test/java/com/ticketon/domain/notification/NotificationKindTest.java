@@ -98,7 +98,7 @@ class NotificationKindTest {
                 "EVENT_PAGE_TAKEN_DOWN_BY_ADMIN", "EVENT_PAGE_RESTORED_BY_ADMIN", "HANDLED_BY_ADMIN_ON_BEHALF",
                 "OPERATOR_INVITED", "REMOVED_FROM_STAFF", "OWNER_CHANGED", "SETTLEMENT_ACCOUNT_CHANGE_DECIDED",
                 "ORGANIZER_NAME_CHANGED", "EVENT_TITLE_CHANGED_BY_OPERATOR", "REOPEN_APPROVED", "REOPEN_REJECTED",
-                "STAFF_PROFILE_RESET", "ORGANIZER_LOGO_RESET"})
+                "STAFF_PROFILE_RESET", "ORGANIZER_LOGO_RESET", "OWNERSHIP_CLAIM_REJECTED"})
         @DisplayName("주최자 쪽은 전부 이메일이고 받는 쪽이 주최자다 — 제목에 [주최]가 붙는다")
         void organizerKindsAreEmailOnly(NotificationKind kind) {
             assertThat(kind.side()).isEqualTo(RecipientSide.ORGANIZER);
@@ -107,9 +107,16 @@ class NotificationKindTest {
         }
 
         @Test
-        @DisplayName("표의 주최자 대상 종류는 위의 23개가 전부다")
+        @DisplayName("주최자 대상 종류는 표의 23개와 표 밖의 소유자 이전 신청 반려 하나가 전부다")
         void organizerKindsAreExactlyTheTable() {
-            assertThat(kindsOf(RecipientSide.ORGANIZER)).hasSize(23);
+            assertThat(kindsOf(RecipientSide.ORGANIZER)).hasSize(24);
+        }
+
+        @Test
+        @DisplayName("소유자 이전 신청 반려는 신청한 사람과 운영진 전원에게 한 사람씩 — 결과 전에 나간 신청자도 받는다 (#27, docs/12 \"주최자 대상 — 받는 사람\")")
+        void ownershipClaimRejectionGoesToEachPerson() {
+            assertThat(NotificationKind.OWNERSHIP_CLAIM_REJECTED.organizerRecipientScope())
+                    .contains(OrganizerRecipientScope.INDIVIDUAL);
         }
 
         @Test
@@ -144,13 +151,13 @@ class NotificationKindTest {
         }
 
         @Test
-        @DisplayName("그 사람에게 가는 종류는 위의 일곱이 전부다")
-        void individualKindsAreExactlySeven() {
+        @DisplayName("그 사람에게 가는 종류는 위의 일곱과 표 밖의 소유자 이전 신청 반려가 전부다")
+        void individualKindsAreExactlyEight() {
             assertThat(kindsWithScope(OrganizerRecipientScope.INDIVIDUAL)).containsExactlyInAnyOrder(
                     NotificationKind.OPERATOR_INVITED, NotificationKind.REMOVED_FROM_STAFF,
                     NotificationKind.STAFF_PROFILE_RESET, NotificationKind.ORGANIZER_APPLICATION_APPROVED,
                     NotificationKind.ORGANIZER_APPLICATION_REJECTED, NotificationKind.REOPEN_APPROVED,
-                    NotificationKind.REOPEN_REJECTED);
+                    NotificationKind.REOPEN_REJECTED, NotificationKind.OWNERSHIP_CLAIM_REJECTED);
         }
 
         @Test

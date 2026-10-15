@@ -118,6 +118,40 @@ class AdminOperationRecordTest {
     }
 
     @Nested
+    @DisplayName("소유자 이전 신청 승인·반려 기록")
+    class OwnershipClaimReviewed {
+
+        private final AccountRef admin = AccountRef.of(AccountKind.ADMIN, 2);
+
+        @Test
+        @DisplayName("승인은 누가(관리자) · 언제 · 무엇을(소유자 이전 신청 승인) · 대상(신청 id) · 요약(주최자명)을 남기고, 사유는 없다")
+        void recordsApproval() {
+            AdminOperationRecord record = AdminOperationRecord.ownershipClaimApproved(admin, 4,
+                    OrganizerName.of("극단 열두달"), OPERATED_AT);
+
+            assertThat(record.operator()).isEqualTo(admin);
+            assertThat(record.operatedAt()).isEqualTo(OPERATED_AT);
+            assertThat(record.kind()).isEqualTo(AdminOperationKind.APPROVE_OWNERSHIP_CLAIM);
+            assertThat(record.targetKind()).isEqualTo(AdminOperationTargetKind.OWNERSHIP_CLAIM);
+            assertThat(record.targetId()).isEqualTo(4);
+            assertThat(record.summary()).isEqualTo("소유자 이전 신청 승인 — 극단 열두달");
+            assertThat(record.reason()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("반려는 운영진에게 알린 사유를 그대로 사유로 남긴다")
+        void recordsRejectionWithReason() {
+            AdminOperationRecord record = AdminOperationRecord.ownershipClaimRejected(admin, 4,
+                    OrganizerName.of("극단 열두달"), RejectionReason.of("소유자와 통화해 직접 넘기기로 함"), OPERATED_AT);
+
+            assertThat(record.kind()).isEqualTo(AdminOperationKind.REJECT_OWNERSHIP_CLAIM);
+            assertThat(record.targetKind()).isEqualTo(AdminOperationTargetKind.OWNERSHIP_CLAIM);
+            assertThat(record.summary()).isEqualTo("소유자 이전 신청 반려 — 극단 열두달");
+            assertThat(record.reason()).hasValue("소유자와 통화해 직접 넘기기로 함");
+        }
+    }
+
+    @Nested
     @DisplayName("한 줄의 규칙")
     class Rules {
 

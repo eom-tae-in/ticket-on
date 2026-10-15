@@ -268,6 +268,56 @@ class OrganizerStaffTest {
     }
 
     @Nested
+    @DisplayName("관리자의 소유자 이전 — 소유자와 연락이 끊긴 경우 (docs/01, docs/11 \"대표가 바뀔 때\")")
+    class ReassignOwnershipByAdmin {
+
+        @Test
+        @DisplayName("운영자가 소유자가 되고 옛 소유자는 운영자로 남는다 — 두 사람 모두 그때까지의 소속을 끝내고 같은 시각에 새 역할로 시작한다")
+        void reassignsToOperator() {
+            OrganizerStaff staff = twelveMonthsStaff();
+
+            OwnershipTransfer transfer = staff.reassignOwnershipByAdmin(JUNGHOON, PLANNER, TRANSFERRED_AT);
+
+            assertThat(transfer).isEqualTo(new OwnershipTransfer(TWELVE_MONTHS, JUNGHOON, PLANNER, TRANSFERRED_AT));
+            assertThat(staff.currentOwner()).hasValue(PLANNER);
+            assertThat(staff.roleOf(JUNGHOON)).contains(StaffRole.OPERATOR);
+            assertThat(activeOwnerCount(staff)).isEqualTo(1);
+            assertThat(staff.memberships()).containsExactlyInAnyOrder(
+                    new StaffMembership(TWELVE_MONTHS, JUNGHOON, StaffRole.OWNER, APPROVED_AT, TRANSFERRED_AT),
+                    new StaffMembership(TWELVE_MONTHS, PLANNER, StaffRole.OPERATOR, PLANNER_JOINED_AT, TRANSFERRED_AT),
+                    new StaffMembership(TWELVE_MONTHS, JUNGHOON, StaffRole.OPERATOR, TRANSFERRED_AT, null),
+                    new StaffMembership(TWELVE_MONTHS, PLANNER, StaffRole.OWNER, TRANSFERRED_AT, null));
+        }
+
+        @Test
+        @DisplayName("자리를 내줄 사람이 지금 소유자가 아니면 바꾸지 않는다 — 그 사이 소유자가 바뀌었다 (OWNERSHIP_ALREADY_TRANSFERRED)")
+        void requiresNamedOwnerStillOwner() {
+            OrganizerStaff staff = twelveMonthsStaff();
+            staff.addOperator(DOHYUN, LATER);
+            staff.transferOwnership(JUNGHOON, DOHYUN, LATER);
+
+            assertRejected(() -> staff.reassignOwnershipByAdmin(JUNGHOON, PLANNER, LATER),
+                    OrganizerErrorCode.OWNERSHIP_ALREADY_TRANSFERRED);
+            assertThat(staff.currentOwner()).hasValue(DOHYUN);
+        }
+
+        @Test
+        @DisplayName("받는 사람은 이미 이 주최자의 운영자여야 한다 — 바깥 사람 · 나간 사람 · 소유자 자신은 받지 못한다 (OWNERSHIP_RECEIVER_NOT_OPERATOR)")
+        void receiverMustBeOperator() {
+            OrganizerStaff staff = twelveMonthsStaff();
+
+            assertRejected(() -> staff.reassignOwnershipByAdmin(JUNGHOON, DOHYUN, TRANSFERRED_AT),
+                    OrganizerErrorCode.OWNERSHIP_RECEIVER_NOT_OPERATOR);
+            assertRejected(() -> staff.reassignOwnershipByAdmin(JUNGHOON, JUNGHOON, TRANSFERRED_AT),
+                    OrganizerErrorCode.OWNERSHIP_RECEIVER_NOT_OPERATOR);
+            staff.leave(PLANNER, TRANSFERRED_AT);
+            assertRejected(() -> staff.reassignOwnershipByAdmin(JUNGHOON, PLANNER, LATER),
+                    OrganizerErrorCode.OWNERSHIP_RECEIVER_NOT_OPERATOR);
+            assertThat(staff.currentOwner()).hasValue(JUNGHOON);
+        }
+    }
+
+    @Nested
     @DisplayName("나가기와 내보내기")
     class LeaveAndRemove {
 

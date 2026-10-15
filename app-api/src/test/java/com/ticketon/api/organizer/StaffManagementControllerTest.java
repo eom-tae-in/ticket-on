@@ -27,6 +27,9 @@ import com.ticketon.application.organizer.port.in.LeaveOrganizerUseCase;
 import com.ticketon.application.organizer.port.in.RemoveOperatorCommand;
 import com.ticketon.application.organizer.port.in.RemoveOperatorUseCase;
 import com.ticketon.application.organizer.port.in.StaffListResult;
+import com.ticketon.application.organizer.port.in.SubmitOwnershipClaimCommand;
+import com.ticketon.application.organizer.port.in.SubmitOwnershipClaimResult;
+import com.ticketon.application.organizer.port.in.SubmitOwnershipClaimUseCase;
 import com.ticketon.application.organizer.port.in.TransferOwnershipCommand;
 import com.ticketon.application.organizer.port.in.TransferOwnershipUseCase;
 import com.ticketon.common.KoreanTime;
@@ -37,6 +40,7 @@ import com.ticketon.domain.error.ConflictException;
 import com.ticketon.domain.error.PermissionDeniedException;
 import com.ticketon.domain.error.RuleViolationException;
 import com.ticketon.domain.organizer.OrganizerErrorCode;
+import com.ticketon.domain.organizer.OwnershipClaimReason;
 import com.ticketon.domain.organizer.StaffRole;
 import java.time.Duration;
 import java.time.Instant;
@@ -90,6 +94,9 @@ class StaffManagementControllerTest {
 
     @MockitoBean
     private TransferOwnershipUseCase transferOwnershipUseCase;
+
+    @MockitoBean
+    private SubmitOwnershipClaimUseCase submitOwnershipClaimUseCase;
 
     @Test
     @DisplayName("운영진 목록을 닉네임 · 역할 이름 · 한국 시각으로 돌려준다")
@@ -254,6 +261,53 @@ class StaffManagementControllerTest {
     }
 
     @Test
+    @DisplayName("소유자 이전을 신청하면 201에 신청 id · 한국 시각을 돌려주고, 사유는 앞뒤 공백을 걷어 넘긴다")
+    void submitsOwnershipClaim() throws Exception {
+        AccountRef planner = AccountRef.of(AccountKind.STAFF, 2);
+        given(submitOwnershipClaimUseCase.submit(new SubmitOwnershipClaimCommand(new ActingStaff(planner, 12),
+                OwnershipClaimReason.of("전 대표와 연락이 끊겼습니다."))))
+                .willReturn(new SubmitOwnershipClaimResult(4, INVITED_AT));
+
+        mockMvc.perform(claim(planner, "{\"reason\": \"  전 대표와 연락이 끊겼습니다. \"}"))
+                .andExpect(status().isCreated())
+                .andExpect(content().json("""
+                        {"ownershipClaimId": 4, "submittedAt": "2026-10-15T10:00:00+09:00"}""", JsonCompareMode.STRICT));
+    }
+
+    @ParameterizedTest(name = "\"{0}\"")
+    @ValueSource(strings = {"", "   ", "　"})
+    @DisplayName("신청 사유가 비었으면(전각 공백만 넣어도) 400 INVALID_INPUT이고 유스케이스를 부르지 않는다")
+    void rejectsBlankClaimReason(String reason) throws Exception {
+        mockMvc.perform(claim(AccountRef.of(AccountKind.STAFF, 2), "{\"reason\": \"" + reason + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("reason"))
+                .andExpect(jsonPath("$.fieldErrors[0].message").value("신청 사유를 입력해 주세요."));
+
+        verifyNoInteractions(submitOwnershipClaimUseCase);
+    }
+
+    @Test
+    @DisplayName("소유자가 신청하면 409 OWNER_CANNOT_CLAIM_OWNERSHIP, 심사 중인 신청이 있으면 409 OWNERSHIP_CLAIM_ALREADY_UNDER_REVIEW다")
+    void ownershipClaimRejections() throws Exception {
+        given(submitOwnershipClaimUseCase.submit(new SubmitOwnershipClaimCommand(JUNGHOON_IN_TWELVE_MONTHS,
+                OwnershipClaimReason.of("연락 두절"))))
+                .willThrow(new RuleViolationException(OrganizerErrorCode.OWNER_CANNOT_CLAIM_OWNERSHIP));
+        mockMvc.perform(claim(JUNGHOON, "{\"reason\": \"연락 두절\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(errorBody("OWNER_CANNOT_CLAIM_OWNERSHIP", "소유자는 이전 신청 없이 운영자에게 직접 넘길 수 있습니다."));
+
+        AccountRef planner = AccountRef.of(AccountKind.STAFF, 2);
+        given(submitOwnershipClaimUseCase.submit(new SubmitOwnershipClaimCommand(new ActingStaff(planner, 12),
+                OwnershipClaimReason.of("연락 두절"))))
+                .willThrow(new RuleViolationException(OrganizerErrorCode.OWNERSHIP_CLAIM_ALREADY_UNDER_REVIEW));
+        mockMvc.perform(claim(planner, "{\"reason\": \"연락 두절\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(errorBody("OWNERSHIP_CLAIM_ALREADY_UNDER_REVIEW",
+                        "심사 중인 소유자 이전 신청이 있습니다. 심사 결과를 기다려 주세요."));
+    }
+
+    @Test
     @DisplayName("나가면 204이고, 소유자가 나가려 해 거절되면 409 OWNER_MUST_HAND_OVER_FIRST다")
     void leaves() throws Exception {
         AccountRef planner = AccountRef.of(AccountKind.STAFF, 2);
@@ -285,6 +339,14 @@ class StaffManagementControllerTest {
                 .andExpect(errorBody("ACCESS_DENIED", "이 요청을 처리할 권한이 없습니다."));
 
         verifyNoInteractions(leaveOrganizerUseCase);
+    }
+
+    private MockHttpServletRequestBuilder claim(AccountRef staff, String body) {
+        return post(ORGANIZER_PATH + "/ownership-claims")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .with(csrf())
+                .with(loggedInAs(staff));
     }
 
     private MockHttpServletRequestBuilder invite(String body) {

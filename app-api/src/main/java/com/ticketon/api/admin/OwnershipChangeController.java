@@ -32,7 +32,8 @@ public class OwnershipChangeController {
 
     @Operation(summary = "사후 확인", description = "소유자 변경(처리 목록의 OWNERSHIP_CHANGE 항목, 대상 id)을 확인한다. 확인하면 처리 목록에서 "
             + "빠진다. 소유자 넘기기는 관리자를 거치지 않고 이미 바뀐 일이라 되돌리지 않는다. 이미 확인했거나 다른 관리자가 먼저 확인했으면 409 "
-            + "OWNERSHIP_CHANGE_ALREADY_CONFIRMED, 없는 이력이면 404 OWNERSHIP_CHANGE_NOT_FOUND. 로그인하지 않았으면 401, 관리자가 아닌 "
+            + "OWNERSHIP_CHANGE_ALREADY_CONFIRMED, 소유자 이전 신청을 승인해 바꾼 건(처리 목록에 쌓이지 않는다)이면 409 "
+            + "OWNERSHIP_CHANGE_NOT_CONFIRMABLE, 없는 이력이면 404 OWNERSHIP_CHANGE_NOT_FOUND. 로그인하지 않았으면 401, 관리자가 아닌 "
             + "계정이면 403이다. 관리자 조작 기록에 남는다.")
     @PostMapping("/confirmation")
     @ResponseStatus(HttpStatus.NO_CONTENT)

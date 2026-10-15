@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  *   <li>주최자 신청 — 심사 목표일이 다가왔는지({@link OrganizerReviewDeadline#isApproaching}). 목표일은 제출한 날부터 영업일 3일이다.</li>
  *   <li>소유자 변경 — 강조하지 않는다. 이미 바뀐 일을 사후 확인하는 것이라 문서에 정한 기한이 없다.</li>
+ *   <li>소유자 이전 신청 — 강조하지 않는다. 문서에 정한 처리 기한이 없다.</li>
  * </ul>
  * 종류를 더하는 이슈는 강조 기준도 여기 함께 더한다. 오늘은 한국 날짜로 본다.
  */
@@ -48,7 +49,7 @@ public class GetAdminWorkQueueService implements GetAdminWorkQueueUseCase {
         return switch (work.kind()) {
             case ORGANIZER_APPLICATION -> OrganizerReviewDeadline.of(work.receivedAt(), businessDayCalculator)
                     .isApproaching(today, businessDayCalculator);
-            case OWNERSHIP_CHANGE -> false;
+            case OWNERSHIP_CHANGE, OWNERSHIP_CLAIM -> false;
         };
     }
 }

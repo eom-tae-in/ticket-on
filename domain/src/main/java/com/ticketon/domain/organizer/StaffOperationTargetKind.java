@@ -19,5 +19,8 @@ public enum StaffOperationTargetKind {
      * 운영진 한 사람 — 내보내거나 스스로 나가거나(운영진 로그인 탈퇴 포함) 소유자를 넘겨준 조작. 대상 id는 그 사람(나간 사람, 소유자를 받은
      * 사람)의 운영진 계정 id다(소속 이력도 그 사람을 가리킨다).
      */
-    STAFF_MEMBER
+    STAFF_MEMBER,
+
+    /** 소유자 이전 신청 — 운영자가 관리자에게 낸 조작. 대상 id는 신청({@link OwnershipClaim})의 id다. */
+    OWNERSHIP_CLAIM
 }
