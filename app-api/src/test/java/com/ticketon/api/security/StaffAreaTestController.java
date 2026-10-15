@@ -3,9 +3,9 @@ package com.ticketon.api.security;
 import com.ticketon.application.organizer.port.in.ActingStaff;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionQuery;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionUseCase;
+import com.ticketon.application.organizer.port.in.StaffPermissionResult;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.organizer.StaffAction;
-import com.ticketon.domain.organizer.StaffPermission;
 import org.springframework.boot.test.context.TestComponent;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,7 +42,8 @@ class StaffAreaTestController {
     /** 운영진 권한 확인 유스케이스에 그대로 넘기고, 확인한 역할을 돌려준다. */
     @GetMapping(CurrentStaffArgumentResolver.ORGANIZER_PATH + "/test/actions/{action}")
     String checkPermission(@CurrentStaff ActingStaff actingStaff, @PathVariable StaffAction action) {
-        StaffPermission permission = checkStaffPermissionUseCase.check(new CheckStaffPermissionQuery(actingStaff, action));
+        StaffPermissionResult permission =
+                checkStaffPermissionUseCase.check(new CheckStaffPermissionQuery(actingStaff, action));
         return permission.role().name();
     }
 

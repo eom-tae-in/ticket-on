@@ -5,9 +5,9 @@ import com.ticketon.application.organizer.port.in.CheckStaffPermissionQuery;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionUseCase;
 import com.ticketon.application.organizer.port.in.RecordStaffOperationCommand;
 import com.ticketon.application.organizer.port.in.RecordStaffOperationUseCase;
+import com.ticketon.application.organizer.port.in.StaffPermissionResult;
 import com.ticketon.domain.organizer.StaffAction;
 import com.ticketon.domain.organizer.StaffOperationTargetKind;
-import com.ticketon.domain.organizer.StaffPermission;
 import com.ticketon.domain.organizer.StaffRole;
 import java.time.Clock;
 import java.time.Instant;
@@ -37,7 +37,8 @@ class StaffOperationTestService {
     @Transactional
     public StaffRole operate(ActingStaff actingStaff, StaffAction action, boolean failAfterRecording) {
         Instant now = clock.instant();
-        StaffPermission permission = checkStaffPermissionUseCase.check(new CheckStaffPermissionQuery(actingStaff, action));
+        StaffPermissionResult permission =
+                checkStaffPermissionUseCase.check(new CheckStaffPermissionQuery(actingStaff, action));
         recordStaffOperationUseCase.record(new RecordStaffOperationCommand(permission, StaffOperationTargetKind.ORGANIZER,
                 actingStaff.organizerId(), "시험 조작 — " + action, now));
         if (failAfterRecording) {

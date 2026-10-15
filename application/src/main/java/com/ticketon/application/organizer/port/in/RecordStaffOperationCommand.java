@@ -1,7 +1,6 @@
 package com.ticketon.application.organizer.port.in;
 
 import com.ticketon.domain.organizer.StaffOperationTargetKind;
-import com.ticketon.domain.organizer.StaffPermission;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -14,7 +13,7 @@ import java.util.Objects;
  * @param summary    요약 — 목록에서 읽는 "무엇을" 한 줄(예: "초대권 10장 발권")
  * @param operatedAt 조작 일시 — 조작에 쓴 시각 그대로
  */
-public record RecordStaffOperationCommand(StaffPermission permission, StaffOperationTargetKind targetKind, long targetId,
+public record RecordStaffOperationCommand(StaffPermissionResult permission, StaffOperationTargetKind targetKind, long targetId,
         String summary, Instant operatedAt) {
 
     public RecordStaffOperationCommand {

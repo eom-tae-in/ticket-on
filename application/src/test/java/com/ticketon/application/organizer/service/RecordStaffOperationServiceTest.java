@@ -4,12 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import com.ticketon.application.organizer.port.in.RecordStaffOperationCommand;
+import com.ticketon.application.organizer.port.in.StaffPermissionResult;
 import com.ticketon.application.organizer.port.out.StaffOperationRecordRepository;
 import com.ticketon.common.KoreanTime;
 import com.ticketon.domain.organizer.StaffAction;
 import com.ticketon.domain.organizer.StaffOperationRecord;
 import com.ticketon.domain.organizer.StaffOperationTargetKind;
-import com.ticketon.domain.organizer.StaffPermission;
 import com.ticketon.domain.organizer.StaffRole;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -30,8 +30,8 @@ class RecordStaffOperationServiceTest {
 
     private static final Instant OPERATED_AT = KoreanTime.toInstant(LocalDateTime.of(2026, 10, 15, 14, 30));
 
-    private static final StaffPermission PLANNER_EDITS_PROFILE =
-            new StaffPermission(TWELVE_MONTHS, PLANNER, StaffRole.OPERATOR, StaffAction.EDIT_PUBLIC_PROFILE);
+    private static final StaffPermissionResult PLANNER_EDITS_PROFILE =
+            new StaffPermissionResult(TWELVE_MONTHS, PLANNER, StaffRole.OPERATOR, StaffAction.EDIT_PUBLIC_PROFILE);
 
     private final RecordingRepository recordRepository = new RecordingRepository();
     private final RecordStaffOperationService service = new RecordStaffOperationService(recordRepository);

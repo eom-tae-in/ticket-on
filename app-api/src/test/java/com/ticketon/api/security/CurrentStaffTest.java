@@ -14,12 +14,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ticketon.application.organizer.port.in.ActingStaff;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionQuery;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionUseCase;
+import com.ticketon.application.organizer.port.in.StaffPermissionResult;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.error.PermissionDeniedException;
 import com.ticketon.domain.organizer.OrganizerErrorCode;
 import com.ticketon.domain.organizer.StaffAction;
-import com.ticketon.domain.organizer.StaffPermission;
 import com.ticketon.domain.organizer.StaffRole;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -103,7 +103,7 @@ class CurrentStaffTest {
     @DisplayName("받은 운영진 · 주최자와 하려는 일을 그대로 권한 확인에 넘기고, 확인한 역할로 일한다")
     void passesActingStaffToPermissionCheck() throws Exception {
         given(checkStaffPermissionUseCase.check(any())).willReturn(
-                new StaffPermission(12, 1, StaffRole.OWNER, StaffAction.CANCEL_SESSION));
+                new StaffPermissionResult(12, 1, StaffRole.OWNER, StaffAction.CANCEL_SESSION));
 
         mockMvc.perform(get("/api/organizer/organizers/12/test/actions/CANCEL_SESSION")
                         .with(loggedInAs(AccountKind.STAFF, 1)))

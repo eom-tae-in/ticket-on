@@ -5,12 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import com.ticketon.application.organizer.port.in.RecordStaffOperationCommand;
 import com.ticketon.application.organizer.port.in.RecordStaffOperationUseCase;
+import com.ticketon.application.organizer.port.in.StaffPermissionResult;
 import com.ticketon.application.organizer.port.out.StaffOperationRecordRepository;
 import com.ticketon.application.organizer.service.RecordStaffOperationService;
 import com.ticketon.domain.organizer.StaffAction;
 import com.ticketon.domain.organizer.StaffOperationRecord;
 import com.ticketon.domain.organizer.StaffOperationTargetKind;
-import com.ticketon.domain.organizer.StaffPermission;
 import com.ticketon.domain.organizer.StaffRole;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -38,7 +38,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class StaffOperationRecordTransactionTest {
 
     private static final RecordStaffOperationCommand PROFILE_EDITED = new RecordStaffOperationCommand(
-            new StaffPermission(12, 2, StaffRole.OPERATOR, StaffAction.EDIT_PUBLIC_PROFILE),
+            new StaffPermissionResult(12, 2, StaffRole.OPERATOR, StaffAction.EDIT_PUBLIC_PROFILE),
             StaffOperationTargetKind.ORGANIZER, 12, "주최자 소개 · SNS 링크 수정", Instant.parse("2026-10-15T05:30:00Z"));
 
     @Autowired

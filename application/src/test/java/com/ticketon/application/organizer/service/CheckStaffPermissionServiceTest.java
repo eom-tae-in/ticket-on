@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import com.ticketon.application.organizer.port.in.ActingStaff;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionQuery;
+import com.ticketon.application.organizer.port.in.StaffPermissionResult;
 import com.ticketon.common.KoreanTime;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
@@ -13,7 +14,6 @@ import com.ticketon.domain.organizer.OrganizerErrorCode;
 import com.ticketon.domain.organizer.OrganizerStaff;
 import com.ticketon.domain.organizer.OrganizerStatus;
 import com.ticketon.domain.organizer.StaffAction;
-import com.ticketon.domain.organizer.StaffPermission;
 import com.ticketon.domain.organizer.StaffRole;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -54,7 +54,7 @@ class CheckStaffPermissionServiceTest {
         staffRepository.store(OrganizerStaff.startWithOwner(lateSummer, DOHYUN, APPROVED_AT));
     }
 
-    private StaffPermission check(long staffAccountId, long organizerId, StaffAction action) {
+    private StaffPermissionResult check(long staffAccountId, long organizerId, StaffAction action) {
         return service.check(new CheckStaffPermissionQuery(
                 new ActingStaff(AccountRef.of(AccountKind.STAFF, staffAccountId), organizerId), action));
     }
@@ -69,13 +69,23 @@ class CheckStaffPermissionServiceTest {
     @DisplayName("소유자는 소유자만 하는 일(회차 취소)을 할 수 있고, 확인 결과에 소유자 역할이 담긴다")
     void ownerIsPermittedOwnerOnlyAction() {
         assertThat(check(JUNGHOON, twelveMonths, StaffAction.CANCEL_SESSION))
-                .isEqualTo(new StaffPermission(twelveMonths, JUNGHOON, StaffRole.OWNER, StaffAction.CANCEL_SESSION));
+                .isEqualTo(new StaffPermissionResult(twelveMonths, JUNGHOON, StaffRole.OWNER,
+                        StaffAction.CANCEL_SESSION));
     }
 
     @Test
     @DisplayName("운영자는 운영진 공통의 일(초대권)을 할 수 있다")
     void operatorIsPermittedSharedAction() {
         assertThat(check(PLANNER, twelveMonths, StaffAction.MANAGE_INVITATIONS).role()).isEqualTo(StaffRole.OPERATOR);
+    }
+
+    @Test
+    @DisplayName("확인 결과는 확인한 주최자의 자원만 다룬다 — 다른 주최자의 자원은 이 주최자 안에 없는 것으로 본다")
+    void resultCoversOnlyCheckedOrganizer() {
+        StaffPermissionResult permission = check(PLANNER, twelveMonths, StaffAction.MANAGE_INVITATIONS);
+
+        assertThat(permission.covers(twelveMonths)).isTrue();
+        assertThat(permission.covers(lateSummer)).isFalse();
     }
 
     @Test

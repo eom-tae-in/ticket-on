@@ -12,7 +12,7 @@ import com.ticketon.domain.organizer.StaffPermission;
  * @Transactional
  * public IssueInvitationsResult issue(IssueInvitationsCommand command) {
  *     Instant now = clock.instant();
- *     StaffPermission permission = checkStaffPermissionUseCase.check(
+ *     StaffPermissionResult permission = checkStaffPermissionUseCase.check(
  *             new CheckStaffPermissionQuery(command.actingStaff(), StaffAction.MANAGE_INVITATIONS));
  *     Session session = sessionRepository.findById(command.sessionId())
  *             .filter(found -> permission.covers(found.organizerId()))   // 다른 주최자의 회차면 없는 것으로
@@ -22,7 +22,7 @@ import com.ticketon.domain.organizer.StaffPermission;
  * }
  * }</pre>
  * 경로의 주최자 id는 요청한 사람이 바꿀 수 있다. 그래서 주최자 안의 자원을 다룰 때는 그 자원이 확인한 주최자의 것인지도 본다
- * ({@link StaffPermission#covers}).
+ * ({@link StaffPermissionResult#covers}).
  */
 public interface CheckStaffPermissionUseCase {
 
@@ -32,5 +32,5 @@ public interface CheckStaffPermissionUseCase {
      *                                   운영자가 소유자만 하는 일을 하려 하면({@link OrganizerErrorCode#OWNER_ONLY_ACTION}),
      *                                   주최자가 활동 중이 아니면({@link OrganizerErrorCode#ORGANIZER_NOT_ACTIVE})
      */
-    StaffPermission check(CheckStaffPermissionQuery query);
+    StaffPermissionResult check(CheckStaffPermissionQuery query);
 }
