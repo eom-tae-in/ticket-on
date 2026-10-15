@@ -17,6 +17,9 @@
  * <h2>테스트</h2>
  * 서비스 단위 테스트는 common 테스트 픽스처의 {@code MutableClock}(고정·이동 가능한 시계)과
  * {@code FixedTokenGenerator}(고정 생성기)를 생성자에 넣는다. Spring 통합 테스트는
- * {@code @TestBean(name = "clock")}으로 Clock 빈을 {@code MutableClock}으로 바꾼다(app-api의 ClockOverrideTest).
+ * {@code @TestBean(name = "clock")}으로 Clock 빈을 {@code MutableClock}으로 바꾼다. 이때 칸 타입은 {@code MutableClock}이 아니라
+ * {@link java.time.Clock}으로 두고, 같은 이름의 static 메서드가 static 상수 {@code MutableClock}을 돌려주게 한다.
+ * 칸 타입이 {@code MutableClock}이면 {@code @SpringBootTest}에서 같은 이름의 빈을 새로 등록하려다 막혀 컨텍스트가 뜨지 않는다
+ * (app-api의 ClockOverrideTest).
  */
 package com.ticketon.application;
