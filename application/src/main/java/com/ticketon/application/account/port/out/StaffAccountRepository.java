@@ -15,7 +15,7 @@ import java.util.Set;
  * <p>
  * 이메일·닉네임을 쓸 수 있는지는 저장소가 확인해 계정의 규칙({@link StaffAccount#signUp}, {@link StaffAccount#changeNickname})에
  * 넘긴다. 확인과 저장 사이에 같은 이메일이나 닉네임이 다른 요청으로 먼저 저장될 수 있으므로, 저장할 때 다시 막는다({@link #add},
- * {@link #saveNickname}).
+ * {@link #saveProfile}).
  * <ul>
  *   <li>이메일: 탈퇴하지 않은 운영진 로그인 사이에서 하나다(대소문자 무시). 관객 계정은 보지 않는다 — 같은 이메일로 양쪽 가입이 된다
  *       (docs/01 "같은 이메일로 양쪽 가입"). 인증 대기 계정도 이메일을 쥔다.</li>
@@ -71,13 +71,14 @@ public interface StaffAccountRepository {
     void saveEmailVerification(StaffAccount verifiedAccount);
 
     /**
-     * 바꾼 닉네임을 저장한다. 저장소의 계정이 활동 중일 때만 바꾼다.
+     * 바꾼 프로필(닉네임 · 한 줄 소개)을 함께 저장한다 — 내 프로필은 두 칸을 한 번에 고친다(docs/13 "내 프로필"). 저장소의 계정이 활동 중일 때만
+     * 바꾼다. 소개가 없으면 비운다.
      *
-     * @param changedAccount {@link StaffAccount#changeNickname}으로 닉네임을 바꾼 계정
+     * @param changedAccount {@link StaffAccount#changeNickname} · {@link StaffAccount#changeIntroduction}으로 프로필을 바꾼 계정
      * @throws ConflictException 확인한 뒤 다른 운영진이 같은 닉네임을 먼저 저장했거나({@code STAFF_NICKNAME_ALREADY_TAKEN}),
      *                           그 사이 계정이 활동 중이 아니게 됐으면({@code STAFF_NOT_ACTIVE})
      */
-    void saveNickname(StaffAccount changedAccount);
+    void saveProfile(StaffAccount changedAccount);
 
     /**
      * 비밀번호 찾기로 새로 정한 비밀번호 해시를 저장한다. 저장소의 계정이 활동 중일 때만 바꾼다.
@@ -88,7 +89,8 @@ public interface StaffAccountRepository {
     void savePassword(StaffAccount changedAccount);
 
     /**
-     * 탈퇴를 저장한다 — 상태와 탈퇴 일시를 남기고 이름 · 이메일 · 비밀번호 해시 · 이메일 인증 일시를 지운다. 닉네임과 가입 일시는 남는다.
+     * 탈퇴를 저장한다 — 상태와 탈퇴 일시를 남기고 이름 · 이메일 · 한 줄 소개 · 비밀번호 해시 · 이메일 인증 일시를 지운다. 닉네임과 가입 일시는
+     * 남는다.
      * 저장소의 계정이 활동 중일 때만 바꾼다.
      *
      * @param withdrawnAccount {@link StaffAccount#withdraw}로 탈퇴한 계정

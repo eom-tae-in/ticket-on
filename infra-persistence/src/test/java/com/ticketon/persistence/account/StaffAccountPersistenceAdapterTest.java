@@ -18,6 +18,7 @@ import com.ticketon.domain.account.PhoneNumberAvailability;
 import com.ticketon.domain.account.SignupConsentChoices;
 import com.ticketon.domain.account.StaffAccount;
 import com.ticketon.domain.account.StaffAccountStatus;
+import com.ticketon.domain.account.StaffIntroduction;
 import com.ticketon.domain.account.StaffPersonalInformation;
 import com.ticketon.domain.error.ConflictException;
 import com.ticketon.domain.error.ErrorCode;
@@ -50,7 +51,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL에 마이그레이션(V5 운영진 로그인)을 올리고 운영진 계정 저장·조회·이메일/닉네임 확인·동시 가입과 닉네임 변경 경합을 본다.
+ * 진짜 PostgreSQL에 마이그레이션(V5 운영진 로그인, V15 한 줄 소개)을 올리고 운영진 계정 저장·조회·이메일/닉네임 확인·동시 가입과 닉네임 변경
+ * 경합·프로필(닉네임 · 한 줄 소개) 저장을 본다.
  * Docker가 없는 환경에서는 건너뛴다.
  */
 @Testcontainers(disabledWithoutDocker = true)
@@ -355,8 +357,8 @@ class StaffAccountPersistenceAdapterTest {
     }
 
     @Nested
-    @DisplayName("닉네임 변경 저장")
-    class NicknameSave {
+    @DisplayName("프로필 저장 — 닉네임 · 한 줄 소개 (docs/13 \"내 프로필\")")
+    class ProfileSave {
 
         @Test
         @DisplayName("바꾼 닉네임을 저장하면 다시 읽어도 새 닉네임이고, 옛 닉네임은 다른 사람이 쓸 수 있게 풀린다")
@@ -365,10 +367,52 @@ class StaffAccountPersistenceAdapterTest {
             StaffAccount account = adapter.findById(id).orElseThrow();
             account.changeNickname(Nickname.of(WIND), adapter.nicknameAvailability(Nickname.of(WIND)));
 
-            adapter.saveNickname(account);
+            adapter.saveProfile(account);
 
             assertThat(adapter.findById(id).orElseThrow().nickname()).isEqualTo(Nickname.of(WIND));
             assertThat(adapter.nicknameAvailability(Nickname.of(WHALE))).isEqualTo(NicknameAvailability.AVAILABLE);
+        }
+
+        @Test
+        @DisplayName("가입한 계정은 소개가 없다(NULL). 적은 소개를 저장하면 다시 읽어도 그대로이고, 지우면 다시 없음(NULL)이다")
+        void savesAndRemovesIntroduction() {
+            long id = activeAccount(JUNGHOON_EMAIL, WHALE);
+            assertThat(adapter.findById(id).orElseThrow().introduction()).isEmpty();
+            StaffAccount account = adapter.findById(id).orElseThrow();
+            account.changeIntroduction(new StaffIntroduction("극단에서 연출하고 있습니다"));
+
+            adapter.saveProfile(account);
+
+            assertThat(adapter.findById(id).orElseThrow().introduction())
+                    .contains(new StaffIntroduction("극단에서 연출하고 있습니다"));
+            assertThat(adapter.findById(id).orElseThrow().nickname()).isEqualTo(Nickname.of(WHALE));
+
+            StaffAccount stored = adapter.findById(id).orElseThrow();
+            stored.changeIntroduction(null);
+            adapter.saveProfile(stored);
+
+            assertThat(adapter.findById(id).orElseThrow().introduction()).isEmpty();
+            assertThat(dsl.select(STAFF_ACCOUNT.INTRODUCTION).from(STAFF_ACCOUNT).where(STAFF_ACCOUNT.ID.eq(id))
+                    .fetchSingle().value1()).isNull();
+        }
+
+        @Test
+        @DisplayName("최대 길이 50자 소개가 저장된다 — 칸은 바이트가 아니라 글자 수로 센다(한글 · 이모지 50자, 확인 필요 #28)")
+        void storesIntroductionOfMaximumLength() {
+            long korean = activeAccount(JUNGHOON_EMAIL, WHALE);
+            long emoji = activeAccount("dohyun@example.com", WIND);
+            StaffAccount koreanAccount = adapter.findById(korean).orElseThrow();
+            StaffAccount emojiAccount = adapter.findById(emoji).orElseThrow();
+            koreanAccount.changeIntroduction(new StaffIntroduction("가".repeat(50)));
+            emojiAccount.changeIntroduction(new StaffIntroduction("\uD83C\uDFAD".repeat(50)));
+
+            adapter.saveProfile(koreanAccount);
+            adapter.saveProfile(emojiAccount);
+
+            assertThat(adapter.findById(korean).orElseThrow().introduction())
+                    .contains(new StaffIntroduction("가".repeat(50)));
+            assertThat(adapter.findById(emoji).orElseThrow().introduction())
+                    .contains(new StaffIntroduction("\uD83C\uDFAD".repeat(50)));
         }
 
         @Test
@@ -380,9 +424,9 @@ class StaffAccountPersistenceAdapterTest {
             StaffAccount dohyunAccount = adapter.findById(dohyun).orElseThrow();
             junghoonAccount.changeNickname(Nickname.of(WIND), NicknameAvailability.AVAILABLE);
             dohyunAccount.changeNickname(Nickname.of(WIND), NicknameAvailability.AVAILABLE);
-            adapter.saveNickname(junghoonAccount);
+            adapter.saveProfile(junghoonAccount);
 
-            assertConflict(() -> adapter.saveNickname(dohyunAccount), AccountErrorCode.STAFF_NICKNAME_ALREADY_TAKEN);
+            assertConflict(() -> adapter.saveProfile(dohyunAccount), AccountErrorCode.STAFF_NICKNAME_ALREADY_TAKEN);
             assertThat(adapter.findById(dohyun).orElseThrow().nickname()).isEqualTo(Nickname.of("부지런한수달"));
         }
 
@@ -394,7 +438,7 @@ class StaffAccountPersistenceAdapterTest {
             account.changeNickname(Nickname.of(WIND), NicknameAvailability.AVAILABLE);
             markWithdrawn(id);
 
-            assertConflict(() -> adapter.saveNickname(account), AccountErrorCode.STAFF_NOT_ACTIVE);
+            assertConflict(() -> adapter.saveProfile(account), AccountErrorCode.STAFF_NOT_ACTIVE);
             assertThat(adapter.findById(id).orElseThrow().nickname()).isEqualTo(Nickname.of(WHALE));
         }
 
@@ -424,7 +468,7 @@ class StaffAccountPersistenceAdapterTest {
                     assertThat(availability).isEqualTo(NicknameAvailability.AVAILABLE);
                     bothChecked.await(10, TimeUnit.SECONDS);
                     account.changeNickname(Nickname.of(nickname), availability);
-                    transactionAdapter.saveNickname(account);
+                    transactionAdapter.saveProfile(account);
                     return accountId;
                 });
             }
@@ -465,13 +509,17 @@ class StaffAccountPersistenceAdapterTest {
     }
 
     @Nested
-    @DisplayName("탈퇴 저장 — 이름 · 이메일 · 비밀번호 해시를 지우고 닉네임은 쥔다 (docs/11 \"회원 탈퇴 시\")")
+    @DisplayName("탈퇴 저장 — 이름 · 이메일 · 한 줄 소개 · 비밀번호 해시를 지우고 닉네임은 쥔다 (docs/11 \"회원 탈퇴 시\")")
     class WithdrawalSave {
 
         @Test
-        @DisplayName("탈퇴를 저장하면 줄은 남고 이름 · 이메일 · 비밀번호 해시 · 인증 일시가 지워지며 닉네임 · 가입 일시 · 탈퇴 일시가 남는다")
+        @DisplayName("탈퇴를 저장하면 줄은 남고 이름 · 이메일 · 한 줄 소개 · 비밀번호 해시 · 인증 일시가 지워지며 닉네임 · 가입 일시 · 탈퇴 일시가 "
+                + "남는다")
         void destroysPersonalInformation() {
             long id = activeAccount(JUNGHOON_EMAIL, WHALE);
+            StaffAccount introduced = adapter.findById(id).orElseThrow();
+            introduced.changeIntroduction(new StaffIntroduction("극단에서 연출하고 있습니다"));
+            adapter.saveProfile(introduced);
             StaffAccount account = adapter.findById(id).orElseThrow();
             account.withdraw(WITHDRAWN_AT);
 
@@ -484,6 +532,7 @@ class StaffAccountPersistenceAdapterTest {
             assertThat(row.getEmailLowercase()).isNull();
             assertThat(row.getPasswordHash()).isNull();
             assertThat(row.getEmailVerifiedAt()).isNull();
+            assertThat(row.getIntroduction()).isNull();
             assertThat(row.getNickname()).isEqualTo(WHALE);
             assertThat(row.getWithdrawnAt().toInstant()).isEqualTo(WITHDRAWN_AT);
             StaffAccount found = adapter.findById(id).orElseThrow();
@@ -611,6 +660,7 @@ class StaffAccountPersistenceAdapterTest {
                 .setNull(STAFF_ACCOUNT.NAME)
                 .setNull(STAFF_ACCOUNT.EMAIL)
                 .setNull(STAFF_ACCOUNT.EMAIL_LOWERCASE)
+                .setNull(STAFF_ACCOUNT.INTRODUCTION)
                 .setNull(STAFF_ACCOUNT.PASSWORD_HASH)
                 .setNull(STAFF_ACCOUNT.EMAIL_VERIFIED_AT)
                 .where(STAFF_ACCOUNT.ID.eq(id))

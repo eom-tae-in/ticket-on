@@ -157,7 +157,13 @@ public enum OrganizerErrorCode implements ErrorCode {
     STAFF_INVITATION_ALREADY_ANSWERED("이미 답한 초대입니다."),
 
     /** 유효 기간({@link com.ticketon.domain.policy.ProposedPolicy#STAFF_INVITATION_VALIDITY})이 지난 초대에 답하려 했다. */
-    STAFF_INVITATION_EXPIRED("유효 기간이 지난 초대입니다. 소유자에게 다시 초대해 달라고 요청해 주세요.");
+    STAFF_INVITATION_EXPIRED("유효 기간이 지난 초대입니다. 소유자에게 다시 초대해 달라고 요청해 주세요."),
+
+    /**
+     * 운영진 프로필이 없다 — 없는 운영진 로그인이거나, 주최자에 소속된 적이 없어 아직 운영진이 아니거나, 탈퇴했다({@link StaffPublicProfile#of}).
+     * 공개 페이지라 어느 경우인지 가려 알려 주지 않는다 — 누가 운영진 로그인을 만들었는지, 탈퇴했는지가 드러나지 않게.
+     */
+    STAFF_PROFILE_NOT_FOUND("운영진 프로필을 찾을 수 없습니다.");
 
     private final String message;
 

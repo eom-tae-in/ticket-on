@@ -280,7 +280,7 @@ class OrganizerApplicationTest {
 
     private static StaffAccount activeStaffAccount(long id) {
         return StaffAccount.restore(id, StaffPersonalInformation.of("박정훈", "junghoon@example.com"),
-                Nickname.of("조용한고래"), new PasswordHash("{test}hashed-password"), SUBMITTED_AT.minusSeconds(86_400),
+                Nickname.of("조용한고래"), null, new PasswordHash("{test}hashed-password"), SUBMITTED_AT.minusSeconds(86_400),
                 StaffAccountStatus.ACTIVE, SUBMITTED_AT.minusSeconds(86_000));
     }
 }

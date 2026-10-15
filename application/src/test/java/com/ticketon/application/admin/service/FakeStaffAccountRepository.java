@@ -35,7 +35,7 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
     /** 이메일 인증을 마친 운영진 로그인을 그 id로 바로 둔다. */
     void storeActive(long id, String name, String nickname, String email) {
         accounts.put(id, StaffAccount.restore(id, StaffPersonalInformation.of(name, email), Nickname.of(nickname),
-                new PasswordHash("{test}hashed-password"), SIGNED_UP_AT, StaffAccountStatus.ACTIVE, SIGNED_UP_AT));
+                null, new PasswordHash("{test}hashed-password"), SIGNED_UP_AT, StaffAccountStatus.ACTIVE, SIGNED_UP_AT));
     }
 
     /** 그 운영진 로그인을 탈퇴한 것으로 바꾼다 — 개인정보는 없고 닉네임만 남는다. */
@@ -105,8 +105,8 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
     }
 
     @Override
-    public void saveNickname(StaffAccount changedAccount) {
-        throw new UnsupportedOperationException("주최자 심사에서는 닉네임을 저장하지 않습니다");
+    public void saveProfile(StaffAccount changedAccount) {
+        throw new UnsupportedOperationException("주최자 심사에서는 프로필을 저장하지 않습니다");
     }
 
     @Override

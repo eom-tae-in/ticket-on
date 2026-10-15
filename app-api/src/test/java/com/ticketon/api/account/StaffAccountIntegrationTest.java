@@ -43,7 +43,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 서버 전체를 진짜 PostgreSQL(마이그레이션 전체)로 띄우고, 실제 HTTP 요청으로 운영진 로그인의 가입 → [주최] 인증 메일 → 인증 → 로그인
- * → 닉네임 변경 → 로그아웃을 끝까지 돌린다. 같은 이메일로 관객 계정과 운영진 로그인을 각각 만들고 영역이 갈리는지, 닉네임이 겹치면
+ * → 내 프로필 편집(닉네임) → 로그아웃을 끝까지 돌린다. 같은 이메일로 관객 계정과 운영진 로그인을 각각 만들고 영역이 갈리는지, 닉네임이 겹치면
  * 막히는지(동시 가입 포함)를 본다. Docker가 없는 환경에서는 건너뛴다.
  * <p>
  * 브라우저 하나를 쿠키를 기억하는 HTTP 클라이언트 하나로 흉내 낸다({@link Browser}). 상태를 바꾸는 요청에는 그 세션의 CSRF 토큰을 싣는다.
@@ -69,7 +69,7 @@ class StaffAccountIntegrationTest {
 
     private static final String RANDOM_NICKNAME_PATH = "/api/auth/staff/random-nickname";
 
-    private static final String NICKNAME_PATH = "/api/organizer/account/nickname";
+    private static final String PROFILE_PATH = "/api/organizer/account/profile";
 
     private static final String AUDIENCE_ACCOUNT_PATH = "/api/audience/account";
 
@@ -130,20 +130,21 @@ class StaffAccountIntegrationTest {
 
             expectError(browser.get(AUDIENCE_ACCOUNT_PATH), 403, "ACCESS_DENIED");
             expectError(browser.post("/api/audience/bookings", null, browser.csrfToken()), 403, "ACCESS_DENIED");
-            HttpResponse<String> nickname = browser.put(NICKNAME_PATH, Map.of("nickname", "양쪽가입바람"), browser.csrfToken());
-            assertThat(nickname.statusCode()).isEqualTo(200);
-            assertThat(jsonMapper.readValue(nickname.body(), StaffNicknameResponse.class))
-                    .isEqualTo(new StaffNicknameResponse("양쪽가입바람"));
+            HttpResponse<String> profile = browser.put(PROFILE_PATH, Map.of("nickname", "양쪽가입바람"), browser.csrfToken());
+            assertThat(profile.statusCode()).isEqualTo(200);
+            MyStaffProfileResponse changed = jsonMapper.readValue(profile.body(), MyStaffProfileResponse.class);
+            assertThat(changed.nickname()).isEqualTo("양쪽가입바람");
+            assertThat(changed.introduction()).isNull();
 
             assertThat(browser.post(STAFF_LOGOUT_PATH, null, browser.csrfToken()).statusCode()).isEqualTo(204);
-            expectError(browser.put(NICKNAME_PATH, Map.of("nickname", "양쪽가입구름"), browser.csrfToken()), 401,
+            expectError(browser.put(PROFILE_PATH, Map.of("nickname", "양쪽가입구름"), browser.csrfToken()), 401,
                     "UNAUTHENTICATED");
             assertThat(sessionCountOf(principalName)).isZero();
         }
         try (Browser audienceBrowser = new Browser()) {
             audienceBrowser.logInAudience(email);
             assertThat(audienceBrowser.get(AUDIENCE_ACCOUNT_PATH).statusCode()).isEqualTo(200);
-            expectError(audienceBrowser.put(NICKNAME_PATH, Map.of("nickname", "관객은못바꿈"), audienceBrowser.csrfToken()),
+            expectError(audienceBrowser.put(PROFILE_PATH, Map.of("nickname", "관객은못바꿈"), audienceBrowser.csrfToken()),
                     403, "ACCESS_DENIED");
         }
         assertThat(staffNicknameOf(email)).isEqualTo("양쪽가입바람");
@@ -181,7 +182,7 @@ class StaffAccountIntegrationTest {
                     second.csrfToken()).statusCode()).isEqualTo(201);
             second.verifyStaffEmailFromDatabase("taken-second@example.com");
             second.logInStaff("taken-second@example.com");
-            expectError(second.put(NICKNAME_PATH, Map.of("nickname", "겹치는고래"), second.csrfToken()), 409,
+            expectError(second.put(PROFILE_PATH, Map.of("nickname", "겹치는고래"), second.csrfToken()), 409,
                     "STAFF_NICKNAME_ALREADY_TAKEN");
             assertThat(staffNicknameOf("taken-second@example.com")).isEqualTo("안겹치는고래");
         }

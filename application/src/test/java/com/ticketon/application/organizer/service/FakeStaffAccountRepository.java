@@ -9,6 +9,7 @@ import com.ticketon.domain.account.NicknameAvailability;
 import com.ticketon.domain.account.PasswordHash;
 import com.ticketon.domain.account.StaffAccount;
 import com.ticketon.domain.account.StaffAccountStatus;
+import com.ticketon.domain.account.StaffIntroduction;
 import com.ticketon.domain.account.StaffPersonalInformation;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -22,7 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * 메모리 운영진 계정 저장소 — 운영자 초대 · 수락 · 내보내기 · 소유자 넘기기가 쓰는 찾기(id · 잠그고 찾기 · 이메일)만 한다. 가입 · 인증 · 닉네임 · 비밀번호 저장은 계정 유스케이스의
+ * 메모리 운영진 계정 저장소 — 운영자 초대 · 수락 · 내보내기 · 소유자 넘기기 · 운영진 프로필이 쓰는 찾기(id · 잠그고 찾기 · 이메일)만 한다. 가입 · 인증 · 닉네임 · 비밀번호 저장은 계정 유스케이스의
  * 테스트가 본다.
  */
 final class FakeStaffAccountRepository implements StaffAccountRepository {
@@ -36,7 +37,15 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
     /** 이메일 인증을 마친 운영진 로그인을 그 id로 바로 둔다. */
     void storeActive(long id, String name, String nickname, String email) {
         accounts.put(id, StaffAccount.restore(id, StaffPersonalInformation.of(name, email), Nickname.of(nickname),
-                new PasswordHash("{test}hashed-password"), SIGNED_UP_AT, StaffAccountStatus.ACTIVE, SIGNED_UP_AT));
+                null, new PasswordHash("{test}hashed-password"), SIGNED_UP_AT, StaffAccountStatus.ACTIVE, SIGNED_UP_AT));
+    }
+
+    /** 그 운영진 로그인에 한 줄 소개를 적어 둔다 — 내 프로필 편집을 거치지 않는다. */
+    void introduce(long id, String introduction) {
+        StaffAccount account = accounts.get(id);
+        accounts.put(id, StaffAccount.restore(id, account.personalInformation(), account.nickname(),
+                new StaffIntroduction(introduction), account.passwordHash(), account.signedUpAt(), account.status(),
+                account.emailVerifiedAt().orElse(null)));
     }
 
     /** 그 운영진 로그인을 탈퇴한 것으로 바꾼다 — 개인정보는 없고 닉네임만 남는다. */
@@ -110,8 +119,8 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
     }
 
     @Override
-    public void saveNickname(StaffAccount changedAccount) {
-        throw new UnsupportedOperationException("운영자 초대에서는 닉네임을 저장하지 않습니다");
+    public void saveProfile(StaffAccount changedAccount) {
+        throw new UnsupportedOperationException("운영자 초대에서는 프로필을 저장하지 않습니다");
     }
 
     @Override

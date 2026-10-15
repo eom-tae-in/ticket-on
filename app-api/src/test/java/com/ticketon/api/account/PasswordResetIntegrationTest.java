@@ -76,7 +76,7 @@ class PasswordResetIntegrationTest {
 
     private static final String AUDIENCE_ACCOUNT_PATH = "/api/audience/account";
 
-    private static final String NICKNAME_PATH = "/api/organizer/account/nickname";
+    private static final String PROFILE_PATH = "/api/organizer/account/profile";
 
     private static final String CSRF_TOKEN_PATH = "/api/auth/test/csrf";
 
@@ -265,7 +265,7 @@ class PasswordResetIntegrationTest {
 
             expectError(phone.get(AUDIENCE_ACCOUNT_PATH), 401, "UNAUTHENTICATED");
             assertThat(sessionCountOf(audiencePrincipal)).isZero();
-            assertThat(organizerBrowser.put(NICKNAME_PATH, Map.of("nickname", "세션고래"), organizerBrowser.csrfToken())
+            assertThat(organizerBrowser.put(PROFILE_PATH, Map.of("nickname", "세션고래"), organizerBrowser.csrfToken())
                     .statusCode()).isEqualTo(200);
         }
     }
