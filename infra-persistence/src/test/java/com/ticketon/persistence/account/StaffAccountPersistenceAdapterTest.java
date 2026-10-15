@@ -24,6 +24,7 @@ import com.ticketon.domain.error.ErrorCode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -64,6 +65,8 @@ class StaffAccountPersistenceAdapterTest {
     private static final String WHALE = "조용한고래";
 
     private static final String WIND = "푸른바람";
+
+    private static final Instant WITHDRAWN_AT = SIGNUP_TIME.plusSeconds(30 * 86_400);
 
     @Container
     private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18");
@@ -455,7 +458,93 @@ class StaffAccountPersistenceAdapterTest {
             markWithdrawn(id);
 
             assertConflict(() -> adapter.savePassword(account), AccountErrorCode.STAFF_NOT_ACTIVE);
-            assertThat(adapter.findById(id).orElseThrow().passwordHash()).isEqualTo(PASSWORD_HASH);
+            assertThat(dsl.select(STAFF_ACCOUNT.PASSWORD_HASH).from(STAFF_ACCOUNT).where(STAFF_ACCOUNT.ID.eq(id))
+                    .fetchSingle().value1()).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("탈퇴 저장 — 이름 · 이메일 · 비밀번호 해시를 지우고 닉네임은 쥔다 (docs/11 \"회원 탈퇴 시\")")
+    class WithdrawalSave {
+
+        @Test
+        @DisplayName("탈퇴를 저장하면 줄은 남고 이름 · 이메일 · 비밀번호 해시 · 인증 일시가 지워지며 닉네임 · 가입 일시 · 탈퇴 일시가 남는다")
+        void destroysPersonalInformation() {
+            long id = activeAccount(JUNGHOON_EMAIL, WHALE);
+            StaffAccount account = adapter.findById(id).orElseThrow();
+            account.withdraw(WITHDRAWN_AT);
+
+            adapter.saveWithdrawal(account);
+
+            var row = dsl.selectFrom(STAFF_ACCOUNT).where(STAFF_ACCOUNT.ID.eq(id)).fetchSingle();
+            assertThat(row.getStatus()).isEqualTo("WITHDRAWN");
+            assertThat(row.getName()).isNull();
+            assertThat(row.getEmail()).isNull();
+            assertThat(row.getEmailLowercase()).isNull();
+            assertThat(row.getPasswordHash()).isNull();
+            assertThat(row.getEmailVerifiedAt()).isNull();
+            assertThat(row.getNickname()).isEqualTo(WHALE);
+            assertThat(row.getWithdrawnAt().toInstant()).isEqualTo(WITHDRAWN_AT);
+            StaffAccount found = adapter.findById(id).orElseThrow();
+            assertThat(found.isWithdrawn()).isTrue();
+            assertThat(found.nickname()).isEqualTo(Nickname.of(WHALE));
+            assertThat(found.signedUpAt()).isEqualTo(SIGNUP_TIME);
+            assertThat(found.withdrawnAt()).contains(WITHDRAWN_AT);
+        }
+
+        @Test
+        @DisplayName("탈퇴하면 이메일이 풀려 같은 이메일로 다시 가입할 수 있고, 닉네임은 쥐고 있어 다른 사람이 가져가지 못한다")
+        void releasesEmailAndKeepsNickname() {
+            long id = activeAccount(JUNGHOON_EMAIL, WHALE);
+            StaffAccount account = adapter.findById(id).orElseThrow();
+            account.withdraw(WITHDRAWN_AT);
+            adapter.saveWithdrawal(account);
+
+            assertThat(adapter.findRegisteredByEmail(EmailAddress.of(JUNGHOON_EMAIL))).isEmpty();
+            assertThat(adapter.add(newAccount(JUNGHOON_EMAIL, WIND)).id()).isPresent();
+            assertConflict(() -> adapter.add(newAccount("new@example.com", WHALE)),
+                    AccountErrorCode.STAFF_NICKNAME_ALREADY_TAKEN);
+        }
+
+        @Test
+        @DisplayName("그 사이 먼저 탈퇴했으면 409 STAFF_WITHDRAWN이고 먼저 남긴 탈퇴 일시가 그대로다")
+        void conflictsWhenAlreadyWithdrawn() {
+            long id = activeAccount(JUNGHOON_EMAIL, WHALE);
+            StaffAccount account = adapter.findById(id).orElseThrow();
+            account.withdraw(WITHDRAWN_AT.plusSeconds(60));
+            markWithdrawn(id);
+
+            assertConflict(() -> adapter.saveWithdrawal(account), AccountErrorCode.STAFF_WITHDRAWN);
+            assertThat(adapter.findById(id).orElseThrow().withdrawnAt()).contains(WITHDRAWN_AT);
+        }
+
+        @Test
+        @DisplayName("같은 계정의 탈퇴 두 건이 동시에 저장되면 하나만 저장되고 다른 하나는 409 STAFF_WITHDRAWN으로 되돌려진다")
+        void concurrentWithdrawalsLeaveOne() throws Exception {
+            long id = activeAccount(JUNGHOON_EMAIL, WHALE);
+            CyclicBarrier bothRead = new CyclicBarrier(2);
+
+            List<Object> outcomes = runConcurrently(
+                    () -> withdrawInOwnTransaction(id, bothRead),
+                    () -> withdrawInOwnTransaction(id, bothRead));
+
+            assertOneSucceededAndOtherConflicted(outcomes, AccountErrorCode.STAFF_WITHDRAWN);
+            assertThat(adapter.findById(id).orElseThrow().isWithdrawn()).isTrue();
+        }
+
+        /** 제 연결·트랜잭션에서 계정을 읽고, 상대도 읽을 때까지 기다렸다가 탈퇴시켜 저장한다. */
+        private long withdrawInOwnTransaction(long accountId, CyclicBarrier bothRead) {
+            try (CloseableDSLContext ownConnection = DSL.using(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                    POSTGRES.getPassword())) {
+                return ownConnection.transactionResult(transaction -> {
+                    StaffAccountPersistenceAdapter transactionAdapter = new StaffAccountPersistenceAdapter(transaction.dsl());
+                    StaffAccount account = transactionAdapter.findById(accountId).orElseThrow();
+                    bothRead.await(10, TimeUnit.SECONDS);
+                    account.withdraw(WITHDRAWN_AT);
+                    transactionAdapter.saveWithdrawal(account);
+                    return accountId;
+                });
+            }
         }
     }
 
@@ -480,10 +569,19 @@ class StaffAccountPersistenceAdapterTest {
         new AudienceAccountPersistenceAdapter(dsl).add(audienceAccount);
     }
 
-    /** 회원 탈퇴가 만들 상태를 흉내 낸다 — 상태만 바꾼다. */
+    /**
+     * 탈퇴한 상태로 바꾼다 — 탈퇴 저장({@link StaffAccountPersistenceAdapter#saveWithdrawal})과 같은 모양(개인정보 없음, 탈퇴 일시)이다.
+     * 탈퇴 기능을 거치지 않으므로 인증 대기 계정에도 쓴다.
+     */
     private static void markWithdrawn(long id) {
         dsl.update(STAFF_ACCOUNT)
                 .set(STAFF_ACCOUNT.STATUS, StaffAccountStatus.WITHDRAWN.name())
+                .set(STAFF_ACCOUNT.WITHDRAWN_AT, WITHDRAWN_AT.atOffset(ZoneOffset.UTC))
+                .setNull(STAFF_ACCOUNT.NAME)
+                .setNull(STAFF_ACCOUNT.EMAIL)
+                .setNull(STAFF_ACCOUNT.EMAIL_LOWERCASE)
+                .setNull(STAFF_ACCOUNT.PASSWORD_HASH)
+                .setNull(STAFF_ACCOUNT.EMAIL_VERIFIED_AT)
                 .where(STAFF_ACCOUNT.ID.eq(id))
                 .execute();
     }

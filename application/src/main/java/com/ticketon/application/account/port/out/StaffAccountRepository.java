@@ -75,4 +75,14 @@ public interface StaffAccountRepository {
      * @throws ConflictException 그 사이 계정이 활동 중이 아니게 됐으면({@code STAFF_NOT_ACTIVE})
      */
     void savePassword(StaffAccount changedAccount);
+
+    /**
+     * 탈퇴를 저장한다 — 상태와 탈퇴 일시를 남기고 이름 · 이메일 · 비밀번호 해시 · 이메일 인증 일시를 지운다. 닉네임과 가입 일시는 남는다.
+     * 저장소의 계정이 활동 중일 때만 바꾼다.
+     *
+     * @param withdrawnAccount {@link StaffAccount#withdraw}로 탈퇴한 계정
+     * @throws ConflictException 그 사이 계정이 활동 중이 아니게 됐으면 — 같은 계정의 탈퇴가 거의 동시에 두 번 들어와 한쪽이 먼저 탈퇴시킨
+     *                           경합({@code STAFF_WITHDRAWN})
+     */
+    void saveWithdrawal(StaffAccount withdrawnAccount);
 }

@@ -13,7 +13,8 @@ import java.util.Objects;
  * @param operatedAt     조작 일시
  * @param staffAccountId 조작한 운영진의 계정 id
  * @param staffNickname  조작한 운영진의 지금 닉네임
- * @param staffName      조작한 운영진의 이름(가입 때 받은 실명)
+ * @param staffName      조작한 운영진의 이름(가입 때 받은 실명). 운영진 로그인을 탈퇴해 이름을 파기했으면 null — 닉네임은 남는다
+ *                       (docs/11 "데이터 보관 — 회원 탈퇴 시").
  * @param staffRole      조작할 때의 역할
  * @param action         조작 종류 — 그 조작으로 한 일
  * @param targetKind     대상 종류
@@ -27,7 +28,6 @@ public record StaffOperationHistoryEntry(long recordId, Instant operatedAt, long
     public StaffOperationHistoryEntry {
         Objects.requireNonNull(operatedAt, "operatedAt");
         Objects.requireNonNull(staffNickname, "staffNickname");
-        Objects.requireNonNull(staffName, "staffName");
         Objects.requireNonNull(staffRole, "staffRole");
         Objects.requireNonNull(action, "action");
         Objects.requireNonNull(targetKind, "targetKind");

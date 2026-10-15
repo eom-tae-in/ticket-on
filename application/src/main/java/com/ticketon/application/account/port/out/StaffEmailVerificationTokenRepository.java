@@ -13,4 +13,12 @@ public interface StaffEmailVerificationTokenRepository {
 
     /** 링크에 담긴 값으로 찾는다. 발급한 적 없는 값이면 비어 있다. */
     Optional<StaffEmailVerificationToken> findByValue(String value);
+
+    /**
+     * 그 계정의 인증 링크를 모두 지운다 — 운영진 로그인을 탈퇴할 때(회원 탈퇴 시 법정 보존 대상 외 즉시 파기, docs/11 "데이터 보관").
+     * 지운 링크를 다시 열면 발급한 적 없는 링크처럼 안내된다.
+     *
+     * @return 지운 링크 수
+     */
+    int deleteAllOf(long staffAccountId);
 }

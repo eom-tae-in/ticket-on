@@ -83,6 +83,11 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
         throw new UnsupportedOperationException("운영자 초대에서는 비밀번호를 저장하지 않습니다");
     }
 
+    @Override
+    public void saveWithdrawal(StaffAccount withdrawnAccount) {
+        throw new UnsupportedOperationException("주최자 쪽 유스케이스에서는 탈퇴를 저장하지 않습니다");
+    }
+
     private static String lowercase(EmailAddress email) {
         return email.value().toLowerCase(Locale.ROOT);
     }

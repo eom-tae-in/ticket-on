@@ -112,6 +112,13 @@ public class PasswordResetTokenPersistenceAdapter implements PasswordResetTokenR
         }
     }
 
+    @Override
+    public int deleteAllOf(AccountRef account) {
+        return dsl.deleteFrom(PASSWORD_RESET_TOKEN)
+                .where(accountColumn(account.kind()).eq(account.id()))
+                .execute();
+    }
+
     /** 그 사이 링크가 쓰였는지 대체됐는지 다시 보고 그쪽 문구로 알린다. */
     private ConflictException lostUseRace(PasswordResetToken usedToken) {
         boolean replaced = dsl.fetchExists(PASSWORD_RESET_TOKEN,

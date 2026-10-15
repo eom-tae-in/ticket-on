@@ -2,6 +2,8 @@ package com.ticketon.application.admin.service;
 
 import com.ticketon.application.organizer.port.out.OrganizerStaffRepository;
 import com.ticketon.domain.organizer.OrganizerStaff;
+import com.ticketon.domain.organizer.OwnershipTransfer;
+import com.ticketon.domain.organizer.StaffAffiliations;
 import com.ticketon.domain.organizer.StaffMembership;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,5 +35,15 @@ final class FakeOrganizerStaffRepository implements OrganizerStaffRepository {
     @Override
     public void saveEnded(StaffMembership endedMembership) {
         throw new UnsupportedOperationException("주최자 심사에서는 소속을 끝내지 않습니다");
+    }
+
+    @Override
+    public void saveOwnershipTransfer(OwnershipTransfer transfer) {
+        throw new UnsupportedOperationException("주최자 심사에서는 소유자를 넘기지 않습니다");
+    }
+
+    @Override
+    public StaffAffiliations findAffiliationsOf(long staffAccountId) {
+        throw new UnsupportedOperationException("주최자 심사에서는 한 사람의 소속을 읽지 않습니다");
     }
 }

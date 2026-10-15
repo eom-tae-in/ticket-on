@@ -5,7 +5,6 @@ import com.ticketon.domain.account.EmailAvailability;
 import com.ticketon.domain.account.Nickname;
 import com.ticketon.domain.account.NicknameAvailability;
 import com.ticketon.domain.account.StaffAccount;
-import com.ticketon.domain.account.StaffAccountStatus;
 import com.ticketon.domain.account.StaffPersonalInformation;
 import java.time.Duration;
 import java.time.Instant;
@@ -13,7 +12,6 @@ import java.time.LocalDateTime;
 
 /**
  * 메모리 운영진 계정 저장소에 상태별 계정을 넣는다. 이름은 박정훈, 비밀번호는 {@value #RAW_PASSWORD}다.
- * 탈퇴는 저장 기능이 아직 없어 계정의 상태를 바꿔 저장소에 바로 넣는다.
  */
 final class StoredStaffAccounts {
 
@@ -44,13 +42,12 @@ final class StoredStaffAccounts {
         return id;
     }
 
-    /** 활동 중이던 계정이 탈퇴한 것. */
+    /** 활동 중이던 계정이 탈퇴한 것 — 이름 · 이메일 · 비밀번호 해시는 파기되고 닉네임만 남았다. */
     long withdrawn(String email, String nickname) {
         long id = active(email, nickname);
         StaffAccount account = repository.findById(id).orElseThrow();
-        repository.replace(StaffAccount.restore(id, account.personalInformation(), account.nickname(),
-                account.passwordHash(), account.signedUpAt(), StaffAccountStatus.WITHDRAWN,
-                account.emailVerifiedAt().orElse(null)));
+        account.withdraw(SIGNUP_TIME.plus(Duration.ofDays(30)));
+        repository.saveWithdrawal(account);
         return id;
     }
 }
