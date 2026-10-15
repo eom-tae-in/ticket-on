@@ -1,10 +1,13 @@
 package com.ticketon.persistence.admin;
 
+import static com.ticketon.persistence.jooq.Tables.ADMIN_ACCOUNT;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ticketon.application.admin.query.AdminWorkKind;
 import com.ticketon.application.admin.query.PendingAdminWork;
 import com.ticketon.common.KoreanTime;
+import com.ticketon.domain.account.AccountKind;
+import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.organizer.BusinessDeclaration;
 import com.ticketon.domain.organizer.OrganizerApplication;
@@ -13,13 +16,17 @@ import com.ticketon.domain.organizer.OrganizerApplicationStatus;
 import com.ticketon.domain.organizer.OrganizerName;
 import com.ticketon.domain.organizer.OrganizerStatus;
 import com.ticketon.domain.organizer.OrganizerType;
+import com.ticketon.domain.organizer.OwnershipChange;
+import com.ticketon.domain.organizer.OwnershipTransfer;
 import com.ticketon.domain.organizer.RejectionReason;
 import com.ticketon.domain.organizer.SettlementAccount;
 import com.ticketon.domain.organizer.TelephoneNumber;
 import com.ticketon.persistence.organizer.OrganizerApplicationPersistenceAdapter;
 import com.ticketon.persistence.organizer.OrganizerRows;
+import com.ticketon.persistence.organizer.OwnershipChangePersistenceAdapter;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.flywaydb.core.Flyway;
 import org.jooq.CloseableDSLContext;
@@ -34,7 +41,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL에 마이그레이션 전체를 올리고 관리자 처리 목록 조회를 본다 — 지금 원천은 심사 중인 주최자 신청뿐이다.
+ * 진짜 PostgreSQL에 마이그레이션 전체를 올리고 관리자 처리 목록 조회를 본다 — 지금 원천은 심사 중인 주최자 신청과 확인 전인 소유자 변경이다.
  * Docker가 없는 환경에서는 건너뛴다.
  */
 @Testcontainers(disabledWithoutDocker = true)
@@ -72,6 +79,7 @@ class AdminWorkQueueQueryPersistenceAdapterTest {
     void clearRows() {
         rows = new OrganizerRows(dsl);
         rows.clear();
+        dsl.truncate(ADMIN_ACCOUNT).cascade().execute();
         applications = new OrganizerApplicationPersistenceAdapter(dsl);
         adapter = new AdminWorkQueueQueryPersistenceAdapter(dsl);
     }
@@ -106,6 +114,53 @@ class AdminWorkQueueQueryPersistenceAdapterTest {
         review(rejected, RejectionReason.of("연락이 닿지 않음"));
 
         assertThat(adapter.pendingWork()).extracting(PendingAdminWork::targetId).containsExactly(pending);
+    }
+
+    @Test
+    @DisplayName("확인 전인 소유자 변경이 신청과 함께 접수 순서로 쌓인다 — 대상은 이력 id, 제목은 '주최자명 · 넘긴 사람 → 받은 사람' 닉네임")
+    void unconfirmedOwnershipChangesJoinTheQueue() {
+        long application = submit("applicant@example.com", "늦여름", MONDAY_MORNING.plusSeconds(60));
+        long changeId = transfer("극단 열두달", "junghoon@example.com", "planner@example.com", MONDAY_MORNING);
+
+        assertThat(adapter.pendingWork()).containsExactly(
+                new PendingAdminWork(AdminWorkKind.OWNERSHIP_CHANGE, changeId, "극단 열두달 · junghoon → planner",
+                        MONDAY_MORNING),
+                new PendingAdminWork(AdminWorkKind.ORGANIZER_APPLICATION, application, "늦여름",
+                        MONDAY_MORNING.plusSeconds(60)));
+    }
+
+    @Test
+    @DisplayName("관리자가 확인한 소유자 변경은 목록에서 빠진다")
+    void confirmedOwnershipChangesLeaveTheQueue() {
+        long confirmed = transfer("극단 열두달", "junghoon@example.com", "planner@example.com", MONDAY_MORNING);
+        long unconfirmed = transfer("늦여름", "yeoreum@example.com", "dohyun@example.com", MONDAY_MORNING.plusSeconds(60));
+        OwnershipChangePersistenceAdapter changes = new OwnershipChangePersistenceAdapter(dsl);
+        OwnershipChange change = changes.findById(confirmed).orElseThrow();
+        change.confirm(AccountRef.of(AccountKind.ADMIN, adminAccount()), MONDAY_MORNING.plusSeconds(3_600));
+        changes.saveConfirmation(change);
+
+        assertThat(adapter.pendingWork()).extracting(PendingAdminWork::targetId).containsExactly(unconfirmed);
+    }
+
+    /** 활동 중인 주최자에서 소유자가 운영자에게 넘긴 한 건을 이력으로 저장한다 — 소속은 이 조회와 상관없어 넣지 않는다. */
+    private long transfer(String organizerName, String ownerEmail, String receiverEmail, Instant transferredAt) {
+        long organizerId = rows.organizer(organizerName, OrganizerStatus.ACTIVE);
+        long owner = rows.staffAccount(ownerEmail);
+        long receiver = rows.staffAccount(receiverEmail);
+        return new OwnershipChangePersistenceAdapter(dsl)
+                .add(new OwnershipTransfer(organizerId, owner, receiver, transferredAt)).id();
+    }
+
+    private static long adminAccount() {
+        return dsl.insertInto(ADMIN_ACCOUNT)
+                .set(ADMIN_ACCOUNT.GRADE, "ADMIN")
+                .set(ADMIN_ACCOUNT.EMAIL, "admin@ticket-on.example")
+                .set(ADMIN_ACCOUNT.EMAIL_LOWERCASE, "admin@ticket-on.example")
+                .set(ADMIN_ACCOUNT.PASSWORD_HASH, "{test}hashed-password")
+                .set(ADMIN_ACCOUNT.ISSUED_AT, MONDAY_MORNING.minusSeconds(86_400).atOffset(ZoneOffset.UTC))
+                .returningResult(ADMIN_ACCOUNT.ID)
+                .fetchSingle()
+                .value1();
     }
 
     /** 운영진 로그인을 만들고, 심사 중 주최자와 그 주최자를 가리키는 신청서를 저장한다. */

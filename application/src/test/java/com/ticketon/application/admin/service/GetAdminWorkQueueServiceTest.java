@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("관리자 처리 목록 유스케이스 — 주최자 신청은 심사 목표일(영업일 3일)이 다가오면 강조")
+@DisplayName("관리자 처리 목록 유스케이스 — 주최자 신청은 심사 목표일(영업일 3일)이 다가오면 강조, 소유자 변경은 강조하지 않음")
 class GetAdminWorkQueueServiceTest {
 
     private final FakeAdminWorkQueueQueryPort queryPort = new FakeAdminWorkQueueQueryPort();
@@ -64,6 +64,17 @@ class GetAdminWorkQueueServiceTest {
 
         assertThat(service.getWorkQueue().items()).singleElement()
                 .satisfies(item -> assertThat(item.highlighted()).isTrue());
+    }
+
+    @Test
+    @DisplayName("소유자 변경은 기한이 없어 오래돼도 강조하지 않는다")
+    void ownershipChangeIsNotHighlighted() {
+        Instant transferredAt = KoreanTime.toInstant(LocalDateTime.of(2026, 10, 1, 10, 0));
+        queryPort.add(new PendingAdminWork(AdminWorkKind.OWNERSHIP_CHANGE, 9, "극단 열두달 · 조용한고래 → 푸른바람",
+                transferredAt));
+
+        assertThat(service.getWorkQueue().items()).containsExactly(new AdminWorkQueueResult.Item(
+                AdminWorkKind.OWNERSHIP_CHANGE, 9, "극단 열두달 · 조용한고래 → 푸른바람", transferredAt, false));
     }
 
     private static PendingAdminWork application(long applicationId, String name, LocalDateTime submittedAtKorea) {
