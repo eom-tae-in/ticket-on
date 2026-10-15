@@ -20,6 +20,9 @@
  *   <tr><td>{@link com.ticketon.domain.error.NotFoundException 찾을 수 없음}</td><td>404</td><td>도메인 오류 코드</td></tr>
  *   <tr><td>{@link com.ticketon.domain.error.RuleViolationException 규칙 위반},
  *           {@link com.ticketon.domain.error.ConflictException 충돌(동시성 패배)}</td><td>409</td><td>도메인 오류 코드</td></tr>
+ *   <tr><td>데이터베이스가 잠금 경합으로 끊은 요청(교착 40P01 · 직렬화 실패 40001 · 잠금 대기 실패 55P03 —
+ *           {@link org.springframework.dao.PessimisticLockingFailureException})</td><td>409</td>
+ *       <td>CONCURRENT_REQUEST — 반영된 것이 없어 다시 보내면 된다. 서버가 다시 시도하지는 않는다</td></tr>
  *   <tr><td>Spring MVC가 상태를 정한 그 밖의 요청 오류(없는 주소 404, 지원하지 않는 메서드 405 등)</td><td>그 상태</td>
  *       <td>NOT_FOUND · UNSUPPORTED_REQUEST 등 {@link com.ticketon.api.error.ApiErrorCode}, fieldErrors는 빈 배열</td></tr>
  *   <tr><td>Spring Security 예외(메서드 보안의 권한 없음 등)</td><td>401 / 403</td>
@@ -47,7 +50,8 @@
  * ErrorResponse 스키마는 API가 하나도 없어도 실린다({@link com.ticketon.api.error.ErrorResponseOpenApiConfiguration}).
  *
  * <h2>로그</h2>
- * 400·401·403·404·409는 정상적인 거절이라 debug로만 남긴다. 500은 예외 전체를 error로 남기고, 응답에는 정해진 문구만 보낸다.
+ * 400·401·403·404·409는 정상적인 거절이라 debug로만 남긴다. 다만 잠금 경합(409 CONCURRENT_REQUEST)은 잠금 순서를 어긴 흐름을 찾을 수 있게
+ * 예외 전체를 warn으로 남긴다. 500은 예외 전체를 error로 남기고, 응답에는 정해진 문구만 보낸다.
  *
  * <h2>컨트롤러 밖에서 막히거나 난 오류</h2>
  * 같은 {@link com.ticketon.api.error.ErrorResponse} 모양으로 응답한다. 화면은 어디서 막혔는지 몰라도 된다.

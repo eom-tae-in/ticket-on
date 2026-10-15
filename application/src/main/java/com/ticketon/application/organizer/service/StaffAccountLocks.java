@@ -57,6 +57,9 @@ import java.util.stream.LongStream;
  *       잡는다. 그런 흐름이 생기면 그 계정 줄을 ①에서 먼저 잡는다.</li>
  * </ul>
  * 관련된 사람이 여럿이면 <b>id가 작은 쪽부터</b> 잠근다 — 같은 두 사람을 잠그는 두 흐름이 서로 반대 순서로 잠가 교착하지 않게.
+ * <p>
+ * 이 순서를 어긴 흐름이 있어 그래도 교착하면, 진 쪽 트랜잭션은 되돌려지고 API는 500이 아니라 409 CONCURRENT_REQUEST("다시 시도")로 답한다
+ * (app-api ApiExceptionHandler — 예외 전체를 warn 로그로 남겨 어긴 흐름을 찾는다).
  */
 public final class StaffAccountLocks {
 

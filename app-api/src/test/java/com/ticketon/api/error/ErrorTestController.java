@@ -17,6 +17,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.util.List;
 import org.springframework.boot.test.context.TestComponent;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,6 +42,8 @@ import org.springframework.web.multipart.MultipartFile;
 class ErrorTestController {
 
     static final String INTERNAL_DETAIL = "lock timeout on table ticket_internal";
+
+    static final String DEADLOCK_DETAIL = "ERROR: deadlock detected — Process 4242 waits for ShareLock on transaction 777";
 
     @GetMapping("/rule-violation")
     void ruleViolation() {
@@ -69,6 +73,18 @@ class ErrorTestController {
     @GetMapping("/unauthenticated")
     void unauthenticated() {
         throw new UnauthenticatedException();
+    }
+
+    /** 교착(40P01) — 실제 서버에서는 jOOQ가 PostgreSQL 오류를 이 계열의 Spring 예외로 바꿔 던진다. */
+    @GetMapping("/deadlock")
+    void deadlock() {
+        throw new PessimisticLockingFailureException(DEADLOCK_DETAIL);
+    }
+
+    /** 잠금 대기 실패(55P03) — NOWAIT · 잠금 대기 시간 초과. */
+    @GetMapping("/lock-not-available")
+    void lockNotAvailable() {
+        throw new CannotAcquireLockException(DEADLOCK_DETAIL);
     }
 
     @GetMapping("/unexpected")
