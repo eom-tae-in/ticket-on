@@ -14,6 +14,7 @@ final class FakeOrganizerRepository implements OrganizerRepository {
 
     private final List<Organizer> organizers = new ArrayList<>();
     private int publicProfileSaves;
+    private boolean failingPublicProfileSaves;
 
     @Override
     public Organizer add(Organizer newOrganizer) {
@@ -55,11 +56,19 @@ final class FakeOrganizerRepository implements OrganizerRepository {
 
     @Override
     public void savePublicProfile(Organizer organizer) {
+        if (failingPublicProfileSaves) {
+            throw new IllegalStateException("공개 정보 저장 실패를 흉내 냅니다");
+        }
         long id = organizer.id().orElseThrow(() -> new IllegalArgumentException("저장 전 주최자입니다"));
         Organizer stored = findById(id).orElseThrow(() -> new IllegalArgumentException("없는 주최자입니다: " + id));
         organizers.set(organizers.indexOf(stored), Organizer.restore(id, organizer.name(), stored.status(),
                 organizer.publicProfile()));
         publicProfileSaves++;
+    }
+
+    /** 이제부터 공개 정보 저장이 실패한다 — 저장 단계에서 트랜잭션이 되돌려지는 경우를 본다. */
+    void failPublicProfileSaves() {
+        failingPublicProfileSaves = true;
     }
 
     /** 공개 정보를 저장한 횟수. */
