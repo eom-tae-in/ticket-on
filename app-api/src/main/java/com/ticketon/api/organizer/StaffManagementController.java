@@ -55,8 +55,8 @@ public class StaffManagementController {
         return StaffListResponse.from(getStaffListUseCase.getStaffList(new GetStaffListQuery(actingStaff)));
     }
 
-    @Operation(summary = "운영자 초대", description = "소유자가 이메일로 운영자를 초대하고, 그 이메일로 초대 메일([주최])을 보낸다. 초대는 7일 "
-            + "(확인 필요) 동안 수락할 수 있다. 같은 이메일로 보낸 초대가 유효 기간이 지났으면 그 초대를 다시 열어 보낸다. 운영자가 초대하면 "
+    @Operation(summary = "운영자 초대", description = "소유자가 이메일로 운영자를 초대하고, 그 이메일로 초대 메일([주최])을 보낸다. 초대는 유효 "
+            + "기간(정책값, 확인 필요) 동안 수락할 수 있고, 끝나는 일시는 응답의 expiresAt이다. 같은 이메일로 보낸 초대가 유효 기간이 지났으면 그 초대를 다시 열어 보낸다. 운영자가 초대하면 "
             + "403 OWNER_ONLY_ACTION, 그 주최자의 운영진이 아니면 403 NOT_ORGANIZER_STAFF, 그 이메일의 사람이 이미 그 주최자의 운영진이면 "
             + "409 ALREADY_ORGANIZER_STAFF, 같은 이메일로 보낸 초대가 아직 유효하면 409 STAFF_INVITATION_ALREADY_PENDING, 이메일이 "
             + "비었거나 형식이 틀리면 400. 운영진 조작 기록에 남는다.")

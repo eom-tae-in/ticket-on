@@ -7,7 +7,7 @@
 -- 받는 사람은 이메일로 정한다 — 초대받은 이메일과 같은 이메일(대소문자 무시)의 운영진 로그인만 수락·거절한다. 아직 주최자 쪽 로그인이 없는
 -- 사람에게도 보내므로 운영진 계정을 가리키지 않고 이메일을 둔다. 대소문자는 운영진 로그인(V5)과 같이 lower()로 채운 칸으로 비교하고 CHECK로 묶는다.
 -- 상태는 셋만 저장한다(도메인 StaffInvitationStatus). "만료"는 저장하지 않는다 — 답을 기다리는 초대가 expires_at을 지났는지로 계산한다.
--- expires_at은 보낸 때부터 유효 기간(ProposedPolicy.STAFF_INVITATION_VALIDITY, 7일 — 확인 필요 #25) 뒤이고, 그 순간부터 답할 수 없다.
+-- expires_at은 보낸 때부터 유효 기간(ProposedPolicy.STAFF_INVITATION_VALIDITY — 확인 필요 #25) 뒤이고, 그 순간부터 답할 수 없다.
 -- 지난 초대를 같은 이메일로 다시 초대하면 새 줄을 만들지 않고 그 줄의 보낸 사람 · 보낸 일시 · 유효 기간을 다시 쓴다(도메인 StaffInvitation.reinvite).
 -- 수락·거절하면 답한 일시와 답한 운영진 계정을 남긴다. 수락하면 운영자 소속 줄(staff_membership)이 같은 트랜잭션에서 생긴다.
 -- 초대를 보내고 수락한 일은 운영진 조작 기록(staff_operation_record — 대상 STAFF_INVITATION, 대상 id = 이 표의 id)에도 남는다.
