@@ -33,7 +33,16 @@ public enum AdminOperationKind {
      * 주최자명 변경 사후 확인 — 처리 목록에서 빠진다(docs/12 "관리자 대상 — 주최자명 변경 (사후 확인용)"). 이름은 되돌리지 않는다. 대상은 확인한
      * 주최자명 변경 이력이다.
      */
-    CONFIRM_ORGANIZER_NAME_CHANGE(AdminOperationTargetKind.ORGANIZER_NAME_CHANGE);
+    CONFIRM_ORGANIZER_NAME_CHANGE(AdminOperationTargetKind.ORGANIZER_NAME_CHANGE),
+
+    /**
+     * 정산 계좌 · 사업자 정보 변경 승인 — 요청한 새 값이 주최자에 적용된다(docs/11 "정산 계좌 변경", docs/01 "판매자 정보"). 대상은 승인한 변경
+     * 요청이다.
+     */
+    APPROVE_ORGANIZER_CHANGE_REQUEST(AdminOperationTargetKind.ORGANIZER_CHANGE_REQUEST),
+
+    /** 정산 계좌 · 사업자 정보 변경 반려 — 사유를 남긴다. 기존 값이 그대로다. 대상은 반려한 변경 요청이다. */
+    REJECT_ORGANIZER_CHANGE_REQUEST(AdminOperationTargetKind.ORGANIZER_CHANGE_REQUEST);
 
     private final AdminOperationTargetKind targetKind;
 

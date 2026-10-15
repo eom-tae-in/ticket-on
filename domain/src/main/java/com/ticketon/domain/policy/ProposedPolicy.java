@@ -142,6 +142,16 @@ public final class ProposedPolicy {
      */
     public static final FileSize UPLOAD_REQUEST_MAXIMUM_SIZE = FileSize.ofMegabytes(10);
 
+    /**
+     * 확인 필요 (#31, 문서에 없음) — 소유자 화면의 정산 계좌번호에서 그대로 보이는 마지막 숫자의 수. 나머지 숫자는 {@code *}로 가린다
+     * ({@code SettlementAccount#maskedAccountNumber} — 예: {@code 123456-78-901234} → {@code ******-**-**1234}).
+     * 4자리를 제안한다: 소유자가 "어느 계좌인지" 알아보는 데는 은행 · 예금주와 끝 네 자리면 충분하고, 은행 앱 · 카드사 화면이 흔히 그만큼만
+     * 보인다. 정산 계좌는 소유자 자리를 넘겨받은 사람이 정산금을 가로챌 수 있는 값이라(docs/01 "가로채기를 막는 장치") 소유자 화면 응답에도
+     * 전체를 싣지 않는다. 관리자 확인 화면은 확인과 손으로 하는 정산(docs/11 "정산 완료 처리")에 전체가 필요해 가리지 않는다(주최자 심사 화면과
+     * 같다). 문서에는 가리는 방식이 없다.
+     */
+    public static final int SETTLEMENT_ACCOUNT_VISIBLE_TRAILING_DIGITS = 4;
+
     private ProposedPolicy() {
     }
 }

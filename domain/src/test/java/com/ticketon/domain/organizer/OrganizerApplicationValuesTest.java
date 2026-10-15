@@ -8,6 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 @DisplayName("주최자 신청서의 값")
@@ -119,6 +120,21 @@ class OrganizerApplicationValuesTest {
             assertThatIllegalArgumentException().isThrownBy(() -> new SettlementAccount(" ", "123456-78-901234", "박정훈"));
             assertThatIllegalArgumentException().isThrownBy(() -> new SettlementAccount("국민은행", "", "박정훈"));
             assertThatIllegalArgumentException().isThrownBy(() -> new SettlementAccount("국민은행", "123456-78-901234", " "));
+        }
+
+        @ParameterizedTest(name = "{0} → {1}")
+        @CsvSource(delimiter = '|', value = {
+                "123456-78-901234 | ******-**-**1234",
+                "110-123-456789   | ***-***-**6789",
+                "1002 345 678901  | **** *** **8901",
+                "12345            | *2345",
+                "1234             | ****",
+                "12-3             | **-*"})
+        @DisplayName("소유자 화면에는 마지막 숫자 네 개만 남기고 나머지 숫자를 가린다 — 하이픈 · 공백은 그대로, 숫자가 네 개 이하면 모두 가린다 (#31 제안값)")
+        void masksAllButLastFourDigits(String accountNumber, String masked) {
+            SettlementAccount account = new SettlementAccount("국민은행", accountNumber, "박정훈");
+
+            assertThat(account.maskedAccountNumber()).isEqualTo(masked);
         }
     }
 

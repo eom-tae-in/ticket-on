@@ -12,7 +12,7 @@ import java.util.Set;
 
 /**
  * 알림 종류와 채널 표 — docs/12 "관객 대상"·"주최자 대상" 표를 그대로 옮긴다. 표 밖에서 docs/12가 보내라고 한 알림(마케팅 수신 동의·철회
- * 처리 결과, "마케팅 발송")과 표 밖의 주최자 쪽 결과 알림(소유자 이전 신청 반려)도 여기 둔다.
+ * 처리 결과, "마케팅 발송")과 표 밖의 주최자 쪽 결과 알림(소유자 이전 신청 반려, 사업자 정보 변경 확인 결과)도 여기 둔다.
  * <p>
  * <b>긴급하거나 돈이 걸린 것만 문자, 나머지는 이메일</b>(docs/12 "원칙"). 관객 쪽은 종류마다 이메일·문자 중 무엇으로 보내는지가
  * 정해져 있고, <b>주최자 쪽은 전부 이메일</b>이며 제목에 [주최]가 붙는다({@link EmailSubject#notice}). 주최자 쪽은 종류마다
@@ -206,7 +206,14 @@ public enum NotificationKind {
      * 이메일로 보낸다 — 신청한 사람이 아직 운영진이면 한 번만 간다. 운영진 로그인을 탈퇴한 신청자는 이메일을 파기해 받지 않는다. 승인은 소유자가
      * 바뀌는 일이라 표의 {@link #OWNER_CHANGED}로 보낸다.
      */
-    OWNERSHIP_CLAIM_REJECTED(OrganizerRecipientScope.INDIVIDUAL);
+    OWNERSHIP_CLAIM_REJECTED(OrganizerRecipientScope.INDIVIDUAL),
+
+    /**
+     * 사업자 정보 변경 확인 결과 — 승인 / 반려(사유 포함), <b>소유자에게</b>. 표에는 정산 계좌 쪽({@link #SETTLEMENT_ACCOUNT_CHANGE_DECIDED})만
+     * 있지만 사업자 정보 수정도 "정산 계좌와 같습니다"(docs/01 "판매자 정보")라 같은 흐름으로 관리자가 확인하고, #31이 결과를 소유자에게 메일로
+     * 보내라고 했다. 소유자만 다루는 일이라 소유자에게만 간다(docs/12 "주최자 대상 — 받는 사람").
+     */
+    BUSINESS_INFORMATION_CHANGE_DECIDED(OrganizerRecipientScope.OWNER_ONLY);
 
     private final RecipientSide side;
     private final Set<NotificationChannel> channels;

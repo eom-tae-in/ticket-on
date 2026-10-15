@@ -8,6 +8,7 @@ import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.account.AdminGrade;
 import com.ticketon.domain.account.EmailAddress;
+import com.ticketon.domain.organizer.OrganizerChangeRequestKind;
 import com.ticketon.domain.organizer.OrganizerName;
 import com.ticketon.domain.organizer.OrganizerNameChange;
 import com.ticketon.domain.organizer.RejectionReason;
@@ -172,6 +173,41 @@ class AdminOperationRecordTest {
             assertThat(record.targetKind()).isEqualTo(AdminOperationTargetKind.OWNERSHIP_CLAIM);
             assertThat(record.summary()).isEqualTo("소유자 이전 신청 반려 — 극단 열두달");
             assertThat(record.reason()).hasValue("소유자와 통화해 직접 넘기기로 함");
+        }
+    }
+
+    @Nested
+    @DisplayName("정산 계좌 · 사업자 정보 변경 승인·반려 기록")
+    class OrganizerChangeRequestReviewed {
+
+        private final AccountRef admin = AccountRef.of(AccountKind.ADMIN, 2);
+
+        @Test
+        @DisplayName("승인은 누가(관리자) · 언제 · 무엇을(변경 승인) · 대상(변경 요청 id) · 요약(종류 · 주최자명)을 남기고, 사유와 계좌번호 같은 값은 없다")
+        void recordsApproval() {
+            AdminOperationRecord record = AdminOperationRecord.organizerChangeRequestApproved(admin, 8,
+                    OrganizerChangeRequestKind.SETTLEMENT_ACCOUNT, OrganizerName.of("극단 열두달"), OPERATED_AT);
+
+            assertThat(record.operator()).isEqualTo(admin);
+            assertThat(record.operatedAt()).isEqualTo(OPERATED_AT);
+            assertThat(record.kind()).isEqualTo(AdminOperationKind.APPROVE_ORGANIZER_CHANGE_REQUEST);
+            assertThat(record.targetKind()).isEqualTo(AdminOperationTargetKind.ORGANIZER_CHANGE_REQUEST);
+            assertThat(record.targetId()).isEqualTo(8);
+            assertThat(record.summary()).isEqualTo("정산 계좌 변경 승인 — 극단 열두달");
+            assertThat(record.reason()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("반려는 소유자에게 알린 사유를 그대로 사유로 남긴다 — 사업자 정보면 요약이 '사업자 정보 변경 반려'다")
+        void recordsRejectionWithReason() {
+            AdminOperationRecord record = AdminOperationRecord.organizerChangeRequestRejected(admin, 9,
+                    OrganizerChangeRequestKind.BUSINESS_INFORMATION, OrganizerName.of("늦여름"),
+                    RejectionReason.of("사업자등록증의 주소와 다릅니다"), OPERATED_AT);
+
+            assertThat(record.kind()).isEqualTo(AdminOperationKind.REJECT_ORGANIZER_CHANGE_REQUEST);
+            assertThat(record.targetKind()).isEqualTo(AdminOperationTargetKind.ORGANIZER_CHANGE_REQUEST);
+            assertThat(record.summary()).isEqualTo("사업자 정보 변경 반려 — 늦여름");
+            assertThat(record.reason()).hasValue("사업자등록증의 주소와 다릅니다");
         }
     }
 

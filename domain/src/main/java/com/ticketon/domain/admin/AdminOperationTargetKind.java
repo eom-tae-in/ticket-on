@@ -20,5 +20,8 @@ public enum AdminOperationTargetKind {
     OWNERSHIP_CLAIM,
 
     /** 주최자명 변경 이력 — 소유자가 주최자명을 바꾼 한 건. */
-    ORGANIZER_NAME_CHANGE
+    ORGANIZER_NAME_CHANGE,
+
+    /** 정산 계좌 · 사업자 정보 변경 요청 — 소유자가 낸 요청 한 건. */
+    ORGANIZER_CHANGE_REQUEST
 }

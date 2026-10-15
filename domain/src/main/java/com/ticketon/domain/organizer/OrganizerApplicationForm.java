@@ -50,6 +50,11 @@ public record OrganizerApplicationForm(OrganizerType organizerType, OrganizerNam
         return businessDeclaration.businessStatus();
     }
 
+    /** 승인 때 주최자에 옮겨 둘 사업자 여부 · 사업자 정보 · 정산 계좌 — 그 뒤로는 관리자가 확인한 변경만 적용한다. */
+    public OrganizerBusinessDetails businessDetails() {
+        return new OrganizerBusinessDetails(businessDeclaration, settlementAccount);
+    }
+
     @Override
     public String toString() {
         return "OrganizerApplicationForm[organizerType=" + organizerType + ", name=" + name.value()
