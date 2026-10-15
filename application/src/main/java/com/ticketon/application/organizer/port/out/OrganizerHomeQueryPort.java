@@ -10,10 +10,11 @@ import java.util.Optional;
 
 /**
  * 내 주최 홈 조회 — 나가는 포트. 읽기 전용이라 도메인 객체를 만들지 않고 화면에 쓸 칸만 돌려준다(docs/13 "3. 주최 관리 — 로그인").
+ * 주최자 전환의 내 소속 목록도 지금 소속({@link #currentAffiliationsOf})을 쓴다.
  */
 public interface OrganizerHomeQueryPort {
 
-    /** 그 사람이 지금 소속된 주최자 — 끝나지 않은 소속만, 소속을 시작한 순서. */
+    /** 그 사람이 지금 소속된 주최자와 그 상태 — 끝나지 않은 소속만, 소속을 시작한 순서. */
     List<CurrentAffiliation> currentAffiliationsOf(long staffAccountId);
 
     /** 그 사람이 가장 최근에 낸 주최자 신청. 낸 적이 없으면 비어 있다. */

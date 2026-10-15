@@ -15,7 +15,10 @@ public enum AdminOperationKind {
     APPROVE_ORGANIZER_APPLICATION(AdminOperationTargetKind.ORGANIZER_APPLICATION),
 
     /** 주최자 신청 반려 — 사유를 반드시 남긴다(docs/01 "반려"). 대상은 반려한 신청서다. */
-    REJECT_ORGANIZER_APPLICATION(AdminOperationTargetKind.ORGANIZER_APPLICATION);
+    REJECT_ORGANIZER_APPLICATION(AdminOperationTargetKind.ORGANIZER_APPLICATION),
+
+    /** 소유자 변경 사후 확인 — 처리 목록에서 빠진다(docs/12 "소유자가 바뀌면 관리자에게도 알립니다"). 대상은 확인한 소유자 변경 이력이다. */
+    CONFIRM_OWNERSHIP_CHANGE(AdminOperationTargetKind.OWNERSHIP_CHANGE);
 
     private final AdminOperationTargetKind targetKind;
 

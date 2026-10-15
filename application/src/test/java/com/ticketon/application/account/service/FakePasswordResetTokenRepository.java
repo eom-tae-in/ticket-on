@@ -83,6 +83,14 @@ final class FakePasswordResetTokenRepository implements PasswordResetTokenReposi
         tokens.put(usedToken.value(), copyOf(usedToken));
     }
 
+    @Override
+    public int deleteAllOf(AccountRef account) {
+        writeLog.record("링크 지우기 " + account.principalName());
+        int before = tokens.size();
+        tokens.values().removeIf(token -> token.account().equals(account));
+        return before - tokens.size();
+    }
+
     private static boolean isUnused(PasswordResetToken token) {
         return token.usedAt().isEmpty() && token.replacedAt().isEmpty();
     }

@@ -6,12 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 
 import com.ticketon.application.organizer.query.StaffOperationHistoryEntry;
 import com.ticketon.common.KoreanTime;
+import com.ticketon.domain.account.StaffAccount;
 import com.ticketon.domain.organizer.OrganizerStatus;
 import com.ticketon.domain.organizer.StaffAction;
 import com.ticketon.domain.organizer.StaffOperationRecord;
 import com.ticketon.domain.organizer.StaffOperationTargetKind;
 import com.ticketon.domain.organizer.StaffPermission;
 import com.ticketon.domain.organizer.StaffRole;
+import com.ticketon.persistence.account.StaffAccountPersistenceAdapter;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -122,6 +124,23 @@ class StaffOperationHistoryQueryPersistenceAdapterTest {
                 .filteredOn(entry -> entry.staffAccountId() == planner)
                 .extracting(StaffOperationHistoryEntry::staffNickname)
                 .containsExactly("조용한고래");
+    }
+
+    @Test
+    @DisplayName("운영진 로그인을 탈퇴해 이름을 파기한 사람의 기록은 이름 없이 닉네임으로 남는다")
+    void withdrawnStaffKeepsNicknameWithoutName() {
+        StaffAccountPersistenceAdapter accounts = new StaffAccountPersistenceAdapter(dsl);
+        StaffAccount account = accounts.findById(planner).orElseThrow();
+        account.withdraw(FIRST_AT.plusSeconds(3_600));
+        accounts.saveWithdrawal(account);
+
+        assertThat(queryAdapter.historyOf(twelveMonths, null, 10))
+                .filteredOn(entry -> entry.staffAccountId() == planner)
+                .singleElement()
+                .satisfies(entry -> {
+                    assertThat(entry.staffNickname()).isEqualTo("푸른바람");
+                    assertThat(entry.staffName()).isNull();
+                });
     }
 
     @Test

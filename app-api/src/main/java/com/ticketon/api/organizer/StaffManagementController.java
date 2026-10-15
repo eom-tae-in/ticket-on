@@ -9,6 +9,8 @@ import com.ticketon.application.organizer.port.in.LeaveOrganizerCommand;
 import com.ticketon.application.organizer.port.in.LeaveOrganizerUseCase;
 import com.ticketon.application.organizer.port.in.RemoveOperatorCommand;
 import com.ticketon.application.organizer.port.in.RemoveOperatorUseCase;
+import com.ticketon.application.organizer.port.in.TransferOwnershipCommand;
+import com.ticketon.application.organizer.port.in.TransferOwnershipUseCase;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -28,8 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/organizer/organizers/{organizerId}")
-@Tag(name = "운영진 관리", description = "운영진 목록 · 운영자 초대 · 내보내기 · 이 주최자에서 나가기 (docs/01 \"운영자 초대\", "
-        + "\"권한 두 가지\", docs/13 \"운영진 관리\")")
+@Tag(name = "운영진 관리", description = "운영진 목록 · 운영자 초대 · 내보내기 · 소유자 넘기기 · 이 주최자에서 나가기 (docs/01 "
+        + "\"운영자 초대\", \"권한 두 가지\", \"소유자 넘기기\", docs/13 \"운영진 관리\")")
 public class StaffManagementController {
 
     private static final String INVALID_ID_MESSAGE = "형식이 올바르지 않습니다.";
@@ -38,13 +40,16 @@ public class StaffManagementController {
     private final InviteOperatorUseCase inviteOperatorUseCase;
     private final RemoveOperatorUseCase removeOperatorUseCase;
     private final LeaveOrganizerUseCase leaveOrganizerUseCase;
+    private final TransferOwnershipUseCase transferOwnershipUseCase;
 
     public StaffManagementController(GetStaffListUseCase getStaffListUseCase, InviteOperatorUseCase inviteOperatorUseCase,
-            RemoveOperatorUseCase removeOperatorUseCase, LeaveOrganizerUseCase leaveOrganizerUseCase) {
+            RemoveOperatorUseCase removeOperatorUseCase, LeaveOrganizerUseCase leaveOrganizerUseCase,
+            TransferOwnershipUseCase transferOwnershipUseCase) {
         this.getStaffListUseCase = getStaffListUseCase;
         this.inviteOperatorUseCase = inviteOperatorUseCase;
         this.removeOperatorUseCase = removeOperatorUseCase;
         this.leaveOrganizerUseCase = leaveOrganizerUseCase;
+        this.transferOwnershipUseCase = transferOwnershipUseCase;
     }
 
     @Operation(summary = "운영진 목록", description = "그 주최자의 지금 운영진(소유자 · 운영자)을 닉네임 · 역할 · 소속 일시와 함께 돌려준다. "
@@ -76,6 +81,19 @@ public class StaffManagementController {
     public void remove(@CurrentStaff ActingStaff actingStaff,
             @PathVariable @Positive(message = INVALID_ID_MESSAGE) long staffAccountId) {
         removeOperatorUseCase.remove(new RemoveOperatorCommand(actingStaff, staffAccountId));
+    }
+
+    @Operation(summary = "소유자 넘기기", description = "소유자가 그 주최자의 운영자에게 소유자를 넘긴다. 관리자를 거치지 않는다. 받은 사람이 "
+            + "소유자가 되고 넘긴 사람은 운영자로 남는다(소유자는 늘 1명). 넘긴 뒤의 운영진 전원에게 '소유자 변경' 메일([주최])이 가고, 관리자 처리 "
+            + "목록에 '소유자 변경'(사후 확인)이 쌓인다. 운영자가 넘기려 하면 403 OWNER_ONLY_ACTION, 그 주최자의 운영진이 아니면 403 "
+            + "NOT_ORGANIZER_STAFF, 받을 사람이 그 주최자의 운영자가 아니면(소유자 자신 · 바깥 사람 · 나간 사람) 409 "
+            + "OWNERSHIP_RECEIVER_NOT_OPERATOR, 그 사이 같은 소유자가 먼저 넘겼으면 409 OWNERSHIP_ALREADY_TRANSFERRED, 받을 사람이 그 사이 "
+            + "나갔으면 409 MEMBERSHIP_ALREADY_ENDED. 소유자 변경 이력과 운영진 조작 기록에 남는다.")
+    @PostMapping("/staff/{staffAccountId}/ownership-transfer")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void transferOwnership(@CurrentStaff ActingStaff actingStaff,
+            @PathVariable @Positive(message = INVALID_ID_MESSAGE) long staffAccountId) {
+        transferOwnershipUseCase.transfer(new TransferOwnershipCommand(actingStaff, staffAccountId));
     }
 
     @Operation(summary = "이 주최자에서 나가기", description = "운영자가 그 주최자에서 나간다. 소속은 끝나도 이력으로 남고, 다른 주최자의 소속은 "

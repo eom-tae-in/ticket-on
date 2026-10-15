@@ -42,14 +42,15 @@ public class OrganizerHomeQueryPersistenceAdapter implements OrganizerHomeQueryP
 
     @Override
     public List<CurrentAffiliation> currentAffiliationsOf(long staffAccountId) {
-        return dsl.select(STAFF_MEMBERSHIP.ORGANIZER_ID, ORGANIZER.NAME, STAFF_MEMBERSHIP.ROLE, STAFF_MEMBERSHIP.STARTED_AT)
+        return dsl.select(STAFF_MEMBERSHIP.ORGANIZER_ID, ORGANIZER.NAME, STAFF_MEMBERSHIP.ROLE, STAFF_MEMBERSHIP.STARTED_AT,
+                        ORGANIZER.STATUS)
                 .from(STAFF_MEMBERSHIP)
                 .join(ORGANIZER).on(ORGANIZER.ID.eq(STAFF_MEMBERSHIP.ORGANIZER_ID))
                 .where(STAFF_MEMBERSHIP.STAFF_ACCOUNT_ID.eq(staffAccountId))
                 .and(STAFF_MEMBERSHIP.ENDED_AT.isNull())
                 .orderBy(STAFF_MEMBERSHIP.STARTED_AT, STAFF_MEMBERSHIP.ID)
                 .fetch(row -> new CurrentAffiliation(row.value1(), row.value2(), StaffRole.valueOf(row.value3()),
-                        row.value4().toInstant()));
+                        row.value4().toInstant(), OrganizerStatus.valueOf(row.value5())));
     }
 
     /** 제출 일시가 가장 늦은 신청 — 같으면 나중에 저장된 것. */

@@ -186,6 +186,26 @@ class PasswordResetTokenPersistenceAdapterTest {
     }
 
     @Nested
+    @DisplayName("탈퇴할 때 지우기")
+    class DeleteAll {
+
+        @Test
+        @DisplayName("그 계정의 링크를 쓴 것 · 대체된 것까지 모두 지우고, 같은 id의 다른 종류 계정 링크는 남긴다")
+        void deletesOnlyThatAccountsTokens() {
+            adapter.add(PasswordResetToken.issue(STAFF_TOKEN, junghoon, REQUESTED_AT));
+            adapter.replaceUnusedTokensOf(junghoon, REQUESTED_AT.plusSeconds(60));
+            adapter.add(PasswordResetToken.issue("staffBBBBBBBBBBBBBBBBBBBBBBBBBBB", junghoon, REQUESTED_AT.plusSeconds(60)));
+            adapter.add(PasswordResetToken.issue(FIRST_TOKEN, seoyun, REQUESTED_AT));
+
+            assertThat(adapter.deleteAllOf(junghoon)).isEqualTo(2);
+
+            assertThat(adapter.findByValue(AccountKind.STAFF, STAFF_TOKEN)).isEmpty();
+            assertThat(adapter.findByValue(AccountKind.STAFF, "staffBBBBBBBBBBBBBBBBBBBBBBBBBBB")).isEmpty();
+            assertThat(adapter.findByValue(AccountKind.AUDIENCE, FIRST_TOKEN)).isPresent();
+        }
+    }
+
+    @Nested
     @DisplayName("이전 링크 대체 — 새 링크를 보내면 쓸 수 있는 링크는 새 것 하나")
     class Replace {
 

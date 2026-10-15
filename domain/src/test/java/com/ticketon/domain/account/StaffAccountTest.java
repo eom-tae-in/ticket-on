@@ -11,6 +11,7 @@ import static com.ticketon.domain.account.StaffAccountFixtures.storedPendingAcco
 import static com.ticketon.domain.account.StaffAccountFixtures.storedWithdrawnAccount;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
@@ -204,6 +205,85 @@ class StaffAccountTest {
         @DisplayName("id는 1 이상이다")
         void rejectsNonPositiveId() {
             assertThatIllegalArgumentException().isThrownBy(() -> storedActiveAccount(0));
+            assertThatIllegalArgumentException().isThrownBy(() -> storedWithdrawnAccount(0));
+        }
+
+        @Test
+        @DisplayName("탈퇴한 계정은 개인정보와 함께 되살리지 않는다 — 탈퇴할 때 파기했으므로 닉네임 · 가입 일시 · 탈퇴 일시만으로 되살린다")
+        void withdrawnAccountRestoresWithoutPersonalInformation() {
+            assertThatIllegalArgumentException().isThrownBy(() -> StaffAccount.restore(7, personalInformation(), NICKNAME,
+                    PASSWORD_HASH, SIGNUP_TIME, StaffAccountStatus.WITHDRAWN, null));
+
+            Instant withdrawnAt = SIGNUP_TIME.plusSeconds(86_400);
+            StaffAccount account = StaffAccount.restoreWithdrawn(7, NICKNAME, SIGNUP_TIME, withdrawnAt);
+
+            assertThat(account.id()).hasValue(7);
+            assertThat(account.status()).isEqualTo(StaffAccountStatus.WITHDRAWN);
+            assertThat(account.nickname()).isEqualTo(NICKNAME);
+            assertThat(account.signedUpAt()).isEqualTo(SIGNUP_TIME);
+            assertThat(account.withdrawnAt()).contains(withdrawnAt);
+            assertThat(account.emailVerifiedAt()).isEmpty();
+            assertThat(account.canLogIn()).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("탈퇴")
+    class Withdraw {
+
+        private static final Instant WITHDRAWN_AT = SIGNUP_TIME.plusSeconds(30 * 86_400);
+
+        @Test
+        @DisplayName("활동 중인 계정이 탈퇴하면 이름 · 이메일 · 비밀번호 해시가 파기되고 닉네임 · 가입 일시만 남으며 로그인할 수 없다")
+        void destroysPersonalInformationAndKeepsNickname() {
+            StaffAccount account = storedActiveAccount(1);
+
+            account.withdraw(WITHDRAWN_AT);
+
+            assertThat(account.status()).isEqualTo(StaffAccountStatus.WITHDRAWN);
+            assertThat(account.isWithdrawn()).isTrue();
+            assertThat(account.withdrawnAt()).contains(WITHDRAWN_AT);
+            assertThat(account.nickname()).isEqualTo(NICKNAME);
+            assertThat(account.signedUpAt()).isEqualTo(SIGNUP_TIME);
+            assertThat(account.emailVerifiedAt()).isEmpty();
+            assertThat(account.canLogIn()).isFalse();
+            assertThat(account.canResetPassword()).isFalse();
+            assertThatIllegalStateException().isThrownBy(account::personalInformation);
+            assertThatIllegalStateException().isThrownBy(account::passwordHash);
+        }
+
+        @Test
+        @DisplayName("이미 탈퇴한 계정은 다시 탈퇴하지 못한다")
+        void rejectsWithdrawnAgain() {
+            StaffAccount account = storedActiveAccount(1);
+            account.withdraw(WITHDRAWN_AT);
+
+            assertRejected(() -> account.withdraw(WITHDRAWN_AT.plusSeconds(60)), AccountErrorCode.STAFF_WITHDRAWN);
+            assertRejected(() -> storedWithdrawnAccount(2).withdraw(WITHDRAWN_AT), AccountErrorCode.STAFF_WITHDRAWN);
+            assertThat(account.withdrawnAt()).contains(WITHDRAWN_AT);
+        }
+
+        @Test
+        @DisplayName("인증 대기 계정은 탈퇴하지 못한다 — 로그인할 수 없는 계정이라 탈퇴를 요청할 길도 없다")
+        void rejectsPending() {
+            StaffAccount account = storedPendingAccount(1);
+
+            assertRejected(() -> account.withdraw(WITHDRAWN_AT), AccountErrorCode.STAFF_NOT_ACTIVE);
+            assertThat(account.status()).isEqualTo(StaffAccountStatus.PENDING_VERIFICATION);
+            assertThat(account.personalInformation()).isEqualTo(personalInformation());
+        }
+
+        @Test
+        @DisplayName("탈퇴한 뒤에는 닉네임 변경 · 비밀번호 재설정 · 이메일 인증을 하지 못한다")
+        void withdrawnAccountCannotChange() {
+            StaffAccount account = storedActiveAccount(1);
+            account.withdraw(WITHDRAWN_AT);
+
+            assertRejected(() -> account.changeNickname(Nickname.of("푸른바람"), NicknameAvailability.AVAILABLE),
+                    AccountErrorCode.STAFF_WITHDRAWN);
+            assertRejected(() -> account.resetPassword(PASSWORD_HASH), AccountErrorCode.STAFF_WITHDRAWN);
+            assertRejected(() -> account.verifyEmail(WITHDRAWN_AT), AccountErrorCode.STAFF_WITHDRAWN);
+            assertThat(account.nickname()).isEqualTo(NICKNAME);
         }
     }
 

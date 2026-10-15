@@ -96,6 +96,28 @@ class AdminOperationRecordTest {
     }
 
     @Nested
+    @DisplayName("소유자 변경 확인 기록")
+    class OwnershipChangeConfirmed {
+
+        @Test
+        @DisplayName("누가(확인한 관리자) · 언제 · 무엇을(소유자 변경 확인) · 대상(소유자 변경 이력 id) · 요약(주최자명)을 남기고, 사유는 없다")
+        void recordsConfirmation() {
+            AccountRef admin = AccountRef.of(AccountKind.ADMIN, 2);
+
+            AdminOperationRecord record = AdminOperationRecord.ownershipChangeConfirmed(admin, 9,
+                    OrganizerName.of("극단 열두달"), OPERATED_AT);
+
+            assertThat(record.operator()).isEqualTo(admin);
+            assertThat(record.operatedAt()).isEqualTo(OPERATED_AT);
+            assertThat(record.kind()).isEqualTo(AdminOperationKind.CONFIRM_OWNERSHIP_CHANGE);
+            assertThat(record.targetKind()).isEqualTo(AdminOperationTargetKind.OWNERSHIP_CHANGE);
+            assertThat(record.targetId()).isEqualTo(9);
+            assertThat(record.summary()).isEqualTo("소유자 변경 확인 — 극단 열두달");
+            assertThat(record.reason()).isEmpty();
+        }
+    }
+
+    @Nested
     @DisplayName("한 줄의 규칙")
     class Rules {
 

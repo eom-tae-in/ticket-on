@@ -24,4 +24,11 @@ final class FakeStaffEmailVerificationTokenRepository implements StaffEmailVerif
     public Optional<StaffEmailVerificationToken> findByValue(String value) {
         return tokens.stream().filter(token -> token.value().equals(value)).findFirst();
     }
+
+    @Override
+    public int deleteAllOf(long staffAccountId) {
+        int before = tokens.size();
+        tokens.removeIf(token -> token.staffAccountId() == staffAccountId);
+        return before - tokens.size();
+    }
 }

@@ -9,6 +9,7 @@ import com.ticketon.api.account.AdminLoginController;
 import com.ticketon.api.security.SecurityConfiguration;
 import com.ticketon.application.account.port.in.LogInAdminUseCase;
 import com.ticketon.application.admin.port.in.ApproveOrganizerApplicationUseCase;
+import com.ticketon.application.admin.port.in.ConfirmOwnershipChangeUseCase;
 import com.ticketon.application.admin.port.in.GetAdminWorkQueueUseCase;
 import com.ticketon.application.admin.port.in.GetOrganizerApplicationReviewUseCase;
 import com.ticketon.application.admin.port.in.IssueAdminAccountUseCase;
@@ -30,10 +31,10 @@ import org.springframework.test.web.servlet.MockMvc;
  * 모양이 명세에 그대로 실리는지 본다. DB 없이 돈다.
  */
 @WebMvcTest(controllers = {AdminLoginController.class, AdminAccountController.class, AdminWorkQueueController.class,
-        OrganizerApplicationReviewController.class})
+        OrganizerApplicationReviewController.class, OwnershipChangeController.class})
 @Import(SecurityConfiguration.class)
 @ImportAutoConfiguration({SpringDocConfiguration.class, SpringDocConfigProperties.class, SpringDocWebMvcConfiguration.class})
-@DisplayName("관리자 로그인·관리자 계정 발급·처리 목록·주최자 심사 API 명세")
+@DisplayName("관리자 로그인·관리자 계정 발급·처리 목록·주최자 심사·소유자 변경 확인 API 명세")
 class AdminApiDocsTest {
 
     @Autowired
@@ -56,6 +57,21 @@ class AdminApiDocsTest {
 
     @MockitoBean
     private RejectOrganizerApplicationUseCase rejectOrganizerApplicationUseCase;
+
+    @MockitoBean
+    private ConfirmOwnershipChangeUseCase confirmOwnershipChangeUseCase;
+
+    @Test
+    @DisplayName("소유자 변경 사후 확인은 경로의 ownershipChangeId만 받고 본문 없이 204다")
+    void ownershipChangeConfirmationOperation() throws Exception {
+        String confirmationPath = "$.paths['/api/admin/ownership-changes/{ownershipChangeId}/confirmation']";
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(confirmationPath + ".post.parameters[*].name",
+                        containsInAnyOrder("ownershipChangeId")))
+                .andExpect(jsonPath(confirmationPath + ".post.responses['204']").exists())
+                .andExpect(jsonPath(confirmationPath + ".post.requestBody").doesNotExist());
+    }
 
     @Test
     @DisplayName("로그인은 200에 LogInAdminResponse(returnPath·grade)를 돌려주고, 요청은 email·password가 필수이고 returnPath는 고를 수 있다")
@@ -107,7 +123,7 @@ class AdminApiDocsTest {
                 .andExpect(jsonPath("$.components.schemas.AdminWorkItem.required",
                         containsInAnyOrder("kind", "targetId", "title", "receivedAt", "highlighted")))
                 .andExpect(jsonPath("$.components.schemas.AdminWorkItem.properties.kind.enum",
-                        containsInAnyOrder("ORGANIZER_APPLICATION")));
+                        containsInAnyOrder("ORGANIZER_APPLICATION", "OWNERSHIP_CHANGE")));
     }
 
     @Test

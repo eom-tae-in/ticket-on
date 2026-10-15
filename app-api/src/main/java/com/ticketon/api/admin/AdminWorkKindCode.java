@@ -3,14 +3,18 @@ package com.ticketon.api.admin;
 import com.ticketon.application.admin.query.AdminWorkKind;
 
 /**
- * 관리자 처리 목록의 요청 종류의 API 이름 — 화면 타입에 쓰인다. 화면은 종류로 처리 화면을 고른다(주최자 신청 → 주최자 심사).
+ * 관리자 처리 목록의 요청 종류의 API 이름 — 화면 타입에 쓰인다. 화면은 종류로 처리 화면을 고른다(주최자 신청 → 주최자 심사, 소유자 변경 →
+ * 사후 확인).
  * <p>
  * 안쪽 값을 바깥에 그대로 내보내지 않으려고 따로 둔다. 이름은 안쪽 종류({@link AdminWorkKind})와 같다. 종류는 그 기능의 이슈가 더한다.
  */
 public enum AdminWorkKindCode {
 
     /** 주최자 신청 — 대상 id는 신청서 id다. */
-    ORGANIZER_APPLICATION(AdminWorkKind.ORGANIZER_APPLICATION);
+    ORGANIZER_APPLICATION(AdminWorkKind.ORGANIZER_APPLICATION),
+
+    /** 소유자 변경(사후 확인) — 대상 id는 소유자 변경 이력 id다. 확인하면 목록에서 빠진다. */
+    OWNERSHIP_CHANGE(AdminWorkKind.OWNERSHIP_CHANGE);
 
     private final AdminWorkKind kind;
 

@@ -14,6 +14,6 @@ public enum StaffAccountStatus {
     /** 활동 — 이메일 인증을 마쳤다. */
     ACTIVE,
 
-    /** 탈퇴. */
+    /** 탈퇴 — 이름 · 이메일 · 비밀번호 해시는 파기했고 닉네임만 쥐고 있다. 로그인할 수 없다. */
     WITHDRAWN
 }

@@ -12,6 +12,11 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
 
 import com.ticketon.common.BusinessDayCalculator;
 import com.ticketon.common.HolidayCalendar;
+import com.ticketon.domain.account.Nickname;
+import com.ticketon.domain.account.PasswordHash;
+import com.ticketon.domain.account.StaffAccount;
+import com.ticketon.domain.account.StaffAccountStatus;
+import com.ticketon.domain.account.StaffPersonalInformation;
 import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -75,7 +80,7 @@ class OrganizerApplicationTest {
         void approvesUnderReview() {
             OrganizerApplication application = submitted();
 
-            application.approve(twelveMonthsUnderReview(), REVIEWED_AT);
+            application.approve(twelveMonthsUnderReview(), junghoon(), REVIEWED_AT);
 
             assertThat(application.status()).isEqualTo(OrganizerApplicationStatus.APPROVED);
             assertThat(application.reviewedAt()).contains(REVIEWED_AT);
@@ -87,7 +92,7 @@ class OrganizerApplicationTest {
         void activatesOrganizer() {
             Organizer organizer = twelveMonthsUnderReview();
 
-            submitted().approve(organizer, REVIEWED_AT);
+            submitted().approve(organizer, junghoon(), REVIEWED_AT);
 
             assertThat(organizer.status()).isEqualTo(OrganizerStatus.ACTIVE);
         }
@@ -95,7 +100,7 @@ class OrganizerApplicationTest {
         @Test
         @DisplayName("신청한 사람이 승인 일시부터 그 주최자의 소유자인 명단이 열린다 — 소유자 1명뿐이다")
         void applicantBecomesOwner() {
-            OrganizerStaff staff = submitted().approve(twelveMonthsUnderReview(), REVIEWED_AT);
+            OrganizerStaff staff = submitted().approve(twelveMonthsUnderReview(), junghoon(), REVIEWED_AT);
 
             assertThat(staff.organizerId()).isEqualTo(TWELVE_MONTHS_ORGANIZER);
             assertThat(staff.currentOwner()).hasValue(JUNGHOON);
@@ -107,14 +112,14 @@ class OrganizerApplicationTest {
         @DisplayName("이미 처리한 신청서는 다시 승인할 수 없다 — 주최자도 그대로다")
         void cannotApproveTwice() {
             OrganizerApplication approved = submitted();
-            approved.approve(twelveMonthsUnderReview(), REVIEWED_AT);
+            approved.approve(twelveMonthsUnderReview(), junghoon(), REVIEWED_AT);
             OrganizerApplication rejected = submitted();
             rejected.reject(UNREACHABLE, REVIEWED_AT);
             Organizer stillUnderReview = twelveMonthsUnderReview();
 
-            assertRejected(() -> approved.approve(stillUnderReview, REVIEWED_AT),
+            assertRejected(() -> approved.approve(stillUnderReview, junghoon(), REVIEWED_AT),
                     OrganizerErrorCode.APPLICATION_ALREADY_REVIEWED);
-            assertRejected(() -> rejected.approve(stillUnderReview, REVIEWED_AT),
+            assertRejected(() -> rejected.approve(stillUnderReview, junghoon(), REVIEWED_AT),
                     OrganizerErrorCode.APPLICATION_ALREADY_REVIEWED);
             assertThat(stillUnderReview.status()).isEqualTo(OrganizerStatus.UNDER_REVIEW);
         }
@@ -126,9 +131,37 @@ class OrganizerApplicationTest {
             Organizer active = Organizer.restore(TWELVE_MONTHS_ORGANIZER, OrganizerName.of("극단 열두달"),
                     OrganizerStatus.ACTIVE, OrganizerPublicProfile.empty());
 
-            assertRejected(() -> application.approve(active, REVIEWED_AT), OrganizerErrorCode.ORGANIZER_NOT_UNDER_REVIEW);
+            assertRejected(() -> application.approve(active, junghoon(), REVIEWED_AT), OrganizerErrorCode.ORGANIZER_NOT_UNDER_REVIEW);
             assertThat(application.status()).isEqualTo(OrganizerApplicationStatus.UNDER_REVIEW);
             assertThat(application.reviewedAt()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("신청한 운영진 로그인이 탈퇴했으면 승인하지 않는다(APPLICANT_WITHDRAWN) — 신청서 · 주최자가 그대로고 반려는 할 수 있다")
+        void withdrawnApplicantCannotBecomeOwner() {
+            OrganizerApplication application = submitted();
+            Organizer organizer = twelveMonthsUnderReview();
+            StaffAccount withdrawn = StaffAccount.restoreWithdrawn(JUNGHOON, Nickname.of("조용한고래"), SUBMITTED_AT,
+                    SUBMITTED_AT.plusSeconds(3_600));
+
+            assertRejected(() -> application.approve(organizer, withdrawn, REVIEWED_AT),
+                    OrganizerErrorCode.APPLICANT_WITHDRAWN);
+            assertThat(application.status()).isEqualTo(OrganizerApplicationStatus.UNDER_REVIEW);
+            assertThat(organizer.status()).isEqualTo(OrganizerStatus.UNDER_REVIEW);
+
+            application.reject(UNREACHABLE, REVIEWED_AT);
+            assertThat(application.status()).isEqualTo(OrganizerApplicationStatus.REJECTED);
+        }
+
+        @Test
+        @DisplayName("신청한 사람의 계정이 아니면 승인하지 않는다")
+        void applicantMustBeTheOneWhoApplied() {
+            OrganizerApplication application = submitted();
+            StaffAccount another = activeStaffAccount(JUNGHOON + 1);
+
+            assertThatIllegalArgumentException().isThrownBy(
+                    () -> application.approve(twelveMonthsUnderReview(), another, REVIEWED_AT));
+            assertThat(application.status()).isEqualTo(OrganizerApplicationStatus.UNDER_REVIEW);
         }
 
         @Test
@@ -138,7 +171,7 @@ class OrganizerApplicationTest {
             Organizer another = Organizer.restore(TWELVE_MONTHS_ORGANIZER + 1, OrganizerName.of("극단 열두달"),
                     OrganizerStatus.UNDER_REVIEW, OrganizerPublicProfile.empty());
 
-            assertThatIllegalArgumentException().isThrownBy(() -> application.approve(another, REVIEWED_AT));
+            assertThatIllegalArgumentException().isThrownBy(() -> application.approve(another, junghoon(), REVIEWED_AT));
             assertThat(application.status()).isEqualTo(OrganizerApplicationStatus.UNDER_REVIEW);
             assertThat(another.status()).isEqualTo(OrganizerStatus.UNDER_REVIEW);
         }
@@ -164,7 +197,7 @@ class OrganizerApplicationTest {
         @DisplayName("이미 처리한 신청서는 반려할 수 없다")
         void cannotRejectReviewed() {
             OrganizerApplication application = submitted();
-            application.approve(twelveMonthsUnderReview(), REVIEWED_AT);
+            application.approve(twelveMonthsUnderReview(), junghoon(), REVIEWED_AT);
 
             assertRejected(() -> application.reject(UNREACHABLE, REVIEWED_AT),
                     OrganizerErrorCode.APPLICATION_ALREADY_REVIEWED);
@@ -238,5 +271,16 @@ class OrganizerApplicationTest {
     private static Organizer twelveMonthsUnderReview() {
         return Organizer.restore(TWELVE_MONTHS_ORGANIZER, OrganizerName.of("극단 열두달"), OrganizerStatus.UNDER_REVIEW,
                 OrganizerPublicProfile.empty());
+    }
+
+    /** 신청한 박정훈의 운영진 로그인 — 이메일 인증을 마친 활동 계정. */
+    private static StaffAccount junghoon() {
+        return activeStaffAccount(JUNGHOON);
+    }
+
+    private static StaffAccount activeStaffAccount(long id) {
+        return StaffAccount.restore(id, StaffPersonalInformation.of("박정훈", "junghoon@example.com"),
+                Nickname.of("조용한고래"), new PasswordHash("{test}hashed-password"), SUBMITTED_AT.minusSeconds(86_400),
+                StaffAccountStatus.ACTIVE, SUBMITTED_AT.minusSeconds(86_000));
     }
 }

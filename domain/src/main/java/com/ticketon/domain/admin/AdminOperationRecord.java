@@ -18,7 +18,7 @@ import java.util.Optional;
  * <p>
  * 요약은 사람이 목록에서 읽는 한 줄이다(운영진 쪽 예: "초대권 10장 발권 · 운영자 김○○", docs/01). 조작마다 만드는 방법을 이 클래스의
  * 정적 메서드로 둔다({@link #adminAccountIssued}, {@link #organizerApplicationApproved},
- * {@link #organizerApplicationRejected}).
+ * {@link #organizerApplicationRejected}, {@link #ownershipChangeConfirmed}).
  * 사유는 관리자가 적은 사유가 있는 조작(정지 사유, 반려 사유 등)만 남기고, 없으면 비어 있다.
  * <p>
  * 보관 기간은 문서에 정해져 있지 않아 지우지 않는다(docs/11 "데이터 보관"에 없음 — 정해지면 파기 작업을 더한다).
@@ -117,6 +117,20 @@ public final class AdminOperationRecord {
         Objects.requireNonNull(reason, "reason");
         return of(reviewer, AdminOperationKind.REJECT_ORGANIZER_APPLICATION, applicationId,
                 "주최자 신청 반려 — " + organizerName.value(), reason.text(), rejectedAt);
+    }
+
+    /**
+     * 소유자 변경 사후 확인 기록 — 대상은 확인한 소유자 변경 이력이고, 요약은 "소유자 변경 확인 — 주최자명"이다. 사유는 없다.
+     *
+     * @param admin             확인한 관리자
+     * @param ownershipChangeId 확인한 소유자 변경 이력 id
+     * @param organizerName     소유자가 바뀐 주최자의 이름
+     */
+    public static AdminOperationRecord ownershipChangeConfirmed(AccountRef admin, long ownershipChangeId,
+            OrganizerName organizerName, Instant confirmedAt) {
+        Objects.requireNonNull(organizerName, "organizerName");
+        return of(admin, AdminOperationKind.CONFIRM_OWNERSHIP_CHANGE, ownershipChangeId,
+                "소유자 변경 확인 — " + organizerName.value(), null, confirmedAt);
     }
 
     /** 조작한 관리자. */

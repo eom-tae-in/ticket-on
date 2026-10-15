@@ -42,6 +42,13 @@ public class StaffEmailVerificationTokenPersistenceAdapter implements StaffEmail
                         token.getIssuedAt().toInstant(), token.getExpiresAt().toInstant()));
     }
 
+    @Override
+    public int deleteAllOf(long staffAccountId) {
+        return dsl.deleteFrom(STAFF_EMAIL_VERIFICATION_TOKEN)
+                .where(STAFF_EMAIL_VERIFICATION_TOKEN.STAFF_ACCOUNT_ID.eq(staffAccountId))
+                .execute();
+    }
+
     private OffsetDateTime toDatabaseTime(Instant instant) {
         return instant.atOffset(ZoneOffset.UTC);
     }

@@ -40,7 +40,9 @@ class AdminGradeTest {
             Map.entry(AdminAction.SEND_MARKETING_EMAIL, true),
             // '최고 관리자' 줄에 더해진 일 — 최고 관리자만
             Map.entry(AdminAction.PERMANENTLY_SUSPEND_ORGANIZER, false),
-            Map.entry(AdminAction.ISSUE_ADMIN_ACCOUNT, false));
+            Map.entry(AdminAction.ISSUE_ADMIN_ACCOUNT, false),
+            // 표 밖에서 다른 문서가 관리자에게 맡긴 일 — 두 등급 모두
+            Map.entry(AdminAction.CONFIRM_OWNERSHIP_CHANGE, true));
 
     static Stream<Arguments> permissionTable() {
         return ADMIN_CAN.entrySet().stream().map(entry -> Arguments.of(entry.getKey(), entry.getValue()));

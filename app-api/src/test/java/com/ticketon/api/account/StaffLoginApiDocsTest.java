@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ticketon.api.security.SecurityConfiguration;
 import com.ticketon.application.account.port.in.ChangeStaffNicknameUseCase;
 import com.ticketon.application.account.port.in.LogInStaffUseCase;
+import com.ticketon.application.account.port.in.WithdrawStaffAccountUseCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springdoc.core.configuration.SpringDocConfiguration;
@@ -38,6 +39,19 @@ class StaffLoginApiDocsTest {
 
     @MockitoBean
     private ChangeStaffNicknameUseCase changeStaffNicknameUseCase;
+
+    @MockitoBean
+    private WithdrawStaffAccountUseCase withdrawStaffAccountUseCase;
+
+    @Test
+    @DisplayName("운영진 로그인 탈퇴는 경로 · 본문 없이 204다")
+    void withdrawalOperation() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/organizer/account/withdrawal'].post.responses['204']").exists())
+                .andExpect(jsonPath("$.paths['/api/organizer/account/withdrawal'].post.parameters").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/organizer/account/withdrawal'].post.requestBody").doesNotExist());
+    }
 
     @Test
     @DisplayName("로그인은 200에 LogInStaffResponse(returnPath)를 돌려주고, 요청은 email·password가 필수이고 returnPath는 고를 수 있다")

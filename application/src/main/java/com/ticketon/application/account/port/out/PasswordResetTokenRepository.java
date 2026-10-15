@@ -17,6 +17,7 @@ import java.util.Optional;
  * <ul>
  *   <li>비밀번호 찾기: 계정 잠금 → 이전 링크 대체 → 새 링크 저장</li>
  *   <li>비밀번호 재설정: 계정 잠금 → 링크 사용 저장 → 계정 비밀번호 저장</li>
+ *   <li>탈퇴: 계정 잠금 → 계정 줄 저장 → 링크 지우기</li>
  * </ul>
  * 같은 계정의 두 요청은 잠금에서 차례를 기다린다. 비밀번호 찾기 둘이 엇갈려 쓸 수 있는 링크가 둘 남는 일이 없고, 찾기와 재설정이
  * 서로 반대 순서로 줄을 잠가 교착(PostgreSQL 40P01)으로 한쪽이 끊기는 일도 없다. 잠금은 트랜잭션이 끝날 때 풀린다.
@@ -58,4 +59,13 @@ public interface PasswordResetTokenRepository {
      *                           비밀번호 찾기를 다시 해 새 링크로 대체됐으면({@code PASSWORD_RESET_LINK_REPLACED})
      */
     void saveUse(PasswordResetToken usedToken);
+
+    /**
+     * 그 계정의 재설정 링크를 모두 지운다(쓴 링크 · 대체된 링크 포함) — 계정을 탈퇴할 때(회원 탈퇴 시 법정 보존 대상 외 즉시 파기,
+     * docs/11 "데이터 보관"). 같은 트랜잭션에서 {@link #lockAccount}로 계정을 잠근 뒤에 부른다(위 "잠금 순서").
+     *
+     * @param account 탈퇴하는 계정 — 관객 계정 또는 운영진 로그인
+     * @return 지운 링크 수
+     */
+    int deleteAllOf(AccountRef account);
 }

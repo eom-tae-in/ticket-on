@@ -45,10 +45,9 @@ final class StaffAccountFixtures {
                 StaffAccountStatus.ACTIVE, SIGNUP_TIME.plusSeconds(300));
     }
 
-    /** 저장소에서 읽은 탈퇴한 계정. */
+    /** 저장소에서 읽은 탈퇴한 계정 — 이름 · 이메일 · 비밀번호 해시는 파기돼 없고 닉네임만 남았다. */
     static StaffAccount storedWithdrawnAccount(long id) {
-        return StaffAccount.restore(id, personalInformation(), NICKNAME, PASSWORD_HASH, SIGNUP_TIME,
-                StaffAccountStatus.WITHDRAWN, SIGNUP_TIME.plusSeconds(300));
+        return StaffAccount.restoreWithdrawn(id, NICKNAME, SIGNUP_TIME, SIGNUP_TIME.plusSeconds(86_400));
     }
 
     /** 규칙 위반으로 막히고, 그 오류 코드가 기대한 것인지 본다. */

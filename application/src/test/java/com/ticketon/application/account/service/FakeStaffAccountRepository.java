@@ -21,8 +21,8 @@ import java.util.stream.Stream;
 
 /**
  * 메모리 운영진 계정 저장소 — 저장소 약속을 표처럼 지킨다: 탈퇴하지 않은 계정 사이에서 이메일(대소문자 무시)이 하나, 모든 계정 사이에서
- * 닉네임이 하나, 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만, 닉네임·비밀번호 저장은 활동 중일 때만,
- * 이메일로 찾을 때 탈퇴한 계정은 빼고. 저장소에 물은 횟수를 센다.
+ * 닉네임이 하나, 읽을 때마다 새 객체(저장하지 않은 변경은 남지 않음), 인증 저장은 인증 대기일 때만, 닉네임·비밀번호·탈퇴 저장은 활동
+ * 중일 때만, 이메일로 찾을 때 탈퇴한 계정은 빼고. 저장소에 물은 횟수를 센다.
  */
 final class FakeStaffAccountRepository implements StaffAccountRepository {
 
@@ -41,15 +41,6 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
     /** 다음 닉네임 저장 직전에 다른 운영진이 같은 닉네임을 먼저 저장한 것처럼. */
     void letAnotherNicknameChangeWinNextSave() {
         anotherNicknameChangeWinsNextSave = true;
-    }
-
-    /** 저장된 계정을 바꿔 둔다 — 아직 저장 기능이 없는 탈퇴가 만들 상태를 흉내 낸다. */
-    void replace(StaffAccount changedAccount) {
-        long id = changedAccount.id().orElseThrow();
-        if (!accounts.containsKey(id)) {
-            throw new IllegalArgumentException("저장된 적 없는 계정: " + id);
-        }
-        accounts.put(id, copyOf(changedAccount, id));
     }
 
     List<StaffAccount> savedAccounts() {
@@ -95,6 +86,12 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
     @Override
     public Optional<StaffAccount> findById(long id) {
         return Optional.ofNullable(accounts.get(id)).map(account -> copyOf(account, id));
+    }
+
+    /** 메모리라 잠그지 않는다 — 잠금은 저장 어댑터 테스트가 본다. */
+    @Override
+    public Optional<StaffAccount> findByIdForUpdate(long id) {
+        return findById(id);
     }
 
     @Override
@@ -144,6 +141,15 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
         accounts.put(id, copyOf(changedAccount, id));
     }
 
+    @Override
+    public void saveWithdrawal(StaffAccount withdrawnAccount) {
+        long id = withdrawnAccount.id().getAsLong();
+        if (accounts.get(id).status() != StaffAccountStatus.ACTIVE) {
+            throw new ConflictException(AccountErrorCode.STAFF_WITHDRAWN, "탈퇴 경합(흉내)");
+        }
+        accounts.put(id, copyOf(withdrawnAccount, id));
+    }
+
     private Stream<StaffAccount> registeredAccounts() {
         return accounts.values().stream().filter(account -> account.status() != StaffAccountStatus.WITHDRAWN);
     }
@@ -153,6 +159,10 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
     }
 
     private static StaffAccount copyOf(StaffAccount account, long id) {
+        if (account.isWithdrawn()) {
+            return StaffAccount.restoreWithdrawn(id, account.nickname(), account.signedUpAt(),
+                    account.withdrawnAt().orElseThrow());
+        }
         return StaffAccount.restore(id, account.personalInformation(), account.nickname(), account.passwordHash(),
                 account.signedUpAt(), account.status(), account.emailVerifiedAt().orElse(null));
     }

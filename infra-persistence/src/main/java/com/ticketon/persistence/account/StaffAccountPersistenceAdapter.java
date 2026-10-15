@@ -45,6 +45,10 @@ import org.springframework.stereotype.Component;
  *
  * <h2>이메일 대소문자</h2>
  * email 칸은 적은 그대로 두고, 비교는 PostgreSQL lower()로 소문자로 바꾼 email_lowercase로 한다(관객 계정과 같다).
+ *
+ * <h2>탈퇴</h2>
+ * 탈퇴하면 줄은 남기고 이름 · 이메일 · 비밀번호 해시 · 이메일 인증 일시를 지운다(V13). 닉네임과 가입 일시는 남는다. 같은 계정의 탈퇴가 거의
+ * 동시에 두 번 들어와도 {@code UPDATE … WHERE status = 'ACTIVE'}가 하나만 통과시킨다.
  */
 @Component
 public class StaffAccountPersistenceAdapter implements StaffAccountRepository {
@@ -112,6 +116,16 @@ public class StaffAccountPersistenceAdapter implements StaffAccountRepository {
                 .map(this::toAccount);
     }
 
+    /** {@code SELECT … FOR UPDATE}로 그 계정 줄을 트랜잭션이 끝날 때까지 잠근다. */
+    @Override
+    public Optional<StaffAccount> findByIdForUpdate(long id) {
+        return dsl.selectFrom(STAFF_ACCOUNT)
+                .where(STAFF_ACCOUNT.ID.eq(id))
+                .forUpdate()
+                .fetchOptional()
+                .map(this::toAccount);
+    }
+
     /** 유일 색인(탈퇴하지 않은 계정 사이에서 소문자 이메일이 하나)이 있어 많아야 한 줄이다. */
     @Override
     public Optional<StaffAccount> findRegisteredByEmail(EmailAddress email) {
@@ -159,6 +173,27 @@ public class StaffAccountPersistenceAdapter implements StaffAccountRepository {
         }
     }
 
+    @Override
+    public void saveWithdrawal(StaffAccount withdrawnAccount) {
+        long id = withdrawnAccount.id().orElseThrow(() -> new IllegalArgumentException("저장하지 않은 계정입니다"));
+        Instant withdrawnAt = withdrawnAccount.withdrawnAt()
+                .orElseThrow(() -> new IllegalArgumentException("탈퇴하지 않은 계정입니다: " + id));
+        int updatedRows = dsl.update(STAFF_ACCOUNT)
+                .set(STAFF_ACCOUNT.STATUS, StaffAccountStatus.WITHDRAWN.name())
+                .set(STAFF_ACCOUNT.WITHDRAWN_AT, toDatabaseTime(withdrawnAt))
+                .setNull(STAFF_ACCOUNT.NAME)
+                .setNull(STAFF_ACCOUNT.EMAIL)
+                .setNull(STAFF_ACCOUNT.EMAIL_LOWERCASE)
+                .setNull(STAFF_ACCOUNT.PASSWORD_HASH)
+                .setNull(STAFF_ACCOUNT.EMAIL_VERIFIED_AT)
+                .where(STAFF_ACCOUNT.ID.eq(id))
+                .and(STAFF_ACCOUNT.STATUS.eq(StaffAccountStatus.ACTIVE.name()))
+                .execute();
+        if (updatedRows == 0) {
+            throw new ConflictException(AccountErrorCode.STAFF_WITHDRAWN, "탈퇴 경합 — 활동 중이 아니게 된 운영진 계정: " + id);
+        }
+    }
+
     /** 유일 색인에 막히면 닉네임 충돌로 바꾼다. 그 밖의 오류는 그대로 내보낸다. */
     private int updateNickname(long id, Nickname nickname) {
         try {
@@ -196,6 +231,10 @@ public class StaffAccountPersistenceAdapter implements StaffAccountRepository {
     }
 
     private StaffAccount toAccount(StaffAccountRecord account) {
+        if (StaffAccountStatus.valueOf(account.getStatus()) == StaffAccountStatus.WITHDRAWN) {
+            return StaffAccount.restoreWithdrawn(account.getId(), new Nickname(account.getNickname()),
+                    account.getSignedUpAt().toInstant(), account.getWithdrawnAt().toInstant());
+        }
         StaffPersonalInformation personalInformation = new StaffPersonalInformation(account.getName(),
                 new EmailAddress(account.getEmail()));
         Instant emailVerifiedAt = account.getEmailVerifiedAt() == null ? null : account.getEmailVerifiedAt().toInstant();

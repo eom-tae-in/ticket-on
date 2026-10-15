@@ -1,6 +1,7 @@
 package com.ticketon.domain.organizer;
 
 import com.ticketon.common.BusinessDayCalculator;
+import com.ticketon.domain.account.StaffAccount;
 import com.ticketon.domain.error.RuleViolationException;
 import java.time.Instant;
 import java.util.Objects;
@@ -114,23 +115,35 @@ public final class OrganizerApplication {
      * 승인한다 — 심사받는 주최자가 활동이 되고({@link Organizer#approve}), 신청한 사람이 그 주최자의 소유자가 된다
      * ({@link OrganizerStaff#startWithOwner}, docs/01 "승인되면 신청한 사람이 소유자가 되고 행사 개설 가능").
      * <p>
-     * 신청서가 심사 중인지 → 주최자가 심사 중인지 순서로 보고, 둘 다 통과해야 바꾼다 — 한쪽만 승인되는 일이 없다.
+     * 신청서가 심사 중인지 → 신청한 운영진 로그인이 탈퇴하지 않았는지 → 주최자가 심사 중인지 순서로 보고, 모두 통과해야 바꾼다 — 한쪽만 승인되는
+     * 일이 없다. 탈퇴한 계정은 소유자가 될 수 없다({@link OrganizerErrorCode#APPLICANT_WITHDRAWN}).
      * 바뀐 신청서·주최자와 돌려준 명단을 저장하는 일은 유스케이스가 한다.
      *
      * @param organizer 이 신청서가 가리키는 주최자 — 저장소에서 읽은 것
+     * @param applicant 신청한 사람의 운영진 로그인 — 저장소에서 잠그고 읽은 것
      * @param now       승인 일시 — 신청서의 처리 일시이자 소유자 소속의 시작
      * @return 신청한 사람 한 명이 소유자인 운영진 명단
      * @throws RuleViolationException   이미 승인·반려한 신청서면({@link OrganizerErrorCode#APPLICATION_ALREADY_REVIEWED}),
+     *                                  신청한 운영진 로그인이 탈퇴했으면({@link OrganizerErrorCode#APPLICANT_WITHDRAWN}),
      *                                  주최자가 심사 중이 아니면({@link OrganizerErrorCode#ORGANIZER_NOT_UNDER_REVIEW})
-     * @throws IllegalArgumentException 이 신청서가 가리키는 주최자가 아니면
+     * @throws IllegalArgumentException 이 신청서가 가리키는 주최자나 신청한 사람의 계정이 아니면
      */
-    public OrganizerStaff approve(Organizer organizer, Instant now) {
+    public OrganizerStaff approve(Organizer organizer, StaffAccount applicant, Instant now) {
         Objects.requireNonNull(organizer, "organizer");
+        Objects.requireNonNull(applicant, "applicant");
         Objects.requireNonNull(now, "now");
         requireUnderReview();
         if (organizer.id().isEmpty() || organizer.id().getAsLong() != organizerId) {
             throw new IllegalArgumentException("신청서 " + id + "가 가리키는 주최자(" + organizerId + ")가 아닙니다: "
                     + organizer.id());
+        }
+        if (applicant.id().isEmpty() || applicant.id().getAsLong() != applicantStaffAccountId) {
+            throw new IllegalArgumentException("신청서 " + id + "를 낸 사람(" + applicantStaffAccountId + ")의 계정이 아닙니다: "
+                    + applicant.id());
+        }
+        if (applicant.isWithdrawn()) {
+            throw new RuleViolationException(OrganizerErrorCode.APPLICANT_WITHDRAWN,
+                    "신청서 " + id + ", 탈퇴한 신청자 " + applicantStaffAccountId);
         }
         organizer.approve();
         status = OrganizerApplicationStatus.APPROVED;

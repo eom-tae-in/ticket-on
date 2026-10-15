@@ -114,6 +114,25 @@ class StaffEmailVerificationTokenPersistenceAdapterTest {
     }
 
     @Test
+    @DisplayName("탈퇴할 때 그 계정의 링크를 모두 지우면 다른 계정의 링크는 남고, 지운 링크는 발급한 적 없는 값처럼 찾지 못한다")
+    void deletesAllTokensOfAccount() {
+        StaffAccount another = StaffAccount.signUp(StaffPersonalInformation.of("이도현", "dohyun@example.com"),
+                Nickname.of("밤의기타"), PASSWORD_HASH, EmailAvailability.AVAILABLE, NicknameAvailability.AVAILABLE,
+                SIGNUP_TIME);
+        long anotherAccountId = new StaffAccountPersistenceAdapter(dsl).add(another).id().getAsLong();
+        adapter.add(StaffEmailVerificationToken.issue(TOKEN_VALUE, staffAccountId, SIGNUP_TIME));
+        adapter.add(StaffEmailVerificationToken.issue("staffBBBBBBBBBBBBBBBBBBBBBBBBBBB", staffAccountId,
+                SIGNUP_TIME.plusSeconds(60)));
+        adapter.add(StaffEmailVerificationToken.issue("staffCCCCCCCCCCCCCCCCCCCCCCCCCCC", anotherAccountId, SIGNUP_TIME));
+
+        assertThat(adapter.deleteAllOf(staffAccountId)).isEqualTo(2);
+
+        assertThat(adapter.findByValue(TOKEN_VALUE)).isEmpty();
+        assertThat(adapter.findByValue("staffCCCCCCCCCCCCCCCCCCCCCCCCCCC")).isPresent();
+        assertThat(adapter.deleteAllOf(staffAccountId)).isZero();
+    }
+
+    @Test
     @DisplayName("없는 운영진 계정의 링크는 표가 받지 않는다")
     void rejectsTokenOfUnknownAccount() {
         assertThatThrownBy(() -> adapter.add(StaffEmailVerificationToken.issue(TOKEN_VALUE, staffAccountId + 1, SIGNUP_TIME)))

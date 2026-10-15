@@ -12,6 +12,7 @@ import com.ticketon.application.organizer.port.in.GetStaffListUseCase;
 import com.ticketon.application.organizer.port.in.InviteOperatorUseCase;
 import com.ticketon.application.organizer.port.in.LeaveOrganizerUseCase;
 import com.ticketon.application.organizer.port.in.RemoveOperatorUseCase;
+import com.ticketon.application.organizer.port.in.TransferOwnershipUseCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springdoc.core.configuration.SpringDocConfiguration;
@@ -52,6 +53,9 @@ class StaffManagementApiDocsTest {
 
     @MockitoBean
     private LeaveOrganizerUseCase leaveOrganizerUseCase;
+
+    @MockitoBean
+    private TransferOwnershipUseCase transferOwnershipUseCase;
 
     @MockitoBean
     private AcceptStaffInvitationUseCase acceptStaffInvitationUseCase;
@@ -100,6 +104,18 @@ class StaffManagementApiDocsTest {
                 .andExpect(jsonPath(ORGANIZER_PATH + "/departure'].post.parameters[*].name",
                         containsInAnyOrder("organizerId")))
                 .andExpect(jsonPath(ORGANIZER_PATH + "/departure'].post.responses['204']").exists());
+    }
+
+    @Test
+    @DisplayName("소유자 넘기기는 경로의 organizerId · staffAccountId(받을 운영자)만 받고 본문 없이 204다")
+    void ownershipTransferOperation() throws Exception {
+        String transferPath = ORGANIZER_PATH + "/staff/{staffAccountId}/ownership-transfer']";
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(transferPath + ".post.parameters[*].name",
+                        containsInAnyOrder("organizerId", "staffAccountId")))
+                .andExpect(jsonPath(transferPath + ".post.responses['204']").exists())
+                .andExpect(jsonPath(transferPath + ".post.requestBody").doesNotExist());
     }
 
     @Test

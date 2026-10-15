@@ -1,28 +1,45 @@
 package com.ticketon.api.account;
 
 import com.ticketon.api.security.CurrentAccount;
+import com.ticketon.api.security.SessionLogin;
 import com.ticketon.application.account.port.in.ChangeStaffNicknameUseCase;
+import com.ticketon.application.account.port.in.WithdrawStaffAccountCommand;
+import com.ticketon.application.account.port.in.WithdrawStaffAccountUseCase;
 import com.ticketon.domain.account.AccountRef;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 내 운영진 로그인 계정 — 운영진 영역(/api/organizer)이라 운영진으로 로그인해야 열린다(api/security).
+ * <p>
+ * 탈퇴하면 유스케이스가 그 계정의 세션을 저장소에서 모두 끊고, 여기서 지금 세션도 로그아웃처럼 끝낸다(세션 쿠키 만료) — 끊긴 세션이 요청 끝에
+ * 다시 저장되지 않게.
  */
 @RestController
 @RequestMapping("/api/organizer/account")
-@Tag(name = "운영진 계정", description = "내 닉네임 변경 (docs/13 \"내 프로필\", docs/99 C \"운영진 닉네임 — 변경 가능\")")
+@Tag(name = "운영진 계정", description = "내 닉네임 변경 · 운영진 로그인 탈퇴 (docs/13 \"내 프로필\", docs/99 C \"운영진 닉네임 — 변경 가능\", "
+        + "docs/01 \"탈퇴와 주최자 닫기\")")
 public class StaffAccountController {
 
     private final ChangeStaffNicknameUseCase changeStaffNicknameUseCase;
+    private final WithdrawStaffAccountUseCase withdrawStaffAccountUseCase;
+    private final SessionLogin sessionLogin;
 
-    public StaffAccountController(ChangeStaffNicknameUseCase changeStaffNicknameUseCase) {
+    public StaffAccountController(ChangeStaffNicknameUseCase changeStaffNicknameUseCase,
+            WithdrawStaffAccountUseCase withdrawStaffAccountUseCase, SessionLogin sessionLogin) {
         this.changeStaffNicknameUseCase = changeStaffNicknameUseCase;
+        this.withdrawStaffAccountUseCase = withdrawStaffAccountUseCase;
+        this.sessionLogin = sessionLogin;
     }
 
     @Operation(summary = "닉네임 변경", description = "로그인한 운영진의 닉네임을 바꾼다. 참여 이력은 그대로 따라간다. 지금 닉네임과 같으면 그대로 돌려준다. "
@@ -32,5 +49,18 @@ public class StaffAccountController {
     public StaffNicknameResponse changeNickname(@CurrentAccount AccountRef account,
             @Valid @RequestBody ChangeStaffNicknameRequest request) {
         return StaffNicknameResponse.from(changeStaffNicknameUseCase.changeNickname(request.toCommand(account)));
+    }
+
+    @Operation(summary = "운영진 로그인 탈퇴", description = "로그인한 운영진이 탈퇴한다. 운영자로 소속된 주최자에서는 모두 빠지고(소속 이력은 남는다), "
+            + "이름 · 이메일 · 비밀번호는 바로 파기되며 닉네임은 남는다. 그 계정의 로그인 세션은 다른 기기까지 모두 바로 끊긴다. 같은 이메일로 다시 "
+            + "가입할 수 있다. 소유자로 남은 주최자가 있으면 409 OWNER_MUST_HAND_OVER_FIRST(먼저 소유자를 넘기거나 주최자를 닫아야 한다), "
+            + "이미 탈퇴했으면 409 STAFF_WITHDRAWN, 거의 동시에 소속이 먼저 끝나 저장에서 지면 409 MEMBERSHIP_ALREADY_ENDED. 로그인하지 않았거나 "
+            + "세션이 끝났으면 401, 운영진이 아닌 계정이면 403이다. 주최자마다 운영진 조작 기록에 남는다.")
+    @PostMapping("/withdrawal")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void withdraw(@CurrentAccount AccountRef account, HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
+        withdrawStaffAccountUseCase.withdraw(new WithdrawStaffAccountCommand(account));
+        sessionLogin.logOut(httpRequest, httpResponse);
     }
 }

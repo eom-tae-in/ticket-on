@@ -54,6 +54,14 @@ class LeaveOrganizerServiceTest {
     }
 
     @Test
+    @DisplayName("나가는 사람의 계정 줄을 먼저 잠근다 — 같은 사람의 운영진 로그인 탈퇴와 같은 잠금 순서(계정 줄 → 소속 줄)")
+    void locksOwnAccountFirst() {
+        service.leave(new LeaveOrganizerCommand(acting(PLANNER, scene.twelveMonths)));
+
+        assertThat(scene.staffAccountRepository.lockedAccountIds()).containsExactly(PLANNER);
+    }
+
+    @Test
     @DisplayName("한 주최자에서 나가도 다른 주최자의 소속은 그대로다")
     void leavingOneOrganizerKeepsOthers() {
         service.leave(new LeaveOrganizerCommand(acting(DOHYUN, scene.lateSummer)));
