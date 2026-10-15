@@ -14,5 +14,8 @@ public enum AdminOperationTargetKind {
     ORGANIZER_APPLICATION,
 
     /** 소유자 변경 이력 — 소유자를 넘긴 한 건. */
-    OWNERSHIP_CHANGE
+    OWNERSHIP_CHANGE,
+
+    /** 소유자 이전 신청 — 소유자와 연락이 끊겨 운영자가 낸 신청 한 건. */
+    OWNERSHIP_CLAIM
 }

@@ -28,6 +28,8 @@ import java.util.Set;
  *       주최자 상태까지 함께 보는 {@link StaffPermission#check}로 확인한다.</li>
  *   <li>{@link #addOperator 운영자 들이기} — 초대를 수락한 사람이 운영자가 된다. 운영자는 심사를 받지 않는다.</li>
  *   <li>{@link #transferOwnership 소유자 넘기기} — 받는 사람은 이미 그 주최자의 운영자여야 하고, 넘긴 사람은 운영자로 남는다.</li>
+ *   <li>{@link #reassignOwnershipByAdmin 관리자의 소유자 이전} — 소유자와 연락이 끊겼을 때 운영자의 신청을 관리자가 승인해 바꾼다. 받는 사람과
+ *       옛 소유자의 규칙은 소유자 넘기기와 같다.</li>
  *   <li>{@link #leave 나가기}·{@link #removeOperator 내보내기} — 운영자는 언제든 나가고, 소유자가 내보낸다. 소유자는 먼저 넘겨야 나간다.</li>
  * </ul>
  * 주최자 상태(심사 중 · 닫힘 등)는 {@link Organizer}가 본다. 시각은 인자로 받는다.
@@ -125,15 +127,35 @@ public final class OrganizerStaff {
     public OwnershipTransfer transferOwnership(long requestedByStaffAccountId, long newOwnerStaffAccountId, Instant now) {
         Objects.requireNonNull(now, "now");
         requirePermission(requestedByStaffAccountId, StaffAction.TRANSFER_OWNERSHIP);
-        StaffMembership receiver = activeMembershipOf(newOwnerStaffAccountId)
-                .filter(membership -> membership.role() == StaffRole.OPERATOR)
-                .orElseThrow(() -> new RuleViolationException(OrganizerErrorCode.OWNERSHIP_RECEIVER_NOT_OPERATOR,
-                        "주최자 " + organizerId + ", 받는 사람 " + newOwnerStaffAccountId));
+        StaffMembership receiver = operatorMembershipToReceive(newOwnerStaffAccountId);
         StaffMembership owner = activeMembershipOf(requestedByStaffAccountId).orElseThrow();
-        changeRole(owner, StaffRole.OPERATOR, now);
-        changeRole(receiver, StaffRole.OWNER, now);
-        requireConsistent();
-        return new OwnershipTransfer(organizerId, requestedByStaffAccountId, newOwnerStaffAccountId, now);
+        return handOver(owner, receiver, now);
+    }
+
+    /**
+     * 관리자가 소유자를 바꾼다 — 소유자와 연락이 끊겨 넘겨줄 사람이 없을 때, 운영자가 신청하고 관리자가 확인한 뒤 바꾼다(docs/01 "소유자 넘기기 —
+     * 소유자와 연락이 끊긴 경우", docs/11 "대표가 바뀔 때"). 소유자 이전 신청을 승인할 때({@link OwnershipClaim#approve}) 부른다.
+     * <ul>
+     *   <li>소유자 본인의 요청이 아니므로 운영진 권한은 보지 않는다 — 관리자의 권한은 관리자 계정이 본다.</li>
+     *   <li><b>누구의 자리를 옮기는지 분명해야 한다.</b> 그 사람이 지금 소유자여야 한다 — 그 사이 소유자가 바뀌었으면 바꾸지 않는다.</li>
+     *   <li>받는 사람은 <b>이미 이 주최자의 운영자</b>여야 한다 — 소유자 넘기기와 같다(docs/01 "가로채기를 막는 장치").</li>
+     *   <li>옛 소유자는 <b>운영자로 남는다</b> — 소유자 넘기기와 같다. 소유자는 바꾸기 전에도 뒤에도 1명이다.</li>
+     * </ul>
+     *
+     * @param ownerStaffAccountId    소유자 자리를 내줄 사람 — 신청 때의 소유자
+     * @param newOwnerStaffAccountId 받는 사람 — 신청한 운영자
+     * @return 넘기기 한 건 — 운영자 전원에게 알리고 소유자 변경 이력을 남기는 데 쓴다
+     * @throws RuleViolationException 그 사람이 지금 소유자가 아니면({@link OrganizerErrorCode#OWNERSHIP_ALREADY_TRANSFERRED}),
+     *                                받는 사람이 이 주최자의 운영자가 아니면({@link OrganizerErrorCode#OWNERSHIP_RECEIVER_NOT_OPERATOR})
+     */
+    public OwnershipTransfer reassignOwnershipByAdmin(long ownerStaffAccountId, long newOwnerStaffAccountId, Instant now) {
+        Objects.requireNonNull(now, "now");
+        StaffMembership owner = activeMembershipOf(ownerStaffAccountId)
+                .filter(membership -> membership.role() == StaffRole.OWNER)
+                .orElseThrow(() -> new RuleViolationException(OrganizerErrorCode.OWNERSHIP_ALREADY_TRANSFERRED,
+                        "주최자 " + organizerId + "의 지금 소유자가 아님: 운영진 " + ownerStaffAccountId));
+        StaffMembership receiver = operatorMembershipToReceive(newOwnerStaffAccountId);
+        return handOver(owner, receiver, now);
     }
 
     /**
@@ -206,6 +228,22 @@ public final class OrganizerStaff {
         return memberships.stream()
                 .filter(membership -> membership.isActive() && membership.staffAccountId() == staffAccountId)
                 .findFirst();
+    }
+
+    /** 소유자를 받을 사람의 지금 운영자 소속 — 받는 사람은 이미 이 주최자의 운영자여야 한다. */
+    private StaffMembership operatorMembershipToReceive(long newOwnerStaffAccountId) {
+        return activeMembershipOf(newOwnerStaffAccountId)
+                .filter(membership -> membership.role() == StaffRole.OPERATOR)
+                .orElseThrow(() -> new RuleViolationException(OrganizerErrorCode.OWNERSHIP_RECEIVER_NOT_OPERATOR,
+                        "주최자 " + organizerId + ", 받는 사람 " + newOwnerStaffAccountId));
+    }
+
+    /** 두 사람 모두 그때까지의 소속을 끝내고 새 역할(소유자 → 운영자, 운영자 → 소유자)의 소속을 같은 시각에 시작한다. */
+    private OwnershipTransfer handOver(StaffMembership owner, StaffMembership receiver, Instant now) {
+        changeRole(owner, StaffRole.OPERATOR, now);
+        changeRole(receiver, StaffRole.OWNER, now);
+        requireConsistent();
+        return new OwnershipTransfer(organizerId, owner.staffAccountId(), receiver.staffAccountId(), now);
     }
 
     private void changeRole(StaffMembership membership, StaffRole newRole, Instant now) {

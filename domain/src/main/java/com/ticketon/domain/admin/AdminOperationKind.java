@@ -18,7 +18,16 @@ public enum AdminOperationKind {
     REJECT_ORGANIZER_APPLICATION(AdminOperationTargetKind.ORGANIZER_APPLICATION),
 
     /** 소유자 변경 사후 확인 — 처리 목록에서 빠진다(docs/12 "소유자가 바뀌면 관리자에게도 알립니다"). 대상은 확인한 소유자 변경 이력이다. */
-    CONFIRM_OWNERSHIP_CHANGE(AdminOperationTargetKind.OWNERSHIP_CHANGE);
+    CONFIRM_OWNERSHIP_CHANGE(AdminOperationTargetKind.OWNERSHIP_CHANGE),
+
+    /**
+     * 소유자 이전 신청 승인 — 신청한 운영자가 소유자가 되고 신청 때의 소유자는 운영자로 남는다(docs/01 "소유자와 연락이 끊긴 경우",
+     * docs/11 "대표가 바뀔 때"). 대상은 승인한 신청이다.
+     */
+    APPROVE_OWNERSHIP_CLAIM(AdminOperationTargetKind.OWNERSHIP_CLAIM),
+
+    /** 소유자 이전 신청 반려 — 사유를 남긴다. 소유자는 그대로다. 대상은 반려한 신청이다. */
+    REJECT_OWNERSHIP_CLAIM(AdminOperationTargetKind.OWNERSHIP_CLAIM);
 
     private final AdminOperationTargetKind targetKind;
 

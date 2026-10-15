@@ -12,7 +12,7 @@ import java.util.Set;
 
 /**
  * 알림 종류와 채널 표 — docs/12 "관객 대상"·"주최자 대상" 표를 그대로 옮긴다. 표 밖에서 docs/12가 보내라고 한 알림(마케팅 수신 동의·철회
- * 처리 결과, "마케팅 발송")도 여기 둔다.
+ * 처리 결과, "마케팅 발송")과 표 밖의 주최자 쪽 결과 알림(소유자 이전 신청 반려)도 여기 둔다.
  * <p>
  * <b>긴급하거나 돈이 걸린 것만 문자, 나머지는 이메일</b>(docs/12 "원칙"). 관객 쪽은 종류마다 이메일·문자 중 무엇으로 보내는지가
  * 정해져 있고, <b>주최자 쪽은 전부 이메일</b>이며 제목에 [주최]가 붙는다({@link EmailSubject#notice}). 주최자 쪽은 종류마다
@@ -195,7 +195,16 @@ public enum NotificationKind {
     STAFF_PROFILE_RESET(OrganizerRecipientScope.INDIVIDUAL),
 
     /** 주최자 로고가 초기화됨 — 운영진 전원에게, 관리자 조치. */
-    ORGANIZER_LOGO_RESET(OrganizerRecipientScope.ALL_STAFF);
+    ORGANIZER_LOGO_RESET(OrganizerRecipientScope.ALL_STAFF),
+
+    // ── 주최자 대상, '주최자 대상' 표 밖 ──
+
+    /**
+     * 소유자 이전 신청 반려 — 사유 포함, 운영진 전원에게(신청한 운영자 포함). 소유자와 연락이 끊겨 운영자가 낸 신청의 결과다(docs/01 "소유자와
+     * 연락이 끊긴 경우", #27 "결과를 신청자와 운영진 전원에게"). 주최자에 관한 알림이라 소유자와 운영자 전원에게 간다(docs/12 "주최자 대상 —
+     * 받는 사람"). 승인은 소유자가 바뀌는 일이라 표의 {@link #OWNER_CHANGED}로 보낸다.
+     */
+    OWNERSHIP_CLAIM_REJECTED(OrganizerRecipientScope.ALL_STAFF);
 
     private final RecipientSide side;
     private final Set<NotificationChannel> channels;

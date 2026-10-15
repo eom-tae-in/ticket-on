@@ -134,7 +134,14 @@ public enum StaffAction {
      * (docs/01 "탈퇴와 주최자 닫기") 그것은 권한 표가 아니라 명단의 규칙이 막는다({@link OrganizerStaff#leave}) — 소유자는 모든 일을 할 수
      * 있으므로 권한으로는 거르지 않는다. 운영진 로그인을 탈퇴하며 소속 주최자마다 나갈 때도 이 일로 남긴다.
      */
-    LEAVE_ORGANIZER(false);
+    LEAVE_ORGANIZER(false),
+
+    /**
+     * 소유자 이전 신청 — docs/13 "운영진 관리"의 "소유자 이전 신청 ※ 운영자. 소유자와 연락이 끊긴 경우 관리자에게". 소유자는 신청하지 않고 직접
+     * 넘기는데(docs/01 "소유자 넘기기") 그것은 권한 표가 아니라 신청의 규칙이 막는다({@link OwnershipClaim#submit}) — 소유자는 모든 일을 할
+     * 수 있으므로 권한으로는 거르지 않는다. 승인 · 반려는 관리자의 일이라 관리자 조작 기록에 남는다.
+     */
+    CLAIM_OWNERSHIP(false);
 
     private final boolean ownerOnly;
 

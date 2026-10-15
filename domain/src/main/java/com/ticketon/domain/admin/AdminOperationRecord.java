@@ -18,7 +18,8 @@ import java.util.Optional;
  * <p>
  * 요약은 사람이 목록에서 읽는 한 줄이다(운영진 쪽 예: "초대권 10장 발권 · 운영자 김○○", docs/01). 조작마다 만드는 방법을 이 클래스의
  * 정적 메서드로 둔다({@link #adminAccountIssued}, {@link #organizerApplicationApproved},
- * {@link #organizerApplicationRejected}, {@link #ownershipChangeConfirmed}).
+ * {@link #organizerApplicationRejected}, {@link #ownershipChangeConfirmed}, {@link #ownershipClaimApproved},
+ * {@link #ownershipClaimRejected}).
  * 사유는 관리자가 적은 사유가 있는 조작(정지 사유, 반려 사유 등)만 남기고, 없으면 비어 있다.
  * <p>
  * 보관 기간은 문서에 정해져 있지 않아 지우지 않는다(docs/11 "데이터 보관"에 없음 — 정해지면 파기 작업을 더한다).
@@ -131,6 +132,37 @@ public final class AdminOperationRecord {
         Objects.requireNonNull(organizerName, "organizerName");
         return of(admin, AdminOperationKind.CONFIRM_OWNERSHIP_CHANGE, ownershipChangeId,
                 "소유자 변경 확인 — " + organizerName.value(), null, confirmedAt);
+    }
+
+    /**
+     * 소유자 이전 신청 승인 기록 — 대상은 승인한 신청이고, 요약은 "소유자 이전 신청 승인 — 주최자명"이다. 사유는 없다.
+     *
+     * @param admin            승인한 관리자
+     * @param ownershipClaimId 승인한 소유자 이전 신청 id
+     * @param organizerName    소유자가 바뀐 주최자의 이름
+     */
+    public static AdminOperationRecord ownershipClaimApproved(AccountRef admin, long ownershipClaimId,
+            OrganizerName organizerName, Instant approvedAt) {
+        Objects.requireNonNull(organizerName, "organizerName");
+        return of(admin, AdminOperationKind.APPROVE_OWNERSHIP_CLAIM, ownershipClaimId,
+                "소유자 이전 신청 승인 — " + organizerName.value(), null, approvedAt);
+    }
+
+    /**
+     * 소유자 이전 신청 반려 기록 — 대상은 반려한 신청이고, 요약은 "소유자 이전 신청 반려 — 주최자명"이다. 사유는 운영진에게 알린 반려 사유
+     * 그대로다.
+     *
+     * @param admin            반려한 관리자
+     * @param ownershipClaimId 반려한 소유자 이전 신청 id
+     * @param organizerName    신청이 가리킨 주최자의 이름
+     * @param reason           반려 사유
+     */
+    public static AdminOperationRecord ownershipClaimRejected(AccountRef admin, long ownershipClaimId,
+            OrganizerName organizerName, RejectionReason reason, Instant rejectedAt) {
+        Objects.requireNonNull(organizerName, "organizerName");
+        Objects.requireNonNull(reason, "reason");
+        return of(admin, AdminOperationKind.REJECT_OWNERSHIP_CLAIM, ownershipClaimId,
+                "소유자 이전 신청 반려 — " + organizerName.value(), reason.text(), rejectedAt);
     }
 
     /** 조작한 관리자. */

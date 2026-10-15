@@ -81,4 +81,38 @@ class OwnershipChangeTest {
         assertThatIllegalArgumentException().isThrownBy(
                 () -> OwnershipChange.restore(9, TRANSFER, TRANSFERRED_AT.minusSeconds(1), ADMIN));
     }
+
+    @Test
+    @DisplayName("소유자 넘기기 이력은 어떻게 바뀌었나가 '소유자 넘기기'이고 가리키는 신청이 없다 — 관리자 사후 확인 대상이다")
+    void ownerHandoverNeedsConfirmation() {
+        OwnershipChange change = unconfirmed();
+
+        assertThat(change.method()).isEqualTo(OwnershipChangeMethod.OWNER_HANDOVER);
+        assertThat(change.method().needsAdminConfirmation()).isTrue();
+        assertThat(change.ownershipClaimId()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("소유자 이전 신청을 승인해 바꾼 이력은 그 신청을 가리키고, 관리자가 확인한 뒤 바꾼 것이라 사후 확인하지 않는다 (OWNERSHIP_CHANGE_NOT_CONFIRMABLE)")
+    void claimApprovalIsNotConfirmed() {
+        OwnershipChange change = OwnershipChange.restoreClaimApproval(10, TRANSFER, 3);
+
+        assertThat(change.method()).isEqualTo(OwnershipChangeMethod.CLAIM_APPROVAL);
+        assertThat(change.method().needsAdminConfirmation()).isFalse();
+        assertThat(change.ownershipClaimId()).hasValue(3);
+        assertThat(change.isConfirmed()).isFalse();
+        assertThatExceptionOfType(RuleViolationException.class)
+                .isThrownBy(() -> change.confirm(ADMIN, CONFIRMED_AT))
+                .satisfies(exception -> assertThat(exception.errorCode())
+                        .isEqualTo(OrganizerErrorCode.OWNERSHIP_CHANGE_NOT_CONFIRMABLE));
+        assertThat(change.isConfirmed()).isFalse();
+        assertThat(change.confirmedBy()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("소유자 이전 신청 승인 이력을 되살릴 때 id와 신청 id는 1 이상이다")
+    void claimApprovalRestoreRules() {
+        assertThatIllegalArgumentException().isThrownBy(() -> OwnershipChange.restoreClaimApproval(0, TRANSFER, 3));
+        assertThatIllegalArgumentException().isThrownBy(() -> OwnershipChange.restoreClaimApproval(10, TRANSFER, 0));
+    }
 }
