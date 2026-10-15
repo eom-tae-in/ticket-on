@@ -18,6 +18,17 @@ import java.util.OptionalLong;
  * 새 신청서는 {@link #submit}으로만 만들고 심사 중으로 시작한다. 심사 중일 때만 {@link #approve 승인}이나 {@link #reject 반려}를 한다.
  * 반려하면 사유를 반드시 남긴다. <b>재신청은 제한 없이 허용</b>하고, 신규 주최자 정원도 두지 않는다(docs/01 "반려", docs/99 B) —
  * 다시 신청하면 새 신청서가 된다. 심사는 주최자 단위로 한 번이라 나중에 들어오는 운영자는 신청서를 내지 않는다.
+ * <p>
+ * <b>신청서는 심사받는 주최자를 가리킨다.</b> 새 주최자 신청이면 신청할 때 그 주최자를 심사 중({@link Organizer#underReview})으로 만들고
+ * 신청서가 그 주최자를 가리킨다(docs/14 "전체 관계도" — 주최자 상태: 심사 중 / 활동 / 닫힘 / 영구 정지). 승인하면 그 주최자가 활동이 되고
+ * 신청한 사람이 소유자가 된다.
+ * <p>
+ * <b>심사 중에는 신청한 사람이 그 주최자에 소속되지 않는다.</b> "승인되면 신청한 사람이 소유자가 되고"(docs/01 "주최자 신청과 승인")라
+ * 소유자 소속은 승인 때 시작한다({@link OrganizerStaff#startWithOwner}). 심사 중인 동안 신청한 사람과 주최자를 잇는 것은 이 신청서뿐이고,
+ * 그래서 반려돼도 끝낼 소속이 없이 신청한 사람은 "소속 없음"으로 남는다.
+ * <p>
+ * <b>심사 중인 신청이 있으면 새 신청서를 내지 않는다</b>({@link #requireCanSubmit}) — 승인 전까지 로그인하면 "심사 중" 화면만 보인다
+ * (docs/01 "주최자 신청과 승인"). 반려되거나 승인된 뒤에는 몇 번이든 다시 낸다.
  * 시각은 인자로 받는다.
  * <p>
  * 저장소에서 다시 읽을 때는 {@link #restore}를 쓴다. 저장 전 신청서는 id가 없다.
@@ -25,6 +36,7 @@ import java.util.OptionalLong;
 public final class OrganizerApplication {
 
     private final Long id;
+    private final long organizerId;
     private final long applicantStaffAccountId;
     private final OrganizerApplicationForm form;
     private final Instant submittedAt;
@@ -32,12 +44,16 @@ public final class OrganizerApplication {
     private Instant reviewedAt;
     private RejectionReason rejectionReason;
 
-    private OrganizerApplication(Long id, long applicantStaffAccountId, OrganizerApplicationForm form,
+    private OrganizerApplication(Long id, long organizerId, long applicantStaffAccountId, OrganizerApplicationForm form,
             Instant submittedAt, OrganizerApplicationStatus status, Instant reviewedAt, RejectionReason rejectionReason) {
+        if (organizerId < 1) {
+            throw new IllegalArgumentException("심사받는 주최자 id는 1 이상이어야 합니다: " + organizerId);
+        }
         if (applicantStaffAccountId < 1) {
             throw new IllegalArgumentException("신청한 운영진 계정 id는 1 이상이어야 합니다: " + applicantStaffAccountId);
         }
         this.id = id;
+        this.organizerId = organizerId;
         this.applicantStaffAccountId = applicantStaffAccountId;
         this.form = Objects.requireNonNull(form, "form");
         this.submittedAt = Objects.requireNonNull(submittedAt, "submittedAt");
@@ -47,13 +63,30 @@ public final class OrganizerApplication {
     }
 
     /**
-     * 신청서를 낸다. 심사 중으로 시작한다.
+     * 그 사람이 새 신청서를 낼 수 있는지 확인한다. 심사 중인 신청이 있으면 그 결과를 기다린다 — 승인 전까지는 "심사 중" 화면만 보인다
+     * (docs/01 "주최자 신청과 승인"). 반려되거나 승인된 신청만 있으면 제한 없이 낸다(docs/01 "반려 — 재신청은 제한 없이 허용").
+     * 심사받을 주최자를 만들기 전에 부른다.
      *
+     * @param applicantReviewState 저장소가 확인한, 그 사람에게 심사 중인 신청이 있는지
+     * @throws RuleViolationException 심사 중인 신청이 있으면({@link OrganizerErrorCode#APPLICATION_ALREADY_UNDER_REVIEW})
+     */
+    public static void requireCanSubmit(ApplicantReviewState applicantReviewState) {
+        Objects.requireNonNull(applicantReviewState, "applicantReviewState");
+        if (applicantReviewState == ApplicantReviewState.APPLICATION_UNDER_REVIEW) {
+            throw new RuleViolationException(OrganizerErrorCode.APPLICATION_ALREADY_UNDER_REVIEW);
+        }
+    }
+
+    /**
+     * 신청서를 낸다. 심사 중으로 시작한다. 낼 수 있는지는 먼저 {@link #requireCanSubmit}으로 확인한다.
+     *
+     * @param organizerId             심사받는 주최자 id — 새 주최자 신청이면 신청하면서 심사 중으로 만든 주최자
      * @param applicantStaffAccountId 신청한 사람의 운영진 계정 id — 승인되면 이 사람이 소유자가 된다
      * @param now                     제출 일시
      */
-    public static OrganizerApplication submit(long applicantStaffAccountId, OrganizerApplicationForm form, Instant now) {
-        return new OrganizerApplication(null, applicantStaffAccountId, form, now,
+    public static OrganizerApplication submit(long organizerId, long applicantStaffAccountId,
+            OrganizerApplicationForm form, Instant now) {
+        return new OrganizerApplication(null, organizerId, applicantStaffAccountId, form, now,
                 OrganizerApplicationStatus.UNDER_REVIEW, null, null);
     }
 
@@ -64,14 +97,15 @@ public final class OrganizerApplication {
      * @param rejectionReason 반려 사유. 반려가 아니면 null.
      * @throws IllegalArgumentException 상태와 처리 일시·반려 사유가 맞지 않으면(반려인데 사유가 없는 등)
      */
-    public static OrganizerApplication restore(long id, long applicantStaffAccountId, OrganizerApplicationForm form,
-            Instant submittedAt, OrganizerApplicationStatus status, Instant reviewedAt, RejectionReason rejectionReason) {
+    public static OrganizerApplication restore(long id, long organizerId, long applicantStaffAccountId,
+            OrganizerApplicationForm form, Instant submittedAt, OrganizerApplicationStatus status, Instant reviewedAt,
+            RejectionReason rejectionReason) {
         if (id < 1) {
             throw new IllegalArgumentException("신청서 id는 1 이상이어야 합니다: " + id);
         }
         Objects.requireNonNull(status, "status");
         requireReviewMatchesStatus(status, reviewedAt, rejectionReason);
-        return new OrganizerApplication(id, applicantStaffAccountId, form, submittedAt, status, reviewedAt,
+        return new OrganizerApplication(id, organizerId, applicantStaffAccountId, form, submittedAt, status, reviewedAt,
                 rejectionReason);
     }
 
@@ -104,6 +138,11 @@ public final class OrganizerApplication {
     /** 저장 전이면 비어 있다. */
     public OptionalLong id() {
         return id == null ? OptionalLong.empty() : OptionalLong.of(id);
+    }
+
+    /** 심사받는 주최자 id. */
+    public long organizerId() {
+        return organizerId;
     }
 
     /** 신청한 사람의 운영진 계정 id. */

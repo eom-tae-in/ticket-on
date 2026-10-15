@@ -22,6 +22,12 @@ public enum OrganizerErrorCode implements ErrorCode {
     /** 이미 승인 또는 반려한 신청서를 다시 처리하려 했다. 반려된 뒤에는 새로 신청한다(docs/01 "반려 — 재신청은 제한 없이 허용"). */
     APPLICATION_ALREADY_REVIEWED("이미 심사를 마친 신청입니다."),
 
+    /**
+     * 심사 중인 신청이 있는데 새 신청서를 내려 했다 — 승인 전까지 로그인하면 "심사 중" 화면만 보인다(docs/01 "주최자 신청과 승인").
+     * 반려된 뒤에는 제한 없이 다시 낸다(docs/01 "반려"). 같은 사람이 거의 동시에 두 번 내 한쪽이 먼저 저장된 경우도 이 코드다.
+     */
+    APPLICATION_ALREADY_UNDER_REVIEW("심사 중인 신청이 있습니다. 심사 결과를 기다려 주세요."),
+
     /** 심사 중이 아닌 주최자를 승인하려 했다. 승인은 심사 중인 주최자를 활동으로 바꾸는 일이다. */
     ORGANIZER_NOT_UNDER_REVIEW("심사 중인 주최자가 아닙니다."),
 
