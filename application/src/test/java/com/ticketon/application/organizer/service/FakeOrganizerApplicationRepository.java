@@ -66,6 +66,11 @@ final class FakeOrganizerApplicationRepository implements OrganizerApplicationRe
     }
 
     @Override
+    public Optional<OrganizerApplication> findLatestApprovedOf(long organizerId) {
+        throw new UnsupportedOperationException("주최자 신청 제출·주최 홈에서는 승인된 신청서를 찾지 않습니다");
+    }
+
+    @Override
     public void saveReview(OrganizerApplication reviewedApplication) {
         throw new UnsupportedOperationException("주최자 신청 제출·주최 홈에서는 심사 결과를 저장하지 않습니다");
     }

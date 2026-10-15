@@ -31,6 +31,12 @@ public interface OrganizerApplicationRepository {
     Optional<OrganizerApplication> findById(long id);
 
     /**
+     * 그 주최자의 가장 최근에 승인된 신청서 — 처리 일시가 늦은 것, 같으면 나중에 낸 것. 관리자가 소유자 이전 신청을 확인할 때 주최자 신청 때
+     * 받은 연락처 · SNS를 본다(docs/11 "대표가 바뀔 때"). 승인된 신청서가 없으면 비어 있다.
+     */
+    Optional<OrganizerApplication> findLatestApprovedOf(long organizerId);
+
+    /**
      * 승인·반려한 신청서의 상태 · 처리 일시 · 반려 사유를 저장한다.
      * <p>
      * <b>표에서 아직 심사 중일 때만 바꾼다.</b> 두 관리자가 같은 신청을 거의 동시에 승인·반려하면 둘 다 심사 중으로 읽고 규칙을 통과할 수 있어,

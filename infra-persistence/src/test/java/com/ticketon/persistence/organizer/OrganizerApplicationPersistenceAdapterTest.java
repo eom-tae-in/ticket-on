@@ -372,6 +372,44 @@ class OrganizerApplicationPersistenceAdapterTest {
     }
 
     @Nested
+    @DisplayName("주최자의 가장 최근 승인된 신청서 — 관리자가 소유자 이전 신청을 확인할 때 본다 (docs/11 \"대표가 바뀔 때\")")
+    class LatestApproved {
+
+        @Test
+        @DisplayName("승인된 신청서가 없으면 비어 있다 — 심사 중 · 반려된 신청서는 세지 않는다")
+        void emptyWithoutApproval() {
+            long id = submitTwelveMonths();
+            long organizerId = adapter.findById(id).orElseThrow().organizerId();
+            assertThat(adapter.findLatestApprovedOf(organizerId)).isEmpty();
+
+            reject(id, "연락이 닿지 않음");
+
+            assertThat(adapter.findLatestApprovedOf(organizerId)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("처리 일시가 가장 늦은 승인 신청서를 연락처 · 링크와 함께 돌려준다 — 다른 주최자의 신청서는 보지 않는다")
+        void latestApprovedOfThatOrganizer() {
+            long first = submitTwelveMonths();
+            long organizerId = adapter.findById(first).orElseThrow().organizerId();
+            approve(first, REVIEWED_AT);
+            long second = adapter.add(OrganizerApplication.submit(organizerId, junghoon, twelveMonthsForm(),
+                    REVIEWED_AT.plusSeconds(86_400))).id().getAsLong();
+            approve(second, REVIEWED_AT.plusSeconds(172_800));
+            long dohyun = rows.staffAccount("dohyun@example.com");
+            long lateSummer = rows.organizer("늦여름", OrganizerStatus.UNDER_REVIEW);
+            long other = adapter.add(OrganizerApplication.submit(lateSummer, dohyun, lateSummerForm(), SUBMITTED_AT))
+                    .id().getAsLong();
+            approve(other, REVIEWED_AT.plusSeconds(259_200));
+
+            OrganizerApplication found = adapter.findLatestApprovedOf(organizerId).orElseThrow();
+
+            assertThat(found.id()).hasValue(second);
+            assertThat(found.form()).isEqualTo(twelveMonthsForm());
+        }
+    }
+
+    @Nested
     @DisplayName("표의 약속")
     class TableConstraints {
 
@@ -408,6 +446,15 @@ class OrganizerApplicationPersistenceAdapterTest {
         long organizerId = rows.organizer("극단 열두달", OrganizerStatus.UNDER_REVIEW);
         return adapter.add(OrganizerApplication.submit(organizerId, junghoon, twelveMonthsForm(), SUBMITTED_AT))
                 .id().getAsLong();
+    }
+
+    /** 관리자가 승인한 것처럼 표를 바로 바꾼다 — 주최자 · 소속은 이 저장소와 상관없어 바꾸지 않는다. */
+    private static void approve(long applicationId, Instant reviewedAt) {
+        dsl.update(ORGANIZER_APPLICATION)
+                .set(ORGANIZER_APPLICATION.STATUS, OrganizerApplicationStatus.APPROVED.name())
+                .set(ORGANIZER_APPLICATION.REVIEWED_AT, reviewedAt.atOffset(ZoneOffset.UTC))
+                .where(ORGANIZER_APPLICATION.ID.eq(applicationId))
+                .execute();
     }
 
     /** 관리자가 반려한 것처럼 표를 바로 바꾼다 — 읽은 뒤 다른 관리자가 먼저 처리한 상황을 만들 때도 쓴다. */

@@ -14,9 +14,13 @@ import com.ticketon.domain.organizer.OrganizerApplication;
 import com.ticketon.domain.organizer.OrganizerApplicationForm;
 import com.ticketon.domain.organizer.OrganizerApplicationStatus;
 import com.ticketon.domain.organizer.OrganizerName;
+import com.ticketon.domain.organizer.OrganizerStaff;
 import com.ticketon.domain.organizer.OrganizerStatus;
 import com.ticketon.domain.organizer.OrganizerType;
 import com.ticketon.domain.organizer.OwnershipChange;
+import com.ticketon.domain.organizer.OwnershipClaim;
+import com.ticketon.domain.organizer.OwnershipClaimReason;
+import com.ticketon.domain.organizer.OwnershipClaimStatus;
 import com.ticketon.domain.organizer.OwnershipTransfer;
 import com.ticketon.domain.organizer.RejectionReason;
 import com.ticketon.domain.organizer.SettlementAccount;
@@ -24,6 +28,7 @@ import com.ticketon.domain.organizer.TelephoneNumber;
 import com.ticketon.persistence.organizer.OrganizerApplicationPersistenceAdapter;
 import com.ticketon.persistence.organizer.OrganizerRows;
 import com.ticketon.persistence.organizer.OwnershipChangePersistenceAdapter;
+import com.ticketon.persistence.organizer.OwnershipClaimPersistenceAdapter;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -140,6 +145,25 @@ class AdminWorkQueueQueryPersistenceAdapterTest {
         changes.saveConfirmation(change);
 
         assertThat(adapter.pendingWork()).extracting(PendingAdminWork::targetId).containsExactly(unconfirmed);
+    }
+
+    @Test
+    @DisplayName("소유자 이전 신청을 승인해 바꾼 소유자 변경은 '소유자 변경'(사후 확인)에 쌓이지 않는다 — 관리자가 확인한 뒤 바꾼 것이다")
+    void claimApprovalChangesStayOutOfTheQueue() {
+        long organizerId = rows.organizer("극단 열두달", OrganizerStatus.ACTIVE);
+        long owner = rows.staffAccount("junghoon@example.com");
+        long claimant = rows.staffAccount("planner@example.com");
+        OrganizerStaff staff = OrganizerStaff.startWithOwner(organizerId, owner, MONDAY_MORNING.minusSeconds(86_400));
+        staff.addOperator(claimant, MONDAY_MORNING.minusSeconds(86_400));
+        OwnershipClaimReason reason = OwnershipClaimReason.of("전 대표와 연락이 끊겼습니다.");
+        OwnershipClaimPersistenceAdapter claims = new OwnershipClaimPersistenceAdapter(dsl);
+        long claimId = claims.add(OwnershipClaim.submit(staff, claimant, reason, false, MONDAY_MORNING)).id().orElseThrow();
+        claims.saveReview(OwnershipClaim.restore(claimId, organizerId, claimant, owner, reason, MONDAY_MORNING,
+                OwnershipClaimStatus.APPROVED, MONDAY_MORNING.plusSeconds(3_600), null));
+        new OwnershipChangePersistenceAdapter(dsl).addClaimApproval(
+                new OwnershipTransfer(organizerId, owner, claimant, MONDAY_MORNING.plusSeconds(3_600)), claimId);
+
+        assertThat(adapter.pendingWork()).noneMatch(work -> work.kind() == AdminWorkKind.OWNERSHIP_CHANGE);
     }
 
     /** 활동 중인 주최자에서 소유자가 운영자에게 넘긴 한 건을 이력으로 저장한다 — 소속은 이 조회와 상관없어 넣지 않는다. */

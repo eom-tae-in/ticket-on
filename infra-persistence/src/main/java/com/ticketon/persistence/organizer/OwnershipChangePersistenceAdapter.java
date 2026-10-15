@@ -8,6 +8,7 @@ import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.error.ConflictException;
 import com.ticketon.domain.organizer.OrganizerErrorCode;
 import com.ticketon.domain.organizer.OwnershipChange;
+import com.ticketon.domain.organizer.OwnershipChangeMethod;
 import com.ticketon.domain.organizer.OwnershipTransfer;
 import com.ticketon.persistence.jooq.tables.records.OwnershipChangeRecord;
 import java.time.Instant;
@@ -18,7 +19,8 @@ import org.jooq.DSLContext;
 import org.springframework.stereotype.Component;
 
 /**
- * 소유자 변경 이력 저장소(ownership_change — V13) 어댑터. 넘기기 한 건이 한 줄이다.
+ * 소유자 변경 이력 저장소(ownership_change — V13 · V14) 어댑터. 소유자가 바뀐 한 건이 한 줄이고, 어떻게 바뀌었나(method)를 함께 남긴다 —
+ * 소유자 넘기기(OWNER_HANDOVER)는 관리자가 사후 확인하고, 소유자 이전 신청 승인(CLAIM_APPROVAL)은 그 신청을 가리키며 확인하지 않는다.
  *
  * <h2>두 관리자가 거의 동시에 확인하기 — 확인 경합</h2>
  * 확인은 {@code UPDATE … WHERE confirmed_at IS NULL}로 남긴다. 먼저 바꾼 쪽이 커밋할 때까지 늦은 쪽이 기다렸다가, 바뀐 줄이 없어
@@ -35,15 +37,14 @@ public class OwnershipChangePersistenceAdapter implements OwnershipChangeReposit
 
     @Override
     public OwnershipChange add(OwnershipTransfer transfer) {
-        long id = dsl.insertInto(OWNERSHIP_CHANGE)
-                .set(OWNERSHIP_CHANGE.ORGANIZER_ID, transfer.organizerId())
-                .set(OWNERSHIP_CHANGE.PREVIOUS_OWNER_STAFF_ACCOUNT_ID, transfer.previousOwnerStaffAccountId())
-                .set(OWNERSHIP_CHANGE.NEW_OWNER_STAFF_ACCOUNT_ID, transfer.newOwnerStaffAccountId())
-                .set(OWNERSHIP_CHANGE.CHANGED_AT, toDatabaseTime(transfer.transferredAt()))
-                .returningResult(OWNERSHIP_CHANGE.ID)
-                .fetchSingle()
-                .value1();
+        long id = insert(transfer, OwnershipChangeMethod.OWNER_HANDOVER, null);
         return OwnershipChange.restore(id, transfer, null, null);
+    }
+
+    @Override
+    public OwnershipChange addClaimApproval(OwnershipTransfer transfer, long ownershipClaimId) {
+        long id = insert(transfer, OwnershipChangeMethod.CLAIM_APPROVAL, ownershipClaimId);
+        return OwnershipChange.restoreClaimApproval(id, transfer, ownershipClaimId);
     }
 
     @Override
@@ -71,10 +72,26 @@ public class OwnershipChangePersistenceAdapter implements OwnershipChangeReposit
         }
     }
 
+    private long insert(OwnershipTransfer transfer, OwnershipChangeMethod method, Long ownershipClaimId) {
+        return dsl.insertInto(OWNERSHIP_CHANGE)
+                .set(OWNERSHIP_CHANGE.ORGANIZER_ID, transfer.organizerId())
+                .set(OWNERSHIP_CHANGE.PREVIOUS_OWNER_STAFF_ACCOUNT_ID, transfer.previousOwnerStaffAccountId())
+                .set(OWNERSHIP_CHANGE.NEW_OWNER_STAFF_ACCOUNT_ID, transfer.newOwnerStaffAccountId())
+                .set(OWNERSHIP_CHANGE.CHANGED_AT, toDatabaseTime(transfer.transferredAt()))
+                .set(OWNERSHIP_CHANGE.METHOD, method.name())
+                .set(OWNERSHIP_CHANGE.OWNERSHIP_CLAIM_ID, ownershipClaimId)
+                .returningResult(OWNERSHIP_CHANGE.ID)
+                .fetchSingle()
+                .value1();
+    }
+
     private static OwnershipChange toChange(OwnershipChangeRecord change) {
         OwnershipTransfer transfer = new OwnershipTransfer(change.getOrganizerId(),
                 change.getPreviousOwnerStaffAccountId(), change.getNewOwnerStaffAccountId(),
                 change.getChangedAt().toInstant());
+        if (OwnershipChangeMethod.valueOf(change.getMethod()) == OwnershipChangeMethod.CLAIM_APPROVAL) {
+            return OwnershipChange.restoreClaimApproval(change.getId(), transfer, change.getOwnershipClaimId());
+        }
         Long confirmedByAdminAccountId = change.getConfirmedByAdminAccountId();
         return OwnershipChange.restore(change.getId(), transfer,
                 change.getConfirmedAt() == null ? null : change.getConfirmedAt().toInstant(),

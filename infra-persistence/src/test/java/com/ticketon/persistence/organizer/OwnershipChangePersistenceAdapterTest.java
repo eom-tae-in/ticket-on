@@ -10,8 +10,13 @@ import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.error.ConflictException;
 import com.ticketon.domain.organizer.OrganizerErrorCode;
+import com.ticketon.domain.organizer.OrganizerStaff;
 import com.ticketon.domain.organizer.OrganizerStatus;
 import com.ticketon.domain.organizer.OwnershipChange;
+import com.ticketon.domain.organizer.OwnershipChangeMethod;
+import com.ticketon.domain.organizer.OwnershipClaim;
+import com.ticketon.domain.organizer.OwnershipClaimReason;
+import com.ticketon.domain.organizer.OwnershipClaimStatus;
 import com.ticketon.domain.organizer.OwnershipTransfer;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -35,8 +40,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL에 마이그레이션(V13 소유자 변경 이력)을 올리고 넘기기 한 건 저장 · 되살리기, 관리자 확인 저장과 확인 경합을 본다. Docker가 없는
- * 환경에서는 건너뛴다.
+ * 진짜 PostgreSQL에 마이그레이션(V13 소유자 변경 이력, V14 어떻게 바뀌었나)을 올리고 넘기기 한 건 · 신청 승인 한 건 저장 · 되살리기, 관리자
+ * 확인 저장과 확인 경합을 본다. Docker가 없는 환경에서는 건너뛴다.
  */
 @Testcontainers(disabledWithoutDocker = true)
 @DisplayName("소유자 변경 이력 저장소 (진짜 PostgreSQL)")
@@ -95,6 +100,22 @@ class OwnershipChangePersistenceAdapterTest {
         assertThat(found.isConfirmed()).isFalse();
         assertThat(found.confirmedBy()).isEmpty();
         assertThat(adapter.findById(added.id() + 1)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("소유자 이전 신청을 승인해 바꾼 한 건은 '신청 승인'으로 그 신청을 가리켜 남고, 확인 없이 그대로 되살아난다")
+    void addsClaimApproval() {
+        long claimId = approvedClaimOf(transfer);
+
+        OwnershipChange added = adapter.addClaimApproval(transfer, claimId);
+
+        OwnershipChange found = adapter.findById(added.id()).orElseThrow();
+        assertThat(found.transfer()).isEqualTo(transfer);
+        assertThat(found.method()).isEqualTo(OwnershipChangeMethod.CLAIM_APPROVAL);
+        assertThat(found.ownershipClaimId()).hasValue(claimId);
+        assertThat(found.isConfirmed()).isFalse();
+        assertThat(adapter.findById(adapter.add(transfer).id()).orElseThrow().method())
+                .isEqualTo(OwnershipChangeMethod.OWNER_HANDOVER);
     }
 
     @Test
@@ -159,6 +180,21 @@ class OwnershipChangePersistenceAdapterTest {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    /** 넘기기의 받는 사람이 낸 소유자 이전 신청을 승인한 것으로 저장하고 id를 돌려준다. */
+    private static long approvedClaimOf(OwnershipTransfer transfer) {
+        OrganizerStaff staff = OrganizerStaff.startWithOwner(transfer.organizerId(), transfer.previousOwnerStaffAccountId(),
+                TRANSFERRED_AT.minusSeconds(86_400));
+        staff.addOperator(transfer.newOwnerStaffAccountId(), TRANSFERRED_AT.minusSeconds(86_400));
+        OwnershipClaimReason reason = OwnershipClaimReason.of("전 대표와 연락이 끊겼습니다.");
+        OwnershipClaimPersistenceAdapter claims = new OwnershipClaimPersistenceAdapter(dsl);
+        long claimId = claims.add(OwnershipClaim.submit(staff, transfer.newOwnerStaffAccountId(), reason, false,
+                TRANSFERRED_AT.minusSeconds(3_600))).id().orElseThrow();
+        claims.saveReview(OwnershipClaim.restore(claimId, transfer.organizerId(), transfer.newOwnerStaffAccountId(),
+                transfer.previousOwnerStaffAccountId(), reason, TRANSFERRED_AT.minusSeconds(3_600),
+                OwnershipClaimStatus.APPROVED, TRANSFERRED_AT, null));
+        return claimId;
     }
 
     private static long adminAccount(String email) {
