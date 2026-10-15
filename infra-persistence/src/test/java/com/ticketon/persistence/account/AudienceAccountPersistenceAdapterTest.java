@@ -27,11 +27,15 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.flywaydb.core.Flyway;
 import org.jooq.CloseableDSLContext;
@@ -47,7 +51,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL에 마이그레이션(V2 관객 계정, V7 비밀번호 선택값)을 올리고 관객 계정 저장·조회·번호/이메일 확인·동시 가입 경합을 본다.
+ * 진짜 PostgreSQL에 마이그레이션(V2 관객 계정, V7 비밀번호 선택값)을 올리고 관객 계정 저장·조회·번호/이메일 확인·동시 가입 경합,
+ * 전화번호 변경과 그 경합, 동의 기록 추가와 계정 잠금(#18)을 본다.
  * Docker가 없는 환경에서는 건너뛴다.
  */
 @Testcontainers(disabledWithoutDocker = true)
@@ -469,6 +474,248 @@ class AudienceAccountPersistenceAdapterTest {
         }
     }
 
+    @Nested
+    @DisplayName("전화번호 변경 저장 — 번호 하나에 계정 하나 (#18)")
+    class PhoneNumberSave {
+
+        private static final String NEW_PHONE = "010-9876-5432";
+
+        @Test
+        @DisplayName("바꾼 번호를 저장하면 다시 읽어도 새 번호이고, 옛 번호는 다른 가입에 쓸 수 있게 풀린다")
+        void savesPhoneNumber() {
+            long id = savedActiveAccount(SEOYUN_PHONE, SEOYUN_EMAIL);
+            AudienceAccount account = adapter.findById(id).orElseThrow();
+            account.changePhoneNumber(PhoneNumber.of(NEW_PHONE), adapter.phoneNumberAvailability(PhoneNumber.of(NEW_PHONE)));
+
+            adapter.savePhoneNumber(account);
+
+            assertThat(adapter.findById(id).orElseThrow().personalInformation().phoneNumber())
+                    .isEqualTo(PhoneNumber.of(NEW_PHONE));
+            assertThat(adapter.phoneNumberAvailability(PhoneNumber.of(SEOYUN_PHONE)))
+                    .isEqualTo(PhoneNumberAvailability.AVAILABLE);
+            assertThat(adapter.phoneNumberAvailability(PhoneNumber.of(NEW_PHONE)))
+                    .isEqualTo(PhoneNumberAvailability.ALREADY_REGISTERED);
+        }
+
+        @Test
+        @DisplayName("이용 정지 중인 계정도 저장한다 — 정지 중에도 번호를 바꿀 수 있다 (docs/01)")
+        void savesForSuspendedAccount() {
+            long id = savedActiveAccount(SEOYUN_PHONE, SEOYUN_EMAIL);
+            AudienceAccount account = adapter.findById(id).orElseThrow();
+            account.changePhoneNumber(PhoneNumber.of(NEW_PHONE), PhoneNumberAvailability.AVAILABLE);
+            markStatus(id, AudienceAccountStatus.SUSPENDED);
+
+            adapter.savePhoneNumber(account);
+
+            assertThat(dsl.select(AUDIENCE_ACCOUNT.PHONE_NUMBER).from(AUDIENCE_ACCOUNT).fetchSingle().value1())
+                    .isEqualTo("01098765432");
+        }
+
+        @Test
+        @DisplayName("확인한 뒤 다른 계정이 같은 번호를 먼저 저장했으면 번호 문구의 충돌이고, 번호는 그대로다")
+        void conflictsWhenTakenAfterCheck() {
+            long seoyun = savedActiveAccount(SEOYUN_PHONE, SEOYUN_EMAIL);
+            long other = savedActiveAccount("010-2222-3333", "other@example.com");
+            AudienceAccount seoyunAccount = adapter.findById(seoyun).orElseThrow();
+            AudienceAccount otherAccount = adapter.findById(other).orElseThrow();
+            seoyunAccount.changePhoneNumber(PhoneNumber.of(NEW_PHONE), PhoneNumberAvailability.AVAILABLE);
+            otherAccount.changePhoneNumber(PhoneNumber.of(NEW_PHONE), PhoneNumberAvailability.AVAILABLE);
+            adapter.savePhoneNumber(seoyunAccount);
+
+            assertConflict(() -> adapter.savePhoneNumber(otherAccount), AccountErrorCode.PHONE_NUMBER_ALREADY_REGISTERED);
+            assertThat(adapter.findById(other).orElseThrow().personalInformation().phoneNumber())
+                    .isEqualTo(PhoneNumber.of("010-2222-3333"));
+        }
+
+        @Test
+        @DisplayName("인증 대기 계정이 쥔 번호로도 바꿀 수 없다 — 인증 대기 계정도 가입한 계정이다")
+        void pendingAccountHoldsNumber() {
+            adapter.add(newAccount(NEW_PHONE, "pending@example.com", false));
+            long id = savedActiveAccount(SEOYUN_PHONE, SEOYUN_EMAIL);
+            AudienceAccount account = adapter.findById(id).orElseThrow();
+            account.changePhoneNumber(PhoneNumber.of(NEW_PHONE), PhoneNumberAvailability.AVAILABLE);
+
+            assertConflict(() -> adapter.savePhoneNumber(account), AccountErrorCode.PHONE_NUMBER_ALREADY_REGISTERED);
+        }
+
+        @Test
+        @DisplayName("일반 탈퇴한 계정이 쓰던 번호로는 바꿀 수 있다 — 탈퇴하면 번호가 풀린다")
+        void withdrawnAccountReleasesNumber() {
+            long withdrawn = adapter.add(newAccount(NEW_PHONE, "left@example.com", false)).id().getAsLong();
+            markWithdrawn(withdrawn);
+            long id = savedActiveAccount(SEOYUN_PHONE, SEOYUN_EMAIL);
+            AudienceAccount account = adapter.findById(id).orElseThrow();
+            account.changePhoneNumber(PhoneNumber.of(NEW_PHONE), adapter.phoneNumberAvailability(PhoneNumber.of(NEW_PHONE)));
+
+            adapter.savePhoneNumber(account);
+
+            assertThat(adapter.findById(id).orElseThrow().personalInformation().phoneNumber())
+                    .isEqualTo(PhoneNumber.of(NEW_PHONE));
+        }
+
+        @Test
+        @DisplayName("그 사이 탈퇴했으면 저장하지 않는다")
+        void conflictsWhenWithdrawn() {
+            long id = savedActiveAccount(SEOYUN_PHONE, SEOYUN_EMAIL);
+            AudienceAccount account = adapter.findById(id).orElseThrow();
+            account.changePhoneNumber(PhoneNumber.of(NEW_PHONE), PhoneNumberAvailability.AVAILABLE);
+            markWithdrawn(id);
+
+            assertConflict(() -> adapter.savePhoneNumber(account), AccountErrorCode.AUDIENCE_NOT_ACTIVE);
+            assertThat(dsl.select(AUDIENCE_ACCOUNT.PHONE_NUMBER).from(AUDIENCE_ACCOUNT).fetchSingle().value1())
+                    .isEqualTo("01012345678");
+        }
+
+        @Test
+        @DisplayName("두 트랜잭션이 동시에 같은 번호로 바꾸면 하나만 바뀌고, 다른 하나는 번호 문구의 충돌로 되돌려진다")
+        void concurrentChangesToSameNumberLeaveOne() throws Exception {
+            long seoyun = savedActiveAccount(SEOYUN_PHONE, SEOYUN_EMAIL);
+            long other = savedActiveAccount("010-2222-3333", "other@example.com");
+            CyclicBarrier bothChecked = new CyclicBarrier(2);
+
+            List<Object> outcomes = runConcurrently(
+                    () -> changePhoneNumberInOwnTransaction(seoyun, bothChecked),
+                    () -> changePhoneNumberInOwnTransaction(other, bothChecked));
+
+            assertOneSucceededAndOtherConflicted(outcomes);
+            assertThat(dsl.fetchCount(AUDIENCE_ACCOUNT, AUDIENCE_ACCOUNT.PHONE_NUMBER.eq("01098765432"))).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("같은 번호로 가입과 번호 변경이 동시에 오면 하나만 남고, 진 쪽은 번호 문구의 충돌이다")
+        void concurrentSignupAndChangeLeaveOne() throws Exception {
+            long seoyun = savedActiveAccount(SEOYUN_PHONE, SEOYUN_EMAIL);
+            CyclicBarrier bothChecked = new CyclicBarrier(2);
+
+            List<Object> outcomes = runConcurrently(
+                    () -> changePhoneNumberInOwnTransaction(seoyun, bothChecked),
+                    () -> signUpWithNewPhoneInOwnTransaction(bothChecked));
+
+            assertOneSucceededAndOtherConflicted(outcomes);
+            assertThat(dsl.fetchCount(AUDIENCE_ACCOUNT, AUDIENCE_ACCOUNT.PHONE_NUMBER.eq("01098765432"))).isEqualTo(1);
+        }
+
+        /** 제 연결·트랜잭션에서 새 번호를 확인하고, 상대도 확인을 마칠 때까지 기다렸다가 바꿔 저장한다. */
+        private long changePhoneNumberInOwnTransaction(long accountId, CyclicBarrier bothChecked) {
+            try (CloseableDSLContext ownConnection = DSL.using(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                    POSTGRES.getPassword())) {
+                return ownConnection.transactionResult(transaction -> {
+                    AudienceAccountPersistenceAdapter transactionAdapter =
+                            new AudienceAccountPersistenceAdapter(transaction.dsl());
+                    AudienceAccount account = transactionAdapter.findById(accountId).orElseThrow();
+                    PhoneNumberAvailability availability = transactionAdapter.phoneNumberAvailability(PhoneNumber.of(NEW_PHONE));
+                    assertThat(availability).isEqualTo(PhoneNumberAvailability.AVAILABLE);
+                    bothChecked.await(10, TimeUnit.SECONDS);
+                    account.changePhoneNumber(PhoneNumber.of(NEW_PHONE), availability);
+                    transactionAdapter.savePhoneNumber(account);
+                    return accountId;
+                });
+            }
+        }
+
+        /** 제 연결·트랜잭션에서 새 번호를 확인하고, 상대도 확인을 마칠 때까지 기다렸다가 그 번호로 가입한다. */
+        private long signUpWithNewPhoneInOwnTransaction(CyclicBarrier bothChecked) {
+            try (CloseableDSLContext ownConnection = DSL.using(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                    POSTGRES.getPassword())) {
+                return ownConnection.transactionResult(transaction -> {
+                    AudienceAccountPersistenceAdapter transactionAdapter =
+                            new AudienceAccountPersistenceAdapter(transaction.dsl());
+                    assertThat(transactionAdapter.phoneNumberAvailability(PhoneNumber.of(NEW_PHONE)))
+                            .isEqualTo(PhoneNumberAvailability.AVAILABLE);
+                    bothChecked.await(10, TimeUnit.SECONDS);
+                    return transactionAdapter.add(newAccount(NEW_PHONE, "newcomer@example.com", false)).id().getAsLong();
+                });
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("동의 기록 추가 — 마케팅 수신 동의 변경 (#18)")
+    class ConsentRecordAdd {
+
+        private static final Instant WITHDRAWN_AT = KoreanTime.toInstant(LocalDateTime.of(2026, 11, 3, 21, 0));
+
+        @Test
+        @DisplayName("더한 줄은 이전 기록을 고치지 않고 뒤에 남고, 다시 읽으면 지금 상태가 바뀌어 있다")
+        void appendsRecord() {
+            long id = adapter.add(newAccount(SEOYUN_PHONE, SEOYUN_EMAIL, true)).id().getAsLong();
+            AudienceAccount account = adapter.findById(id).orElseThrow();
+            account.verifyEmail(SIGNUP_TIME.plusSeconds(300));
+            ConsentRecord withdrawal = account.changeMarketingConsent(false, WITHDRAWN_AT).orElseThrow();
+
+            adapter.addConsentRecord(id, withdrawal);
+
+            AudienceAccount found = adapter.findById(id).orElseThrow();
+            assertThat(found.consentRecords()).containsExactly(
+                    new ConsentRecord(ConsentItem.TERMS_OF_SERVICE, true, SIGNUP_TIME),
+                    new ConsentRecord(ConsentItem.PERSONAL_INFORMATION_COLLECTION, true, SIGNUP_TIME),
+                    new ConsentRecord(ConsentItem.MINIMUM_AGE_CONFIRMATION, true, SIGNUP_TIME),
+                    new ConsentRecord(ConsentItem.MARKETING, true, SIGNUP_TIME),
+                    new ConsentRecord(ConsentItem.MARKETING, false, WITHDRAWN_AT));
+            assertThat(found.isMarketingAgreed()).isFalse();
+        }
+
+        @Test
+        @DisplayName("이전 줄과 일시가 같아도 나중에 더한 줄이 지금 상태다")
+        void laterRowWinsAtSameInstant() {
+            long id = adapter.add(newAccount(SEOYUN_PHONE, SEOYUN_EMAIL, false)).id().getAsLong();
+
+            adapter.addConsentRecord(id, new ConsentRecord(ConsentItem.MARKETING, true, SIGNUP_TIME));
+
+            AudienceAccount found = adapter.findById(id).orElseThrow();
+            assertThat(found.isMarketingAgreed()).isTrue();
+            assertThat(found.marketingAgreedAt()).contains(SIGNUP_TIME);
+        }
+
+        @Test
+        @DisplayName("잠그고 읽으면 계정과 동의 기록이 그대로 돌아오고, 없는 id면 비어 있다")
+        void findsLockedAccount() {
+            long id = adapter.add(newAccount(SEOYUN_PHONE, SEOYUN_EMAIL, true)).id().getAsLong();
+
+            assertThat(adapter.findByIdForUpdate(id).orElseThrow().consentRecords()).hasSize(4);
+            assertThat(adapter.findByIdForUpdate(id + 1000)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("두 트랜잭션이 동시에 철회하면 계정 잠금에서 차례를 기다려, 뒤에 온 쪽은 앞의 철회를 보고 아무것도 더하지 않는다")
+        void concurrentWithdrawalsAddOneRecord() throws Exception {
+            long id = adapter.add(newAccount(SEOYUN_PHONE, SEOYUN_EMAIL, true)).id().getAsLong();
+            AudienceAccount account = adapter.findById(id).orElseThrow();
+            account.verifyEmail(SIGNUP_TIME.plusSeconds(300));
+            adapter.saveEmailVerification(account);
+            CyclicBarrier bothStarted = new CyclicBarrier(2);
+
+            List<Object> outcomes = runConcurrently(
+                    () -> withdrawInOwnTransaction(id, bothStarted),
+                    () -> withdrawInOwnTransaction(id, bothStarted));
+
+            assertThat(outcomes).containsExactlyInAnyOrder(1L, 0L);
+            assertThat(adapter.findById(id).orElseThrow().consentRecords())
+                    .filteredOn(consentRecord -> consentRecord.item() == ConsentItem.MARKETING)
+                    .extracting(ConsentRecord::agreed)
+                    .containsExactly(true, false);
+        }
+
+        /**
+         * 제 연결·트랜잭션에서, 상대도 시작할 때까지 기다렸다가 서비스가 부르는 순서(잠그고 읽기 → 동의 규칙 → 줄 더하기)로 철회한다.
+         * 더한 줄 수를 돌려준다.
+         */
+        private long withdrawInOwnTransaction(long accountId, CyclicBarrier bothStarted) {
+            try (CloseableDSLContext ownConnection = DSL.using(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                    POSTGRES.getPassword())) {
+                return ownConnection.transactionResult(transaction -> {
+                    AudienceAccountPersistenceAdapter transactionAdapter =
+                            new AudienceAccountPersistenceAdapter(transaction.dsl());
+                    bothStarted.await(10, TimeUnit.SECONDS);
+                    AudienceAccount account = transactionAdapter.findByIdForUpdate(accountId).orElseThrow();
+                    Optional<ConsentRecord> withdrawal = account.changeMarketingConsent(false, WITHDRAWN_AT);
+                    withdrawal.ifPresent(consentRecord -> transactionAdapter.addConsentRecord(accountId, consentRecord));
+                    return withdrawal.isPresent() ? 1L : 0L;
+                });
+            }
+        }
+    }
+
     /** 구글로 비밀번호 없이 가입하고, 구글이 확인한 이메일이라 가입하며 바로 인증을 마친 계정(저장 전). */
     private static AudienceAccount oauthAccountVerifiedByProvider() {
         AudiencePersonalInformation personalInformation = AudiencePersonalInformation.of("한서윤",
@@ -488,12 +735,54 @@ class AudienceAccountPersistenceAdapterTest {
                 EmailAvailability.AVAILABLE, SIGNUP_TIME);
     }
 
+    /** 가입하고 이메일 인증까지 마친 계정을 저장하고 id를 돌려준다. */
+    private long savedActiveAccount(String phoneNumber, String email) {
+        AudienceAccount account = adapter.add(newAccount(phoneNumber, email, false));
+        account.verifyEmail(SIGNUP_TIME.plusSeconds(300));
+        adapter.saveEmailVerification(account);
+        return account.id().getAsLong();
+    }
+
     /** 회원 탈퇴(#83)가 만들 상태를 흉내 낸다 — 상태만 바꾼다. */
     private static void markWithdrawn(long id) {
+        markStatus(id, AudienceAccountStatus.WITHDRAWN);
+    }
+
+    /** 아직 저장 기능이 없는 상태(이용 정지 #125, 탈퇴 #83)를 흉내 낸다 — 상태만 바꾼다. */
+    private static void markStatus(long id, AudienceAccountStatus status) {
         dsl.update(AUDIENCE_ACCOUNT)
-                .set(AUDIENCE_ACCOUNT.STATUS, AudienceAccountStatus.WITHDRAWN.name())
+                .set(AUDIENCE_ACCOUNT.STATUS, status.name())
                 .where(AUDIENCE_ACCOUNT.ID.eq(id))
                 .execute();
+    }
+
+    /** 두 작업을 동시에 돌리고, 각각의 결과(돌려준 값 또는 던진 예외)를 순서대로 모은다. */
+    private static List<Object> runConcurrently(Callable<Long> first, Callable<Long> second) throws InterruptedException {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<Long>> futures = List.of(executor.submit(first), executor.submit(second));
+            List<Object> outcomes = new ArrayList<>();
+            for (Future<Long> future : futures) {
+                try {
+                    outcomes.add(future.get(30, TimeUnit.SECONDS));
+                } catch (ExecutionException exception) {
+                    outcomes.add(exception.getCause());
+                } catch (TimeoutException exception) {
+                    throw new AssertionError("동시 작업이 30초 안에 끝나지 않았습니다", exception);
+                }
+            }
+            return outcomes;
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    /** 하나는 값을 돌려주고, 다른 하나는 번호 문구의 충돌로 되돌려졌다. */
+    private static void assertOneSucceededAndOtherConflicted(List<Object> outcomes) {
+        assertThat(outcomes).filteredOn(Long.class::isInstance).hasSize(1);
+        assertThat(outcomes).filteredOn(ConflictException.class::isInstance).singleElement()
+                .satisfies(conflict -> assertThat(((ConflictException) conflict).errorCode())
+                        .isEqualTo(AccountErrorCode.PHONE_NUMBER_ALREADY_REGISTERED));
     }
 
     private static void assertConflict(ThrowingCallable action, ErrorCode expectedCode) {
