@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ticketon.api.security.SecurityConfiguration;
+import com.ticketon.application.organizer.port.in.GetMyAffiliationsUseCase;
 import com.ticketon.application.organizer.port.in.GetOrganizerHomeUseCase;
 import com.ticketon.application.organizer.port.in.SubmitOrganizerApplicationUseCase;
 import org.junit.jupiter.api.DisplayName;
@@ -24,7 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * 화면 타입은 /v3/api-docs에서 생성된다(npm run api:types). 주최자 신청서 제출과 내 주최 홈의 요청·응답 모양이 명세에 그대로 실리는지
  * 본다. DB 없이 돈다.
  */
-@WebMvcTest(controllers = {OrganizerApplicationController.class, OrganizerHomeController.class})
+@WebMvcTest(controllers = {OrganizerApplicationController.class, OrganizerHomeController.class, MyAffiliationController.class})
 @Import(SecurityConfiguration.class)
 @ImportAutoConfiguration({SpringDocConfiguration.class, SpringDocConfigProperties.class, SpringDocWebMvcConfiguration.class})
 @DisplayName("주최자 신청서 제출·내 주최 홈 API 명세")
@@ -38,6 +39,25 @@ class OrganizerApiDocsTest {
 
     @MockitoBean
     private GetOrganizerHomeUseCase getOrganizerHomeUseCase;
+
+    @MockitoBean
+    private GetMyAffiliationsUseCase getMyAffiliationsUseCase;
+
+    @Test
+    @DisplayName("내 소속 목록은 소속마다 주최자 id · 주최자명 · 역할 · 주최자 상태 · 소속 일시를 돌려준다")
+    void myAffiliationsOperation() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/organizer/affiliations'].get.responses['200']"
+                        + ".content['application/json'].schema['$ref']").value("#/components/schemas/MyAffiliationsResponse"))
+                .andExpect(jsonPath("$.paths['/api/organizer/affiliations'].get.parameters").doesNotExist())
+                .andExpect(jsonPath("$.components.schemas.MyAffiliationsResponse.required",
+                        containsInAnyOrder("affiliations")))
+                .andExpect(jsonPath("$.components.schemas.MyAffiliation.required", containsInAnyOrder(
+                        "organizerId", "organizerName", "role", "organizerStatus", "since")))
+                .andExpect(jsonPath("$.components.schemas.MyAffiliation.properties.organizerStatus.enum",
+                        containsInAnyOrder("UNDER_REVIEW", "ACTIVE", "CLOSED", "PERMANENTLY_SUSPENDED")));
+    }
 
     @Test
     @DisplayName("신청서 제출은 201에 심사 중인 신청을 돌려주고, 요청의 필수 칸은 신청 항목 표의 필수 항목이다 — 링크·사업자 정보는 선택")

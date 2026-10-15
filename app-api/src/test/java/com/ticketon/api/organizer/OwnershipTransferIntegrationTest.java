@@ -46,7 +46,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 서버 전체를 진짜 PostgreSQL(마이그레이션 전체)로 띄우고, 실제 HTTP 요청으로 소유자 넘기기가 소속(역할 교대) · 소유자 변경 이력 · 운영진 조작
- * 기록 · 메일 · 관리자 처리 목록(사후 확인)에 반영되는지 끝까지 돌린다(#26 완료 조건). Docker가 없는 환경에서는 건너뛴다.
+ * 기록 · 메일 · 관리자 처리 목록(사후 확인) · 주최자 전환의 내 소속 목록에 반영되는지 끝까지 돌린다(#26 완료 조건). Docker가 없는 환경에서는
+ * 건너뛴다.
  * <p>
  * 극단 열두달(대표 박정훈 소유자, 기획 단원 · 홍보 단원 운영자)에서 대표가 기획 단원에게 소유자를 넘긴다. 이도현은 다른 주최자 늦여름의 운영자라
  * 열두달에는 바깥 사람이다. 운영진 로그인 · 주최자 · 소속은 표에 바로 넣고, 로그인은 실제 로그인 API로 한다. 메일은 '기록만' 어댑터를 그대로
@@ -166,6 +167,14 @@ class OwnershipTransferIntegrationTest {
                 });
             }
             assertThat(mailsTo(dohyunEmail)).isEmpty();
+            assertThat(myAffiliations(owner)).singleElement().satisfies(affiliation -> {
+                assertThat(affiliation.organizerId()).isEqualTo(twelveMonths);
+                assertThat(affiliation.organizerName()).isEqualTo(twelveMonthsName);
+                assertThat(affiliation.role()).isEqualTo(StaffRoleCode.OPERATOR);
+                assertThat(affiliation.organizerStatus()).isEqualTo(OrganizerStatusCode.ACTIVE);
+            });
+            assertThat(myAffiliations(newOwner)).singleElement()
+                    .satisfies(affiliation -> assertThat(affiliation.role()).isEqualTo(StaffRoleCode.OWNER));
             expectError(owner.post(transferPath(planner), null), 403, "OWNER_ONLY_ACTION");
             assertThat(newOwner.post(transferPath(junghoon), null).statusCode()).isEqualTo(204);
             assertThat(activeRoleOf(junghoon)).isEqualTo("OWNER");
@@ -286,6 +295,13 @@ class OwnershipTransferIntegrationTest {
 
     private String transferPath(long newOwnerStaffAccountId) {
         return "/api/organizer/organizers/" + twelveMonths + "/staff/" + newOwnerStaffAccountId + "/ownership-transfer";
+    }
+
+    /** 주최자 전환의 내 소속 목록. */
+    private List<MyAffiliationsResponse.MyAffiliation> myAffiliations(Browser staff) throws Exception {
+        HttpResponse<String> response = staff.get("/api/organizer/affiliations");
+        assertThat(response.statusCode()).isEqualTo(200);
+        return jsonMapper.readValue(response.body(), MyAffiliationsResponse.class).affiliations();
     }
 
     private static String confirmationPath(long ownershipChangeId) {

@@ -18,6 +18,7 @@ import com.ticketon.common.MutableClock;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.organizer.OrganizerApplicationStatus;
+import com.ticketon.domain.organizer.OrganizerStatus;
 import com.ticketon.domain.organizer.StaffRole;
 import java.time.Duration;
 import java.time.Instant;
@@ -84,7 +85,8 @@ class GetOrganizerHomeServiceTest {
     void latestApproved() {
         homeQueryPort.setLatestApplication(JUNGHOON.id(), new LatestOrganizerApplication(3, "극단 열두달",
                 OrganizerApplicationStatus.APPROVED, SUBMITTED_AT, REVIEWED_AT, null));
-        homeQueryPort.addAffiliation(JUNGHOON.id(), new CurrentAffiliation(12, "극단 열두달", StaffRole.OWNER, REVIEWED_AT));
+        homeQueryPort.addAffiliation(JUNGHOON.id(),
+                new CurrentAffiliation(12, "극단 열두달", StaffRole.OWNER, REVIEWED_AT, OrganizerStatus.ACTIVE));
 
         OrganizerHomeResult home = service.getHome(new GetOrganizerHomeQuery(JUNGHOON));
 
@@ -96,8 +98,10 @@ class GetOrganizerHomeServiceTest {
     @Test
     @DisplayName("여러 주최자에 소속돼 있으면 모두 역할과 함께 나온다 — 주최자 전환")
     void severalAffiliations() {
-        homeQueryPort.addAffiliation(JUNGHOON.id(), new CurrentAffiliation(12, "극단 열두달", StaffRole.OWNER, SUBMITTED_AT));
-        homeQueryPort.addAffiliation(JUNGHOON.id(), new CurrentAffiliation(30, "늦여름", StaffRole.OPERATOR, REVIEWED_AT));
+        homeQueryPort.addAffiliation(JUNGHOON.id(),
+                new CurrentAffiliation(12, "극단 열두달", StaffRole.OWNER, SUBMITTED_AT, OrganizerStatus.ACTIVE));
+        homeQueryPort.addAffiliation(JUNGHOON.id(),
+                new CurrentAffiliation(30, "늦여름", StaffRole.OPERATOR, REVIEWED_AT, OrganizerStatus.ACTIVE));
 
         OrganizerHomeResult home = service.getHome(new GetOrganizerHomeQuery(JUNGHOON));
 
@@ -126,7 +130,8 @@ class GetOrganizerHomeServiceTest {
     void onlyThatPerson() {
         homeQueryPort.setLatestApplication(4, new LatestOrganizerApplication(5, "늦여름",
                 OrganizerApplicationStatus.UNDER_REVIEW, SUBMITTED_AT, null, null));
-        homeQueryPort.addAffiliation(4, new CurrentAffiliation(30, "늦여름", StaffRole.OWNER, REVIEWED_AT));
+        homeQueryPort.addAffiliation(4,
+                new CurrentAffiliation(30, "늦여름", StaffRole.OWNER, REVIEWED_AT, OrganizerStatus.ACTIVE));
 
         OrganizerHomeResult home = service.getHome(new GetOrganizerHomeQuery(JUNGHOON));
 

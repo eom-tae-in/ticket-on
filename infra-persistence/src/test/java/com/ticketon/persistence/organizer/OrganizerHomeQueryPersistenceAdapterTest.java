@@ -102,8 +102,8 @@ class OrganizerHomeQueryPersistenceAdapterTest {
         rows.currentMembership(lateSummer, dohyun, StaffRole.OWNER, SUBMITTED_AT);
 
         assertThat(adapter.currentAffiliationsOf(junghoon)).containsExactly(
-                new CurrentAffiliation(twelveMonths, "극단 열두달", StaffRole.OWNER, SUBMITTED_AT),
-                new CurrentAffiliation(lateSummer, "늦여름", StaffRole.OPERATOR, REVIEWED_AT));
+                new CurrentAffiliation(twelveMonths, "극단 열두달", StaffRole.OWNER, SUBMITTED_AT, OrganizerStatus.ACTIVE),
+                new CurrentAffiliation(lateSummer, "늦여름", StaffRole.OPERATOR, REVIEWED_AT, OrganizerStatus.ACTIVE));
     }
 
     @Test
