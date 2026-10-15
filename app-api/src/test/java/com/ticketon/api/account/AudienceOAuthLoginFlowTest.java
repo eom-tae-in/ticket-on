@@ -564,6 +564,30 @@ class AudienceOAuthLoginFlowTest {
         }
 
         @Test
+        @DisplayName("연결을 시작한 뒤 같은 브라우저에서 다른 관객으로 다시 로그인했다면 돌아와도 어느 계정에도 연결하지 않는다 — 남의 계정에 내 제공자 계정이 붙지 않게")
+        void doesNotLinkToAccountLoggedInAfterStart() throws Exception {
+            AccountRef otherAudience = AccountRef.of(AccountKind.AUDIENCE, 8);
+            MockHttpSession session = loggedInSession(SEOYUN);
+            String state = stateOf(mockMvc.perform(get(startLink(session, "GOOGLE", "/my/account")).session(session))
+                    .andReturn());
+            mockMvc.perform(post("/api/auth/test/login").param("kind", otherAudience.kind().name())
+                    .param("id", String.valueOf(otherAudience.id())).with(csrf()).session(session))
+                    .andExpect(status().isNoContent());
+
+            callback(session, "google", "google-link-3", GOOGLE_USER, state).andExpect(redirectedUrl(RESULT_PAGE));
+
+            mockMvc.perform(get(RESULT_PATH).session(session))
+                    .andExpect(jsonPath("$.outcome").value("FAILED"))
+                    .andExpect(jsonPath("$.provider").value("GOOGLE"))
+                    .andExpect(jsonPath("$.returnPath").value("/my/account"))
+                    .andExpect(jsonPath("$.error.code").value("UNAUTHENTICATED"))
+                    .andExpect(jsonPath("$.error.message").value("로그인이 필요합니다."));
+            verify(linkOAuthUseCase, never()).link(any());
+            verifyNoInteractions(logInWithOAuthUseCase);
+            assertLoggedInAs(session, otherAudience);
+        }
+
+        @Test
         @DisplayName("다른 제공자로 시작하면 연결 의도는 버려지고 로그인으로 시작한다")
         void intentForOtherProviderIsDiscarded() throws Exception {
             given(logInWithOAuthUseCase.logIn(any())).willReturn(new LogInWithOAuthResult.LoggedIn(SEOYUN));

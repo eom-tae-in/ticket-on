@@ -229,6 +229,40 @@ class AudienceOAuthIntegrationTest {
     }
 
     @Test
+    @DisplayName("연결을 시작한 뒤 같은 브라우저에서 다른 관객으로 다시 로그인하면 돌아와도 어느 계정에도 연결하지 않는다 — 연결 표에 줄이 생기지 않고 로그인이 필요하다는 실패로 끝난다")
+    void doesNotLinkToAccountLoggedInAfterStart() throws Exception {
+        String starterEmail = "link-starter@example.com";
+        String laterEmail = "logged-in-later@example.com";
+        try (Browser browser = new Browser()) {
+            browser.signUpAndVerify(starterEmail, "010-5555-0061");
+            browser.signUpAndVerify(laterEmail, "010-5555-0062");
+            assertThat(browser.post(LOGIN_PATH, loginBody(starterEmail, PASSWORD)).statusCode()).isEqualTo(200);
+            HttpResponse<String> start = browser.post(LINKS_PATH + "KAKAO", Map.of("returnPath", "/my/account"));
+            String authorizationPath = jsonMapper.readTree(start.body()).get("authorizationPath").asString();
+            HttpResponse<String> providerRedirect = browser.get(authorizationPath);
+            assertThat(providerRedirect.statusCode()).isEqualTo(302);
+            String state = URLDecoder.decode(UriComponentsBuilder.fromUriString(providerRedirect.headers()
+                    .firstValue(HttpHeaders.LOCATION).orElseThrow()).build().getQueryParams().getFirst("state"),
+                    StandardCharsets.UTF_8);
+
+            assertThat(browser.post(LOGIN_PATH, loginBody(laterEmail, PASSWORD)).statusCode()).isEqualTo(200);
+            PROVIDER.willAuthenticate("relogin-link-code", kakaoUser(5551000003L, null, false));
+            HttpResponse<String> callback = browser.get("/api/auth/audience/oauth2/callback/kakao?code=relogin-link-code"
+                    + "&state=" + URLEncoder.encode(state, StandardCharsets.UTF_8));
+            assertThat(callback.statusCode()).isEqualTo(302);
+
+            JsonNode result = browser.getJson(RESULT_PATH);
+            assertThat(result.get("outcome").asString()).isEqualTo("FAILED");
+            assertThat(result.get("error").get("code").asString()).isEqualTo("UNAUTHENTICATED");
+            JsonNode account = browser.getJson(ACCOUNT_PATH);
+            assertThat(account.get("email").asString()).isEqualTo(laterEmail);
+            assertThat(account.get("linkedOAuthProviders").isEmpty()).isTrue();
+        }
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM audience_oauth_link WHERE provider_user_id = ?",
+                Long.class, "5551000003")).isZero();
+    }
+
+    @Test
     @DisplayName("OAuth로만 가입한 관객 — 하나뿐인 연결은 해제할 수 없고, 비밀번호 찾기로 비밀번호를 정하면 이메일·비밀번호로 로그인되고 해제할 수 있다 (#16)")
     void oauthOnlyAudienceSetsPasswordThroughReset(CapturedOutput output) throws Exception {
         String email = "oauth-only@gmail.com";
