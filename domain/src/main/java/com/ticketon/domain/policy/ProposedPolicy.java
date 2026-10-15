@@ -90,6 +90,15 @@ public final class ProposedPolicy {
      */
     public static final BusinessDays ORGANIZER_REVIEW_DEADLINE_APPROACHING_WITHIN = BusinessDays.of(1);
 
+    /**
+     * 확인 필요 (#25, 문서에 없음) — 운영자 초대 유효 기간. 소유자가 보낸 초대는 보낸 때부터 이만큼 지나면 수락·거절할 수 없고 받은 초대에서도
+     * 빠진다. 지난 초대는 소유자가 같은 이메일로 다시 초대하면 그때부터 이 기간만큼 다시 열린다.
+     * 7일을 제안한다: docs/01이 운영진 구조를 GitHub Organization에 견주는데("주최자와 운영진") GitHub 조직 초대가 7일 뒤 만료된다. 받은
+     * 사람이 주최자 쪽 로그인을 새로 만들고 이메일 인증({@link #EMAIL_VERIFICATION_LINK_VALIDITY})까지 마칠 여유가 있고, 주말에만 메일을 보는
+     * 동아리 단원도 다음 주말 전에 답할 수 있다. 문서에는 "소유자가 이메일로 초대"만 있고 기간이 없다(docs/01 "운영자 초대").
+     */
+    public static final Duration STAFF_INVITATION_VALIDITY = Duration.ofDays(7);
+
     private ProposedPolicy() {
     }
 }

@@ -10,5 +10,11 @@ public enum StaffOperationTargetKind {
     /**
      * 주최자 자신 — 주최자명 · 공개 정보 · 사업자 정보 · 정산 계좌처럼 주최자에 붙은 것을 다룬 조작. 대상 id는 기록이 걸린 주최자의 id다.
      */
-    ORGANIZER
+    ORGANIZER,
+
+    /** 운영자 초대 — 초대를 보내거나 수락한 조작. 대상 id는 초대({@link StaffInvitation})의 id다. */
+    STAFF_INVITATION,
+
+    /** 운영진 한 사람 — 내보내거나 스스로 나간 조작. 대상 id는 그 사람의 운영진 계정 id다(소속 이력도 그 사람을 가리킨다). */
+    STAFF_MEMBER
 }

@@ -73,7 +73,32 @@ public enum OrganizerErrorCode implements ErrorCode {
      * 소유자가 주최자에서 나가거나 운영진 로그인을 탈퇴하려 했다 — 소유자는 언제나 1명이라 먼저 소유자를 넘기거나 주최자를 닫아야 한다
      * (docs/01 "탈퇴와 주최자 닫기"). 운영자는 언제든 나갈 수 있다.
      */
-    OWNER_MUST_HAND_OVER_FIRST("먼저 소유자를 넘기거나 주최자를 닫아야 합니다.");
+    OWNER_MUST_HAND_OVER_FIRST("먼저 소유자를 넘기거나 주최자를 닫아야 합니다."),
+
+    /**
+     * 그 사람의 소속을 끝내려 했는데 그 사이 이미 끝났다 — 소유자가 내보내는 사이 그 운영자가 스스로 나갔거나, 두 요청이 거의 동시에 같은 사람을
+     * 내보낸 경우다. 소속을 끝내는 저장이 진 쪽이 받는다.
+     */
+    MEMBERSHIP_ALREADY_ENDED("이미 운영진에서 빠졌습니다."),
+
+    /**
+     * 없는 운영자 초대이거나, 로그인한 운영진의 이메일로 온 초대가 아니다. 초대는 초대받은 이메일의 운영진 로그인만 답한다(docs/01 "운영자
+     * 초대"). 남의 초대가 있는지도 알려 주지 않으려고 없는 초대와 같게 답한다.
+     */
+    STAFF_INVITATION_NOT_FOUND("받은 초대를 찾을 수 없습니다."),
+
+    /**
+     * 같은 이메일로 보낸 초대가 아직 답을 기다리고 유효 기간도 남아 있다. 한 주최자가 한 이메일로 기다리는 초대는 하나뿐이다. 유효 기간이 지난
+     * 초대는 다시 초대하면 다시 열린다({@link StaffInvitation#reinvite}). 같은 이메일로 거의 동시에 두 번 초대해 한쪽이 먼저 저장된 경우도
+     * 이 코드다.
+     */
+    STAFF_INVITATION_ALREADY_PENDING("이미 초대를 보낸 이메일입니다. 받은 분의 답을 기다려 주세요."),
+
+    /** 이미 수락하거나 거절한 초대에 다시 답하려 했다. 같은 초대를 거의 동시에 두 번 수락해 한쪽이 먼저 처리된 경우도 이 코드다. */
+    STAFF_INVITATION_ALREADY_ANSWERED("이미 답한 초대입니다."),
+
+    /** 유효 기간({@link com.ticketon.domain.policy.ProposedPolicy#STAFF_INVITATION_VALIDITY})이 지난 초대에 답하려 했다. */
+    STAFF_INVITATION_EXPIRED("유효 기간이 지난 초대입니다. 소유자에게 다시 초대해 달라고 요청해 주세요.");
 
     private final String message;
 

@@ -125,8 +125,9 @@ class OrganizerStaffTest {
         void addsOperators() {
             OrganizerStaff staff = twelveMonthsStaff();
 
-            staff.addOperator(DOHYUN, LATER);
+            StaffMembership joined = staff.addOperator(DOHYUN, LATER);
 
+            assertThat(joined).isEqualTo(new StaffMembership(TWELVE_MONTHS, DOHYUN, StaffRole.OPERATOR, LATER, null));
             assertThat(staff.roleOf(PLANNER)).contains(StaffRole.OPERATOR);
             assertThat(staff.roleOf(DOHYUN)).contains(StaffRole.OPERATOR);
             assertThat(activeOwnerCount(staff)).isEqualTo(1);
@@ -275,8 +276,10 @@ class OrganizerStaffTest {
         void operatorLeavesAnytime() {
             OrganizerStaff staff = twelveMonthsStaff();
 
-            staff.leave(PLANNER, LATER);
+            StaffMembership ended = staff.leave(PLANNER, LATER);
 
+            assertThat(ended).isEqualTo(
+                    new StaffMembership(TWELVE_MONTHS, PLANNER, StaffRole.OPERATOR, PLANNER_JOINED_AT, LATER));
             assertThat(staff.roleOf(PLANNER)).isEmpty();
             assertThat(staff.memberships()).contains(
                     new StaffMembership(TWELVE_MONTHS, PLANNER, StaffRole.OPERATOR, PLANNER_JOINED_AT, LATER));
@@ -317,8 +320,10 @@ class OrganizerStaffTest {
         void ownerRemovesOperator() {
             OrganizerStaff staff = twelveMonthsStaff();
 
-            staff.removeOperator(JUNGHOON, PLANNER, LATER);
+            StaffMembership ended = staff.removeOperator(JUNGHOON, PLANNER, LATER);
 
+            assertThat(ended).isEqualTo(
+                    new StaffMembership(TWELVE_MONTHS, PLANNER, StaffRole.OPERATOR, PLANNER_JOINED_AT, LATER));
             assertThat(staff.roleOf(PLANNER)).isEmpty();
             assertThat(staff.memberships()).contains(
                     new StaffMembership(TWELVE_MONTHS, PLANNER, StaffRole.OPERATOR, PLANNER_JOINED_AT, LATER));
