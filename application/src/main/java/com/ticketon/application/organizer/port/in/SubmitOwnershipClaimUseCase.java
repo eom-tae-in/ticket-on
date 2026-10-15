@@ -19,6 +19,8 @@ public interface SubmitOwnershipClaimUseCase {
      * @throws RuleViolationException    소유자면({@link OrganizerErrorCode#OWNER_CANNOT_CLAIM_OWNERSHIP}), 그 주최자에 심사 중인 신청을
      *                                   이미 냈으면({@link OrganizerErrorCode#OWNERSHIP_CLAIM_ALREADY_UNDER_REVIEW})
      * @throws ConflictException         같은 사람이 거의 동시에 두 번 내 한쪽이 먼저 저장됐으면
+     *                                   ({@link OrganizerErrorCode#OWNERSHIP_CLAIM_ALREADY_UNDER_REVIEW}), 신청하는 사이 소유자가 다른 사람에게
+     *                                   넘어갔으면({@link OrganizerErrorCode#OWNERSHIP_ALREADY_TRANSFERRED})
      */
     SubmitOwnershipClaimResult submit(SubmitOwnershipClaimCommand command);
 }

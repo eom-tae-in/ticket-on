@@ -1,5 +1,6 @@
 package com.ticketon.application.organizer.service;
 
+import static com.ticketon.application.organizer.service.OrganizerStaffScene.APPROVED_AT;
 import static com.ticketon.application.organizer.service.OrganizerStaffScene.DOHYUN;
 import static com.ticketon.application.organizer.service.OrganizerStaffScene.JUNGHOON;
 import static com.ticketon.application.organizer.service.OrganizerStaffScene.NOW;
@@ -132,8 +133,16 @@ class SubmitOwnershipClaimServiceTest {
     }
 
     @Test
-    @DisplayName("신청하는 사람의 계정 줄을 먼저 잠근다 — 잠금을 기다리는 사이 그 사람이 나갔으면 잠근 뒤의 명단에서 막힌다 (403 NOT_ORGANIZER_STAFF)")
-    void locksClaimantAccountFirst() {
+    @DisplayName("신청하는 사람과 지금 소유자의 계정 줄을 id 순서로 먼저 잠근다 — 신청 줄이 두 사람을 가리키므로 소유자 넘기기 · 내보내기와 같은 순서")
+    void locksClaimantAndOwnerAccountsInIdOrder() {
+        submit(PLANNER, scene.twelveMonths);
+
+        assertThat(scene.staffAccountRepository.lockedAccountIds()).containsExactly(JUNGHOON, PLANNER);
+    }
+
+    @Test
+    @DisplayName("잠금을 기다리는 사이 그 사람이 나갔으면 잠근 뒤의 명단에서 막힌다 (403 NOT_ORGANIZER_STAFF)")
+    void claimantLeftWhileWaitingForLock() {
         scene.staffAccountRepository.runOnNextLock(() -> {
             OrganizerStaff staff = scene.staffRepository.findByOrganizerId(scene.twelveMonths);
             scene.staffRepository.saveEnded(staff.leave(PLANNER, NOW));
@@ -141,7 +150,33 @@ class SubmitOwnershipClaimServiceTest {
 
         assertRejectedWith(PermissionDeniedException.class, OrganizerErrorCode.NOT_ORGANIZER_STAFF,
                 () -> submit(PLANNER, scene.twelveMonths));
-        assertThat(scene.staffAccountRepository.lockedAccountIds()).containsExactly(PLANNER);
+        assertThat(scene.staffAccountRepository.lockedAccountIds()).containsExactly(JUNGHOON, PLANNER);
+        assertNothingSaved();
+    }
+
+    @Test
+    @DisplayName("잠금을 기다리는 사이 소유자가 다른 운영자에게 넘어갔으면 409 OWNERSHIP_ALREADY_TRANSFERRED다 — 잠그지 않은 사람을 가리키는 신청을 넣지 않는다")
+    void ownerChangedToAnotherWhileWaitingForLock() {
+        scene.staffAccountRepository.storeActive(5, "정홍보", "구름", "promoter@example.com");
+        OrganizerStaff staff = scene.staffRepository.findByOrganizerId(scene.twelveMonths);
+        staff.addOperator(5, APPROVED_AT.plusSeconds(172_800));
+        scene.staffRepository.store(staff);
+        scene.staffAccountRepository.runOnNextLock(() -> scene.staffRepository.saveOwnershipTransfer(
+                scene.staffRepository.findByOrganizerId(scene.twelveMonths).transferOwnership(JUNGHOON, 5, NOW)));
+
+        assertRejectedWith(ConflictException.class, OrganizerErrorCode.OWNERSHIP_ALREADY_TRANSFERRED,
+                () -> submit(PLANNER, scene.twelveMonths));
+        assertNothingSaved();
+    }
+
+    @Test
+    @DisplayName("잠금을 기다리는 사이 신청하는 사람이 소유자를 넘겨받았으면 소유자라 신청하지 못한다 (409 OWNER_CANNOT_CLAIM_OWNERSHIP)")
+    void claimantBecameOwnerWhileWaitingForLock() {
+        scene.staffAccountRepository.runOnNextLock(() -> scene.staffRepository.saveOwnershipTransfer(
+                scene.staffRepository.findByOrganizerId(scene.twelveMonths).transferOwnership(JUNGHOON, PLANNER, NOW)));
+
+        assertRejectedWith(RuleViolationException.class, OrganizerErrorCode.OWNER_CANNOT_CLAIM_OWNERSHIP,
+                () -> submit(PLANNER, scene.twelveMonths));
         assertNothingSaved();
     }
 }

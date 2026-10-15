@@ -104,7 +104,8 @@ public class StaffManagementController {
             + "SNS 등으로 확인한 뒤 승인하면 신청한 운영자가 소유자가 되고(옛 소유자는 운영자로 남음), 반려하면 사유와 함께 운영진 전원에게 "
             + "메일([주최])이 간다. 소유자면 409 OWNER_CANNOT_CLAIM_OWNERSHIP(직접 넘긴다), 그 주최자의 운영진이 아니면 403 "
             + "NOT_ORGANIZER_STAFF, 활동 중인 주최자가 아니면 403 ORGANIZER_NOT_ACTIVE, 그 주최자에 심사 중인 신청을 이미 냈으면 409 "
-            + "OWNERSHIP_CLAIM_ALREADY_UNDER_REVIEW, 사유가 비면 400. 운영진 조작 기록에 남는다.")
+            + "OWNERSHIP_CLAIM_ALREADY_UNDER_REVIEW, 신청하는 사이 소유자가 다른 사람에게 넘어갔으면 409 OWNERSHIP_ALREADY_TRANSFERRED(다시 "
+            + "신청하면 새 소유자를 가리킨다), 사유가 비면 400. 운영진 조작 기록에 남는다.")
     @PostMapping("/ownership-claims")
     @ResponseStatus(HttpStatus.CREATED)
     public SubmitOwnershipClaimResponse submitOwnershipClaim(@CurrentStaff ActingStaff actingStaff,
