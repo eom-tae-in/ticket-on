@@ -33,8 +33,31 @@ server:
 
 ticketon:
   web:
-    # 화면(웹) 기준 주소 — 메일·문자 속 링크(이메일 인증 등)가 이 주소로 시작한다. 운영은 application-prod.yml
+    # 화면(웹) 기준 주소 — 메일·문자 속 링크(이메일 인증 등)와 카카오·구글 로그인 뒤 돌아갈 화면이 이 주소로 시작한다. 운영은 application-prod.yml
     base-url: ${WEB_BASE_URL:http://localhost:3000}
+  # 관객 카카오·구글 로그인 (docs/16). 클라이언트 id·시크릿은 환경 변수로만 받는다(.env.example) — 레포에 키를 넣지 않는다.
+  # 키가 없는 제공자는 켜지지 않는다(서버는 뜨고 그 제공자의 로그인 시작 주소만 404).
+  # 제공자 개발자 콘솔에 등록할 콜백 주소: {서버 주소}/api/auth/audience/oauth2/callback/kakao, …/callback/google
+  oauth:
+    kakao:
+      client-id: ${KAKAO_CLIENT_ID:}
+      client-secret: ${KAKAO_CLIENT_SECRET:}
+      authorization-uri: https://kauth.kakao.com/oauth/authorize
+      token-uri: https://kauth.kakao.com/oauth/token
+      user-info-uri: https://kapi.kakao.com/v2/user/me
+      # 카카오 동의 항목 — 이메일. 이름(name)은 카카오 앱 설정에서 권한을 받은 뒤 더한다
+      scopes:
+        - account_email
+    google:
+      client-id: ${GOOGLE_CLIENT_ID:}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
+      authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
+      token-uri: https://oauth2.googleapis.com/token
+      user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo
+      # OpenID Connect(openid)는 쓰지 않는다 — 사용자 정보 주소로 이름·이메일을 읽는다
+      scopes:
+        - profile
+        - email
 
 springdoc:
   api-docs:

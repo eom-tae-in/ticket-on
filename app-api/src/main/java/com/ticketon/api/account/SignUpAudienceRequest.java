@@ -4,16 +4,12 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.ticketon.application.account.port.in.SignUpAudienceCommand;
 import com.ticketon.domain.account.AudiencePersonalInformation;
-import com.ticketon.domain.account.ConsentItem;
 import com.ticketon.domain.account.NewPassword;
-import com.ticketon.domain.account.SignupConsentChoices;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
 import java.time.LocalDate;
-import java.util.EnumSet;
-import java.util.Set;
 
 /**
  * 관객 직접 가입 요청 — 가입 정보 넷(전부 필수, docs/01 "수집 정보 — 사용자"), 비밀번호, 동의 항목 넷(docs/01 "약관과 동의 — 가입 시").
@@ -62,24 +58,8 @@ public record SignUpAudienceRequest(
 
     SignUpAudienceCommand toCommand() {
         return new SignUpAudienceCommand(AudiencePersonalInformation.of(name, birthDate, email, phoneNumber),
-                new NewPassword(password), new SignupConsentChoices(agreedItems()));
-    }
-
-    private Set<ConsentItem> agreedItems() {
-        Set<ConsentItem> agreedItems = EnumSet.noneOf(ConsentItem.class);
-        if (termsOfServiceAgreed) {
-            agreedItems.add(ConsentItem.TERMS_OF_SERVICE);
-        }
-        if (personalInformationCollectionAgreed) {
-            agreedItems.add(ConsentItem.PERSONAL_INFORMATION_COLLECTION);
-        }
-        if (minimumAgeConfirmed) {
-            agreedItems.add(ConsentItem.MINIMUM_AGE_CONFIRMATION);
-        }
-        if (marketingAgreed) {
-            agreedItems.add(ConsentItem.MARKETING);
-        }
-        return agreedItems;
+                new NewPassword(password), SignupConsentItems.choicesOf(termsOfServiceAgreed,
+                        personalInformationCollectionAgreed, minimumAgeConfirmed, marketingAgreed));
     }
 
     @Override

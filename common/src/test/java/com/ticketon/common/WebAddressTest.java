@@ -21,6 +21,15 @@ class WebAddressTest {
     }
 
     @Test
+    @DisplayName("쿼리 없는 화면 주소는 기준 주소 뒤에 경로만 붙인다 — 경로는 '/'로 시작해야 한다")
+    void buildsPage() {
+        WebAddress webAddress = WebAddress.of("http://localhost:3000/");
+
+        assertThat(webAddress.page("/oauth/result")).isEqualTo("http://localhost:3000/oauth/result");
+        assertThatThrownBy(() -> webAddress.page("oauth/result")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     @DisplayName("기준 주소 끝의 '/'는 떼어 내 '//'가 생기지 않는다")
     void stripsTrailingSlash() {
         assertThat(WebAddress.of("http://localhost:3000/").link("/verify-email", "token", "abc"))
