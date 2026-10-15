@@ -21,7 +21,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * 메모리 운영진 계정 저장소 — 주최자 심사가 쓰는 찾기(id · 잠그고 찾기)만 한다. 잠근 계정 id를 부른 차례대로 남긴다. 가입 · 인증 · 닉네임 ·
+ * 메모리 운영진 계정 저장소 — 주최자 심사 · 소유자 이전 신청 심사가 쓰는 찾기(id · 잠그고 찾기)만 한다. 잠근 계정 id를 부른 차례대로 남긴다. 가입 · 인증 · 닉네임 ·
  * 비밀번호 · 탈퇴 저장은 계정 유스케이스의 테스트가 본다.
  */
 final class FakeStaffAccountRepository implements StaffAccountRepository {
@@ -30,6 +30,7 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
 
     private final Map<Long, StaffAccount> accounts = new LinkedHashMap<>();
     private final List<Long> lockedAccountIds = new ArrayList<>();
+    private Runnable nextLockAction;
 
     /** 이메일 인증을 마친 운영진 로그인을 그 id로 바로 둔다. */
     void storeActive(long id, String name, String nickname, String email) {
@@ -53,11 +54,24 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
         return Optional.ofNullable(accounts.get(id));
     }
 
-    /** 메모리라 잠그지 않는다 — 잠근 계정 id만 남기고 지금 저장된 값을 돌려준다. */
+    /**
+     * 메모리라 잠그지 않는다 — 잠근 계정 id만 남기고 지금 저장된 값을 돌려준다. 다음 잠금에 할 일을 맡겨 두었으면 먼저 한다 — 잠금을 기다리는 사이
+     * 다른 트랜잭션이 커밋한 것을 흉내 낸다.
+     */
     @Override
     public Optional<StaffAccount> findByIdForUpdate(long id) {
+        Runnable whileWaiting = nextLockAction;
+        nextLockAction = null;
+        if (whileWaiting != null) {
+            whileWaiting.run();
+        }
         lockedAccountIds.add(id);
         return findById(id);
+    }
+
+    /** 다음 계정 잠금 바로 전에 할 일 — 잠금을 기다리는 사이 다른 트랜잭션이 먼저 커밋한 일을 흉내 낸다. */
+    void runOnNextLock(Runnable action) {
+        nextLockAction = action;
     }
 
     @Override

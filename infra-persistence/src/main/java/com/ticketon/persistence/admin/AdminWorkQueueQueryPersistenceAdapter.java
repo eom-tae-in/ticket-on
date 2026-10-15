@@ -3,6 +3,7 @@ package com.ticketon.persistence.admin;
 import static com.ticketon.persistence.jooq.Tables.ORGANIZER;
 import static com.ticketon.persistence.jooq.Tables.ORGANIZER_APPLICATION;
 import static com.ticketon.persistence.jooq.Tables.OWNERSHIP_CHANGE;
+import static com.ticketon.persistence.jooq.Tables.OWNERSHIP_CLAIM;
 import static com.ticketon.persistence.jooq.Tables.STAFF_ACCOUNT;
 
 import com.ticketon.application.admin.port.out.AdminWorkQueueQueryPort;
@@ -10,6 +11,7 @@ import com.ticketon.application.admin.query.AdminWorkKind;
 import com.ticketon.application.admin.query.PendingAdminWork;
 import com.ticketon.domain.organizer.OrganizerApplicationStatus;
 import com.ticketon.domain.organizer.OwnershipChangeMethod;
+import com.ticketon.domain.organizer.OwnershipClaimStatus;
 import com.ticketon.persistence.jooq.tables.StaffAccount;
 import java.util.Comparator;
 import java.util.List;
@@ -25,6 +27,8 @@ import org.springframework.stereotype.Component;
  *   <li>소유자 변경 — 소유자 변경 이력 표(ownership_change — V13)의 확인 전인 소유자 넘기기 줄. 소유자 이전 신청을 승인해 바꾼 줄(V14
  *       method = CLAIM_APPROVAL)은 관리자가 확인한 뒤 바꾼 것이라 담지 않는다. 제목은 "주최자명 · 넘긴 사람 → 받은 사람"이고 사람은
  *       공개 프로필의 닉네임으로 적는다(탈퇴해도 닉네임은 남는다). 접수 일시는 넘긴 일시다.</li>
+ *   <li>소유자 이전 신청 — 소유자 이전 신청 표(ownership_claim — V14)의 심사 중인 줄. 제목은 "주최자명 · 신청한 사람"이고 사람은 공개
+ *       프로필의 닉네임으로 적는다. 접수 일시는 신청 일시다. 사유는 심사 화면에서 본다.</li>
  * </ul>
  * 다른 종류는 그 기능의 이슈가 원천 조회를 하나씩 더해 {@link #pendingWork}에 잇는다.
  */
@@ -44,7 +48,7 @@ public class AdminWorkQueueQueryPersistenceAdapter implements AdminWorkQueueQuer
 
     @Override
     public List<PendingAdminWork> pendingWork() {
-        return Stream.of(pendingOrganizerApplications(), unconfirmedOwnershipChanges())
+        return Stream.of(pendingOrganizerApplications(), unconfirmedOwnershipChanges(), pendingOwnershipClaims())
                 .flatMap(List::stream)
                 .sorted(RECEIVED_ORDER)
                 .toList();
@@ -56,6 +60,16 @@ public class AdminWorkQueueQueryPersistenceAdapter implements AdminWorkQueueQuer
                 .where(ORGANIZER_APPLICATION.STATUS.eq(OrganizerApplicationStatus.UNDER_REVIEW.name()))
                 .fetch(row -> new PendingAdminWork(AdminWorkKind.ORGANIZER_APPLICATION, row.value1(), row.value2(),
                         row.value3().toInstant()));
+    }
+
+    private List<PendingAdminWork> pendingOwnershipClaims() {
+        return dsl.select(OWNERSHIP_CLAIM.ID, ORGANIZER.NAME, STAFF_ACCOUNT.NICKNAME, OWNERSHIP_CLAIM.SUBMITTED_AT)
+                .from(OWNERSHIP_CLAIM)
+                .join(ORGANIZER).on(ORGANIZER.ID.eq(OWNERSHIP_CLAIM.ORGANIZER_ID))
+                .join(STAFF_ACCOUNT).on(STAFF_ACCOUNT.ID.eq(OWNERSHIP_CLAIM.CLAIMANT_STAFF_ACCOUNT_ID))
+                .where(OWNERSHIP_CLAIM.STATUS.eq(OwnershipClaimStatus.UNDER_REVIEW.name()))
+                .fetch(row -> new PendingAdminWork(AdminWorkKind.OWNERSHIP_CLAIM, row.value1(),
+                        row.value2() + " · " + row.value3(), row.value4().toInstant()));
     }
 
     private List<PendingAdminWork> unconfirmedOwnershipChanges() {

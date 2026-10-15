@@ -14,7 +14,8 @@ public interface ConfirmOwnershipChangeUseCase {
 
     /**
      * @throws NotFoundException      없는 소유자 변경 이력이면({@link OrganizerErrorCode#OWNERSHIP_CHANGE_NOT_FOUND})
-     * @throws RuleViolationException 이미 확인했으면({@link OrganizerErrorCode#OWNERSHIP_CHANGE_ALREADY_CONFIRMED})
+     * @throws RuleViolationException 이미 확인했으면({@link OrganizerErrorCode#OWNERSHIP_CHANGE_ALREADY_CONFIRMED}), 소유자 이전 신청을
+     *                                승인해 바꾼 건이면({@link OrganizerErrorCode#OWNERSHIP_CHANGE_NOT_CONFIRMABLE} — 처리 목록에 쌓이지 않는다)
      * @throws ConflictException      다른 관리자가 거의 동시에 먼저 확인했으면({@link OrganizerErrorCode#OWNERSHIP_CHANGE_ALREADY_CONFIRMED})
      */
     void confirm(ConfirmOwnershipChangeCommand command);

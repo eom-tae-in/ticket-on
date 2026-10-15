@@ -32,6 +32,15 @@ final class FakeOrganizerApplicationRepository implements OrganizerApplicationRe
         return id;
     }
 
+    /** 승인된 신청서를 표에 바로 넣는다 — 소유자 이전 신청 심사가 주최자 신청 때 받은 연락처를 볼 때 쓴다. */
+    long storeApproved(long organizerId, long applicantStaffAccountId, OrganizerApplicationForm form, Instant submittedAt,
+            Instant reviewedAt) {
+        long id = nextId++;
+        applications.put(id, OrganizerApplication.restore(id, organizerId, applicantStaffAccountId, form, submittedAt,
+                OrganizerApplicationStatus.APPROVED, reviewedAt, null));
+        return id;
+    }
+
     /** 다른 관리자가 이미 반려한 것처럼 표를 바꿔 둔다. */
     void rejectInTable(long applicationId, String reason, Instant reviewedAt) {
         OrganizerApplication application = findById(applicationId).orElseThrow();
