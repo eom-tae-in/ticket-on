@@ -1,23 +1,60 @@
 package com.ticketon.persistence.notification;
 
+import static com.ticketon.persistence.jooq.Tables.STAFF_ACCOUNT;
+import static com.ticketon.persistence.jooq.Tables.STAFF_MEMBERSHIP;
+
 import com.ticketon.application.notification.port.out.OrganizerStaffContactPort;
+import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.notification.OrganizerStaffContacts;
+import com.ticketon.domain.organizer.StaffRole;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import org.jooq.DSLContext;
+import org.jooq.Record2;
 import org.springframework.stereotype.Component;
 
 /**
- * 주최자 운영진 연락처 조회 어댑터.
+ * 주최자 운영진 연락처 조회 어댑터 — 소속 표(staff_membership — V8)의 지금 소속과 운영진 로그인 표(staff_account — V5)의 이메일을 잇는다.
  * <p>
- * <b>아직 주최자·소속 표가 없다.</b> 운영진 로그인의 이메일은 운영진 로그인 표(staff_account — V5, #15)에 있지만, 주최자와
- * 소속(소유자·운영자)은 주최자 도메인(#19)·신청과 심사(#20·#23)·운영자 초대(#25)가 표와 함께 만든다. 주최자 표가 없으니 어떤 주최자도
- * 없고, 그래서 늘 비어 있다 — 주최자 id로 알림을 보내면 유스케이스가 '없는 주최자'로 거부한다. 소속 표가 생기는 이슈에서 이 어댑터를
- * 소속 표와 staff_account의 이메일을 잇는 조회로 채운다.
+ * 끝나지 않은 소속(ended_at이 비어 있음)만 본다 — 나간 운영진은 받지 않는다. 소유자는 소속 표의 유일 색인으로 많아야 한 명이다.
+ * 운영자는 소속을 시작한 순서로 담는다. 운영진 로그인 이메일로 보낸다 — 주최자 쪽 알림은 전부 이메일이다(docs/12 "주최자 대상").
+ * <p>
+ * 지금 소유자가 없으면 비어 있다. 없는 주최자뿐 아니라 운영진이 아무도 없는 주최자 — 심사 중(소유자 소속은 승인 때 시작), 닫힘·영구 정지
+ * (운영진이 전원 빠짐) — 도 그렇다. 이때의 알림(신청·다시 열기의 승인·반려)은 주최자 id가 아니라 그 사람의 연락처로 보낸다
+ * (OrganizerRecipientScope.INDIVIDUAL).
  */
 @Component
 public class OrganizerStaffContactPersistenceAdapter implements OrganizerStaffContactPort {
 
+    private final DSLContext dsl;
+
+    public OrganizerStaffContactPersistenceAdapter(DSLContext dsl) {
+        this.dsl = dsl;
+    }
+
     @Override
     public Optional<OrganizerStaffContacts> findStaffContacts(long organizerId) {
-        return Optional.empty();
+        EmailAddress owner = null;
+        List<EmailAddress> operators = new ArrayList<>();
+        for (Record2<String, String> member : currentStaffOf(organizerId)) {
+            EmailAddress email = new EmailAddress(member.value2());
+            switch (StaffRole.valueOf(member.value1())) {
+                case OWNER -> owner = email;
+                case OPERATOR -> operators.add(email);
+            }
+        }
+        return owner == null ? Optional.empty() : Optional.of(new OrganizerStaffContacts(owner, operators));
+    }
+
+    /** 그 주최자에 지금 소속된 운영진의 역할과 운영진 로그인 이메일 — 소속을 시작한 순서. */
+    private List<Record2<String, String>> currentStaffOf(long organizerId) {
+        return dsl.select(STAFF_MEMBERSHIP.ROLE, STAFF_ACCOUNT.EMAIL)
+                .from(STAFF_MEMBERSHIP)
+                .join(STAFF_ACCOUNT).on(STAFF_ACCOUNT.ID.eq(STAFF_MEMBERSHIP.STAFF_ACCOUNT_ID))
+                .where(STAFF_MEMBERSHIP.ORGANIZER_ID.eq(organizerId))
+                .and(STAFF_MEMBERSHIP.ENDED_AT.isNull())
+                .orderBy(STAFF_MEMBERSHIP.STARTED_AT, STAFF_MEMBERSHIP.ID)
+                .fetch();
     }
 }
