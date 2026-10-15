@@ -8,6 +8,8 @@ import java.util.Objects;
  * <b>사업자만 적고, 다섯 가지 모두 필수다.</b> 행사 페이지 "판매자 정보"에 그대로 나가 관객이 예매 전에 본다(docs/01 "판매자 정보").
  * 승인 뒤 바꾸려면 관리자 확인을 거친다 — 관객에게 보여 준 신원정보가 사실과 다르면 우리가 같이 배상해야 하기 때문이다(docs/01).
  * 사업자 여부와 함께 받을 때는 {@link BusinessDeclaration#declare}가 빠진 항목을 모아 알려 준다.
+ * <p>
+ * 승인 전에는 심사에만 쓰는 민감한 값이라 {@link #toString}에는 값을 싣지 않는다 — 예외 설명이나 로그로 새지 않게. 같은지는 값으로 본다.
  *
  * @param tradeName            상호. 앞뒤 공백을 걷는다.
  * @param representativeName   대표자 성명. 앞뒤 공백을 걷는다.
@@ -24,6 +26,11 @@ public record BusinessInformation(String tradeName, String representativeName, S
         businessAddress = requireText(businessAddress, "사업장 주소");
         Objects.requireNonNull(businessPhoneNumber, "businessPhoneNumber");
         Objects.requireNonNull(registrationNumber, "registrationNumber");
+    }
+
+    @Override
+    public String toString() {
+        return "BusinessInformation[****]";
     }
 
     private static String requireText(String value, String itemLabel) {
