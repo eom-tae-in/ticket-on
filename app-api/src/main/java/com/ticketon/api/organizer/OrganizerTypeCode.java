@@ -21,6 +21,16 @@ public enum OrganizerTypeCode {
         this.organizerType = organizerType;
     }
 
+    /** 도메인 구분의 API 이름 — 관리자 심사 화면도 쓴다. */
+    public static OrganizerTypeCode from(OrganizerType organizerType) {
+        for (OrganizerTypeCode code : values()) {
+            if (code.organizerType == organizerType) {
+                return code;
+            }
+        }
+        throw new IllegalArgumentException("API 이름이 없는 주최자 구분: " + organizerType);
+    }
+
     OrganizerType toOrganizerType() {
         return organizerType;
     }
