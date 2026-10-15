@@ -107,6 +107,30 @@ class StaffAffiliationsTest {
     }
 
     @Test
+    @DisplayName("지금 소속돼 있는 주최자인지 — 열두달은 소속 중, 늦여름은 나왔다, 소속된 적 없는 주최자는 아니다")
+    void isActiveIn() {
+        StaffAffiliations affiliations = new StaffAffiliations(JUNGHOON, List.of(
+                owner(TWELVE_MONTHS, Y2019, null),
+                operator(LATE_SUMMER, Y2023, Y2024)));
+
+        assertThat(affiliations.isActiveIn(TWELVE_MONTHS)).isTrue();
+        assertThat(affiliations.isActiveIn(LATE_SUMMER)).isFalse();
+        assertThat(affiliations.isActiveIn(NEW_TEAM)).isFalse();
+    }
+
+    @Test
+    @DisplayName("소속된 적이 있는 주최자 — 지난 소속 포함, 역할이 바뀐 주최자도 한 번만")
+    void participatedOrganizerIds() {
+        StaffAffiliations affiliations = new StaffAffiliations(JUNGHOON, List.of(
+                operator(TWELVE_MONTHS, Y2019, Y2023),
+                operator(LATE_SUMMER, Y2023, Y2024),
+                owner(TWELVE_MONTHS, Y2023, null)));
+
+        assertThat(affiliations.participatedOrganizerIds()).containsExactly(TWELVE_MONTHS, LATE_SUMMER);
+        assertThat(new StaffAffiliations(JUNGHOON, List.of()).participatedOrganizerIds()).isEmpty();
+    }
+
+    @Test
     @DisplayName("다른 사람의 소속이 섞이거나 한 주최자에 지금 소속이 둘이면 만들 수 없다")
     void rejectsInconsistentMemberships() {
         assertThatIllegalArgumentException().isThrownBy(() -> new StaffAffiliations(JUNGHOON, List.of(

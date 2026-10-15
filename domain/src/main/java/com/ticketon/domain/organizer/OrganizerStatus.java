@@ -29,5 +29,19 @@ public enum OrganizerStatus {
     CLOSED,
 
     /** 영구 정지 — 정지 4단계. 주최자 페이지가 내려가고 운영진 프로필의 참여 목록에서도 빠진다. */
-    PERMANENTLY_SUSPENDED
+    PERMANENTLY_SUSPENDED;
+
+    /**
+     * 공개되는 주최자인지 — 활동 · 닫힘. 닫힌 주최자는 "활동 종료" 배지로 주최자 페이지가 남는다 — 공유된 링크가 깨지지 않게 한다는 원칙은
+     * 주최자가 닫혀도 같다(docs/01 "탈퇴와 주최자 닫기"). 영구 정지된 주최자는 페이지가 내려가고(docs/01 "정지 4단계"), 심사 중인 주최자(신청이
+     * 반려돼 남은 것 포함)는 승인 전이라 공개되지 않는다.
+     * <p>
+     * 운영진 프로필의 참여한 주최자에도 공개되는 주최자만 나온다(docs/01 "운영진 프로필 — 영구 정지된 주최자는 프로필 목록에서도 빠짐").
+     */
+    public boolean isPublic() {
+        return switch (this) {
+            case ACTIVE, CLOSED -> true;
+            case UNDER_REVIEW, PERMANENTLY_SUSPENDED -> false;
+        };
+    }
 }

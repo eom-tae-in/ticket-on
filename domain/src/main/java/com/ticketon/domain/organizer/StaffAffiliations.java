@@ -10,7 +10,7 @@ import java.util.Set;
  * 한 사람의 소속 — 그 사람이 소속됐던 모든 주최자의 소속(지난 소속 포함).
  * <p>
  * <b>한 사람이 여러 주최자에 소속될 수 있다</b>(docs/01 "운영자 초대"). 막으면 두 동아리를 돕는 사람이 이메일을 두 개 만들어야 한다.
- * 주최자마다 역할이 따로다. 운영진 프로필의 "참여한 주최자"와 주최자 전환이 이 목록에서 나온다.
+ * 주최자마다 역할이 따로다. 운영진 프로필의 "참여한 주최자"({@link StaffPublicProfile})와 주최자 전환이 이 목록에서 나온다.
  * <p>
  * 운영진 로그인 탈퇴 규칙을 지킨다(docs/01 "탈퇴와 주최자 닫기"):
  * <ul>
@@ -74,5 +74,15 @@ public record StaffAffiliations(long staffAccountId, List<StaffMembership> membe
     /** 지금 소속된 주최자의 id — 탈퇴할 때 이 주최자들에서 나간다. */
     public List<Long> activeOrganizerIds() {
         return activeMemberships().stream().map(StaffMembership::organizerId).toList();
+    }
+
+    /** 그 주최자에 지금 소속돼 있는지. 나왔거나 소속된 적이 없으면 false. */
+    public boolean isActiveIn(long organizerId) {
+        return activeMemberships().stream().anyMatch(membership -> membership.organizerId() == organizerId);
+    }
+
+    /** 소속된 적이 있는 모든 주최자의 id — 지난 소속 포함, 겹치지 않게 소속 목록의 순서대로. 운영진 프로필의 참여한 주최자가 이 주최자들이다. */
+    public List<Long> participatedOrganizerIds() {
+        return memberships.stream().map(StaffMembership::organizerId).distinct().toList();
     }
 }
