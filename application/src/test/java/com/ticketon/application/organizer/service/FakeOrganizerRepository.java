@@ -2,17 +2,21 @@ package com.ticketon.application.organizer.service;
 
 import com.ticketon.application.organizer.port.out.OrganizerRepository;
 import com.ticketon.domain.organizer.Organizer;
+import com.ticketon.domain.organizer.OrganizerBusinessDetails;
 import com.ticketon.domain.organizer.OrganizerName;
 import com.ticketon.domain.organizer.OrganizerPublicProfile;
 import com.ticketon.domain.organizer.OrganizerStatus;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /** 메모리 주최자 저장소 — 저장 순서대로 1부터 id를 붙인다. */
 final class FakeOrganizerRepository implements OrganizerRepository {
 
     private final List<Organizer> organizers = new ArrayList<>();
+    private final Map<Long, OrganizerBusinessDetails> businessDetails = new HashMap<>();
     private final RowLockLog rowLockLog;
     private int publicProfileSaves;
     private int nameSaves;
@@ -63,8 +67,23 @@ final class FakeOrganizerRepository implements OrganizerRepository {
     }
 
     @Override
-    public void saveApproval(Organizer approvedOrganizer) {
+    public void saveApproval(Organizer approvedOrganizer, OrganizerBusinessDetails businessDetails) {
         throw new UnsupportedOperationException("주최자 신청 제출·주최 홈·운영진 권한 확인에서는 승인을 저장하지 않습니다");
+    }
+
+    @Override
+    public Optional<OrganizerBusinessDetails> findBusinessDetails(long organizerId) {
+        return Optional.ofNullable(businessDetails.get(organizerId));
+    }
+
+    @Override
+    public void saveBusinessDetails(long organizerId, OrganizerBusinessDetails businessDetails) {
+        throw new UnsupportedOperationException("주최 관리에서는 사업자 정보 · 정산 계좌를 바로 저장하지 않습니다 — 관리자가 승인할 때 저장합니다");
+    }
+
+    /** 승인을 거치지 않고 그 주최자의 지금 사업자 정보 · 정산 계좌를 둔다. */
+    void storeBusinessDetails(long organizerId, OrganizerBusinessDetails businessDetails) {
+        this.businessDetails.put(organizerId, businessDetails);
     }
 
     @Override

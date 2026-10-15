@@ -90,6 +90,17 @@ class ApproveOrganizerApplicationServiceTest {
         }
 
         @Test
+        @DisplayName("신청서의 사업자 여부 · 사업자 정보 · 정산 계좌가 주최자에 옮겨 적힌다 — 그 뒤로는 관리자가 확인한 변경만 적용된다 (#31)")
+        void copiesBusinessDetailsToOrganizer() {
+            assertThat(organizerRepository.findBusinessDetails(organizerId)).isEmpty();
+
+            service.approve(command(dohyun));
+
+            assertThat(organizerRepository.findBusinessDetails(organizerId))
+                    .contains(OrganizerApplicationForms.twelveMonths().businessDetails());
+        }
+
+        @Test
         @DisplayName("신청한 사람의 운영진 계정 줄을 잠그고 읽는다 — 같은 사람의 탈퇴와 엇갈리지 않게(계정 줄 → 소속 줄)")
         void locksApplicantAccount() {
             service.approve(command(dohyun));
