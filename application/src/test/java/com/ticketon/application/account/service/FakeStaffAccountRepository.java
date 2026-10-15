@@ -94,6 +94,12 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
         return findById(id);
     }
 
+    /** 메모리라 잠그지 않는다 — 잠금은 저장 어댑터 테스트가 본다. */
+    @Override
+    public Optional<StaffAccount> findByIdForKeyShare(long id) {
+        return findById(id);
+    }
+
     @Override
     public Optional<StaffAccount> findRegisteredByEmail(EmailAddress email) {
         return registeredAccounts()

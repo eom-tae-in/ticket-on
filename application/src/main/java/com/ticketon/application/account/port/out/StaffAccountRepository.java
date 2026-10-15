@@ -56,6 +56,16 @@ public interface StaffAccountRepository {
     Optional<StaffAccount> findByIdForUpdate(long id);
 
     /**
+     * 그 계정 줄에 외래 키 확인 잠금(FOR KEY SHARE)을 이 트랜잭션이 끝날 때까지 걸고 읽는다. 없으면 비어 있다.
+     * <p>
+     * 그 계정을 가리키는 줄(주최자명 변경 이력, 운영진 조작 기록)을 넣으면 PostgreSQL이 외래 키를 확인하며 같은 잠금을 건다. 그 잠금을 줄을 넣는
+     * 순간이 아니라 잠금 순서의 제자리(계정 줄 → 주최자 줄)에서 미리 걸 때 쓴다. {@link #findByIdForUpdate}와는 부딪혀, 다른 트랜잭션이 그
+     * 줄을 FOR UPDATE로 잠가 두었으면 그쪽이 끝날 때까지 기다렸다가 끝난 뒤의 값을 돌려준다. 외래 키 확인 잠금끼리는 부딪히지 않아, 그 계정을
+     * 가리키는 줄을 넣는 다른 흐름(운영자 초대, 조작 기록)은 막지 않는다.
+     */
+    Optional<StaffAccount> findByIdForKeyShare(long id);
+
+    /**
      * 그 이메일로 가입한 운영진 로그인 — 로그인 아이디로 찾는다. 대소문자를 가리지 않는다. 없으면 비어 있다.
      * <p>
      * 탈퇴한 계정은 찾지 않는다. 인증 대기 계정은 찾는다 — 로그인할 수 있는지는 계정이 판단한다({@link StaffAccount#canLogIn}).

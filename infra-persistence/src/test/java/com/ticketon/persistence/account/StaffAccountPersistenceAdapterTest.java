@@ -508,6 +508,88 @@ class StaffAccountPersistenceAdapterTest {
         }
     }
 
+    /**
+     * 외래 키 확인 잠금(FOR KEY SHARE) — 주최자 줄을 잠그는 흐름이 이력 · 조작 기록이 가리킬 계정 줄을 주최자 줄보다 먼저 잡는 데 쓴다(#195).
+     * FOR UPDATE와는 부딪히고, 그 계정을 가리키는 줄을 넣을 때의 외래 키 확인 잠금과는 부딪히지 않아야 한다.
+     */
+    @Nested
+    @DisplayName("외래 키 확인 잠금으로 읽기 — FOR UPDATE와만 부딪힌다")
+    class KeyShareLock {
+
+        @Test
+        @DisplayName("계정을 그대로 읽고, 없는 id면 비어 있다")
+        void readsAccount() {
+            long id = activeAccount(JUNGHOON_EMAIL, WHALE);
+
+            StaffAccount account = adapter.findByIdForKeyShare(id).orElseThrow();
+
+            assertThat(account.personalInformation()).isEqualTo(StaffPersonalInformation.of("박정훈", JUNGHOON_EMAIL));
+            assertThat(account.nickname()).isEqualTo(Nickname.of(WHALE));
+            assertThat(adapter.findByIdForKeyShare(id + 1000)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("잡고 있는 동안 다른 트랜잭션은 그 줄을 FOR UPDATE로 잠그지 못하고, 외래 키 확인 잠금은 함께 걸 수 있다")
+        void blocksForUpdateButNotForeignKeyChecks() throws Exception {
+            long id = activeAccount(JUNGHOON_EMAIL, WHALE);
+            CountDownLatch keyShared = new CountDownLatch(1);
+            CountDownLatch checked = new CountDownLatch(1);
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            try {
+                Future<Boolean> holder = executor.submit(() -> inOwnTransaction(transactionAdapter -> {
+                    boolean found = transactionAdapter.findByIdForKeyShare(id).isPresent();
+                    keyShared.countDown();
+                    assertThat(checked.await(10, TimeUnit.SECONDS)).isTrue();
+                    return found;
+                }));
+                assertThat(keyShared.await(10, TimeUnit.SECONDS)).isTrue();
+
+                assertThatExceptionOfType(org.jooq.exception.DataAccessException.class)
+                        .isThrownBy(() -> dsl.selectFrom(STAFF_ACCOUNT).where(STAFF_ACCOUNT.ID.eq(id))
+                                .forUpdate().noWait().fetch())
+                        .satisfies(lockNotAvailable -> assertThat(lockNotAvailable.sqlState()).isEqualTo("55P03"));
+                assertThat(dsl.selectFrom(STAFF_ACCOUNT).where(STAFF_ACCOUNT.ID.eq(id)).forKeyShare().noWait().fetch())
+                        .hasSize(1);
+                checked.countDown();
+
+                assertThat(holder.get(30, TimeUnit.SECONDS)).isTrue();
+            } finally {
+                checked.countDown();
+                executor.shutdownNow();
+            }
+        }
+
+        @Test
+        @DisplayName("다른 트랜잭션이 FOR UPDATE로 잠근 계정은 그쪽이 커밋할 때까지 기다렸다가 커밋된 값(탈퇴함)을 읽는다")
+        void waitsForCommittedWithdrawal() throws Exception {
+            long id = activeAccount(JUNGHOON_EMAIL, WHALE);
+            CountDownLatch firstWithdrew = new CountDownLatch(1);
+            CountDownLatch secondStarted = new CountDownLatch(1);
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            try {
+                Future<Boolean> first = executor.submit(() -> inOwnTransaction(transactionAdapter -> {
+                    StaffAccount account = transactionAdapter.findByIdForUpdate(id).orElseThrow();
+                    account.withdraw(WITHDRAWN_AT);
+                    transactionAdapter.saveWithdrawal(account);
+                    firstWithdrew.countDown();
+                    assertThat(secondStarted.await(10, TimeUnit.SECONDS)).isTrue();
+                    Thread.sleep(300);
+                    return account.isWithdrawn();
+                }));
+                assertThat(firstWithdrew.await(10, TimeUnit.SECONDS)).isTrue();
+                Future<Boolean> second = executor.submit(() -> inOwnTransaction(transactionAdapter -> {
+                    secondStarted.countDown();
+                    return transactionAdapter.findByIdForKeyShare(id).orElseThrow().isWithdrawn();
+                }));
+
+                assertThat(first.get(30, TimeUnit.SECONDS)).isTrue();
+                assertThat(second.get(30, TimeUnit.SECONDS)).isTrue();
+            } finally {
+                executor.shutdownNow();
+            }
+        }
+    }
+
     @Nested
     @DisplayName("탈퇴 저장 — 이름 · 이메일 · 한 줄 소개 · 비밀번호 해시를 지우고 닉네임은 쥔다 (docs/11 \"회원 탈퇴 시\")")
     class WithdrawalSave {

@@ -127,6 +127,19 @@ public class StaffAccountPersistenceAdapter implements StaffAccountRepository {
                 .map(this::toAccount);
     }
 
+    /**
+     * {@code SELECT … FOR KEY SHARE}로 그 계정 줄에 외래 키 확인 잠금을 트랜잭션이 끝날 때까지 건다. FOR UPDATE와만 부딪히고, 외래 키 확인
+     * 잠금 · 다른 FOR KEY SHARE와는 부딪히지 않는다.
+     */
+    @Override
+    public Optional<StaffAccount> findByIdForKeyShare(long id) {
+        return dsl.selectFrom(STAFF_ACCOUNT)
+                .where(STAFF_ACCOUNT.ID.eq(id))
+                .forKeyShare()
+                .fetchOptional()
+                .map(this::toAccount);
+    }
+
     /** 유일 색인(탈퇴하지 않은 계정 사이에서 소문자 이메일이 하나)이 있어 많아야 한 줄이다. */
     @Override
     public Optional<StaffAccount> findRegisteredByEmail(EmailAddress email) {
