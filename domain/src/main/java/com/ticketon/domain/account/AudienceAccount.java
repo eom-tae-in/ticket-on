@@ -15,9 +15,10 @@ import java.util.Set;
 
 /**
  * 관객 계정 — 가입 정보 넷, 비밀번호 해시, 동의 기록, 상태, 이메일 인증 여부, 이용 정지 이력(docs/01 "수집 정보 — 사용자",
- * "가입 경로 — 직접 가입", "약관과 동의", "관객 이용 정지").
+ * "가입 경로", "약관과 동의", "관객 이용 정지").
  * <p>
- * 새 계정은 {@link #signUp}으로만 만든다. 가입 규칙 넷을 여기서 지킨다.
+ * 새 계정은 직접 가입({@link #signUp})이나 카카오·구글 가입({@link #signUpThroughOAuth})으로만 만든다. 두 길 모두 가입 규칙 넷을 여기서
+ * 똑같이 지킨다 — OAuth는 편의 기능이지 본인확인이 아니다(docs/01 "OAuth는 중복 계정을 막지 못합니다").
  * <ul>
  *   <li>가입일(한국 날짜)의 만 나이가 14세 미만이면 막는다. 동의 항목 "만 14세 이상입니다"에 체크했어도 생년월일로 다시 본다
  *       — 생년월일 차단과 동의 항목을 함께 두는 것이 연령 허위 기재를 막는 합리적 장치다(docs/01, docs/99 A-3).</li>
@@ -25,8 +26,8 @@ import java.util.Set;
  *   <li>같은 번호로 가입한 계정이 있거나 차단된 번호면 막는다 — 번호 하나에 계정 하나.</li>
  *   <li>같은 이메일의 관객 계정이 있으면 막는다 — 이메일이 로그인 아이디다.</li>
  * </ul>
- * 비밀번호는 해시({@link PasswordHash})로만 갖는다. 원문의 최소 규칙은 {@link NewPassword}가 지킨다. 비밀번호는 비밀번호 찾기로만
- * 다시 정한다({@link #resetPassword}).
+ * 비밀번호는 해시({@link PasswordHash})로만 갖는다. 원문의 최소 규칙은 {@link NewPassword}가 지킨다. 카카오·구글로 가입한 계정은
+ * 비밀번호가 없다. 비밀번호는 비밀번호 찾기로만 다시 정하거나 처음 정한다({@link #resetPassword}).
  * 상태는 의도가 드러나는 메서드로만 바꾼다. 시각은 인자로 받는다.
  * <p>
  * <b>관객에게 거는 제재는 이용 정지 하나뿐이다</b>({@link #suspend}, {@link #lift}). 정지 중에는 새 예매·변경·신고만 막히고
@@ -50,7 +51,7 @@ public final class AudienceAccount {
             List<AudienceSuspension> suspensions) {
         this.id = id;
         this.personalInformation = Objects.requireNonNull(personalInformation, "personalInformation");
-        this.passwordHash = Objects.requireNonNull(passwordHash, "passwordHash");
+        this.passwordHash = passwordHash;
         this.signedUpAt = Objects.requireNonNull(signedUpAt, "signedUpAt");
         this.consentRecords = new ArrayList<>(List.copyOf(consentRecords));
         this.status = Objects.requireNonNull(status, "status");
@@ -76,8 +77,38 @@ public final class AudienceAccount {
     public static AudienceAccount signUp(AudiencePersonalInformation personalInformation, PasswordHash passwordHash,
             SignupConsentChoices consentChoices, PhoneNumberAvailability phoneNumberAvailability,
             EmailAvailability emailAvailability, Instant now) {
-        Objects.requireNonNull(personalInformation, "personalInformation");
         Objects.requireNonNull(passwordHash, "passwordHash");
+        return newAccount(personalInformation, passwordHash, consentChoices, phoneNumberAvailability, emailAvailability,
+                AccountErrorCode.AUDIENCE_EMAIL_ALREADY_REGISTERED, now);
+    }
+
+    /**
+     * 카카오·구글로 가입한다 — 비밀번호 없이. 새 계정은 인증 대기 상태이고, 동의 기록은 직접 가입과 같이 남긴다.
+     * <p>
+     * 가입 규칙은 직접 가입과 같다(만 나이 → 필수 동의 → 전화번호 → 이메일 순서). 제공자는 생년월일·전화번호를 주지 않으므로 관객이 추가 정보
+     * 입력에서 적은 값으로 본다(docs/01 "가입 경로 — OAuth"). 같은 이메일의 관객 계정이 있으면 자동으로 묶지 않고 막는다 — 기존 계정으로
+     * 로그인한 뒤 연결하라고 안내한다({@link OAuthProvider#emailAlreadyRegisteredError()}, docs/01 "계정 연동").
+     * <p>
+     * 제공자가 확인한 이메일이면 부른 쪽이 바로 {@link #verifyEmail}로 인증을 마친다. 아니면 직접 가입처럼 인증 메일로 인증한다.
+     * 비밀번호는 나중에 비밀번호 찾기로 정할 수 있다({@link #resetPassword}).
+     *
+     * @param provider 가입에 쓴 제공자 — 같은 이메일 안내 문구에 들어간다
+     * @throws RuleViolationException 만 14세 미만, 필수 동의 누락, 가입된 번호 또는 차단된 번호({@link #signUp}과 같은 코드),
+     *                                가입된 이메일(제공자별 연동 안내 — {@link OAuthProvider#emailAlreadyRegisteredError()})
+     * @throws IllegalArgumentException 생년월일이 가입일보다 늦으면
+     */
+    public static AudienceAccount signUpThroughOAuth(OAuthProvider provider,
+            AudiencePersonalInformation personalInformation, SignupConsentChoices consentChoices,
+            PhoneNumberAvailability phoneNumberAvailability, EmailAvailability emailAvailability, Instant now) {
+        Objects.requireNonNull(provider, "provider");
+        return newAccount(personalInformation, null, consentChoices, phoneNumberAvailability, emailAvailability,
+                provider.emailAlreadyRegisteredError(), now);
+    }
+
+    private static AudienceAccount newAccount(AudiencePersonalInformation personalInformation, PasswordHash passwordHash,
+            SignupConsentChoices consentChoices, PhoneNumberAvailability phoneNumberAvailability,
+            EmailAvailability emailAvailability, AccountErrorCode emailAlreadyRegisteredError, Instant now) {
+        Objects.requireNonNull(personalInformation, "personalInformation");
         Objects.requireNonNull(consentChoices, "consentChoices");
         Objects.requireNonNull(phoneNumberAvailability, "phoneNumberAvailability");
         Objects.requireNonNull(emailAvailability, "emailAvailability");
@@ -85,7 +116,7 @@ public final class AudienceAccount {
         requireMinimumAge(personalInformation.birthDate(), now);
         requireAllRequiredConsents(consentChoices);
         requirePhoneNumberAvailable(phoneNumberAvailability);
-        requireEmailAvailable(emailAvailability);
+        requireEmailAvailable(emailAvailability, emailAlreadyRegisteredError);
         return new AudienceAccount(null, personalInformation, passwordHash, now, consentChoices.recordsAt(now),
                 AudienceAccountStatus.PENDING_VERIFICATION, null, List.of());
     }
@@ -93,6 +124,7 @@ public final class AudienceAccount {
     /**
      * 저장소에서 읽은 값으로 계정을 되살린다. 가입 규칙은 다시 보지 않는다.
      *
+     * @param passwordHash    비밀번호 해시. 비밀번호를 정하지 않은 계정(카카오·구글로 가입하고 비밀번호 찾기를 하지 않음)이면 null.
      * @param consentRecords  일어난 순서대로의 동의 기록
      * @param emailVerifiedAt 이메일 인증 일시. 인증 전이면 null.
      * @param suspensions     일어난 순서대로의 이용 정지 이력
@@ -174,7 +206,8 @@ public final class AudienceAccount {
 
     /**
      * 비밀번호를 새로 정한다 — 비밀번호 찾기로 받은 재설정 링크({@link PasswordResetToken})를 거쳐서만 부른다. 지금 비밀번호는 묻지 않는다
-     * (잊어버려서 하는 일이다).
+     * (잊어버려서 하는 일이다). 카카오·구글로 가입해 비밀번호가 없는 계정도 이것으로 비밀번호를 처음 정한다 — 이메일로 받은 링크를 열 수
+     * 있으면 그 이메일의 주인이다.
      * <p>
      * 로그인할 수 있는 계정({@link AudienceAction#RESET_PASSWORD} — 활동·이용 정지)만 바꾼다. 이용 정지 중에도 로그인은 되므로
      * 로그인을 되찾는 일도 막지 않는다.
@@ -216,9 +249,9 @@ public final class AudienceAccount {
         return personalInformation;
     }
 
-    /** 비밀번호 해시. 원문은 갖고 있지 않다. */
-    public PasswordHash passwordHash() {
-        return passwordHash;
+    /** 비밀번호 해시. 원문은 갖고 있지 않다. 비밀번호를 정하지 않은 계정(카카오·구글로 가입)이면 비어 있다. */
+    public Optional<PasswordHash> passwordHash() {
+        return Optional.ofNullable(passwordHash);
     }
 
     public Instant signedUpAt() {
@@ -294,9 +327,10 @@ public final class AudienceAccount {
         }
     }
 
-    private static void requireEmailAvailable(EmailAvailability emailAvailability) {
+    private static void requireEmailAvailable(EmailAvailability emailAvailability,
+            AccountErrorCode emailAlreadyRegisteredError) {
         if (emailAvailability != EmailAvailability.AVAILABLE) {
-            throw new RuleViolationException(AccountErrorCode.AUDIENCE_EMAIL_ALREADY_REGISTERED);
+            throw new RuleViolationException(emailAlreadyRegisteredError);
         }
     }
 

@@ -88,7 +88,7 @@ class PasswordResetTokenTest {
 
             token.resetPassword(account, NEW_PASSWORD_HASH, openedAt);
 
-            assertThat(account.passwordHash()).isEqualTo(NEW_PASSWORD_HASH);
+            assertThat(account.passwordHash()).contains(NEW_PASSWORD_HASH);
             assertThat(token.usedAt()).contains(openedAt);
         }
 
@@ -101,7 +101,7 @@ class PasswordResetTokenTest {
 
             PasswordResetToken.issue(TOKEN_VALUE, SEOYUN, ISSUED_AT).resetPassword(account, NEW_PASSWORD_HASH, ISSUED_AT);
 
-            assertThat(account.passwordHash()).isEqualTo(NEW_PASSWORD_HASH);
+            assertThat(account.passwordHash()).contains(NEW_PASSWORD_HASH);
         }
 
         @Test
@@ -114,7 +114,7 @@ class PasswordResetTokenTest {
 
             assertRejected(() -> token.resetPassword(account, new PasswordHash("{test}another"), ISSUED_AT.plusSeconds(120)),
                     AccountErrorCode.PASSWORD_RESET_LINK_ALREADY_USED);
-            assertThat(account.passwordHash()).isEqualTo(AudienceAccountFixtures.PASSWORD_HASH);
+            assertThat(account.passwordHash()).contains(AudienceAccountFixtures.PASSWORD_HASH);
             assertThat(token.usedAt()).contains(ISSUED_AT.plusSeconds(60));
         }
 
@@ -137,7 +137,7 @@ class PasswordResetTokenTest {
 
             assertRejected(() -> token.resetPassword(account, NEW_PASSWORD_HASH, ISSUED_AT.plusSeconds(60)),
                     AccountErrorCode.PASSWORD_RESET_LINK_REPLACED);
-            assertThat(account.passwordHash()).isEqualTo(AudienceAccountFixtures.PASSWORD_HASH);
+            assertThat(account.passwordHash()).contains(AudienceAccountFixtures.PASSWORD_HASH);
             assertThat(token.usedAt()).isEmpty();
         }
 
@@ -149,7 +149,7 @@ class PasswordResetTokenTest {
 
             assertRejected(() -> token.resetPassword(account, NEW_PASSWORD_HASH, ISSUED_AT.plus(Duration.ofHours(1))),
                     AccountErrorCode.PASSWORD_RESET_LINK_EXPIRED);
-            assertThat(account.passwordHash()).isEqualTo(AudienceAccountFixtures.PASSWORD_HASH);
+            assertThat(account.passwordHash()).contains(AudienceAccountFixtures.PASSWORD_HASH);
             assertThat(token.usedAt()).isEmpty();
         }
 
@@ -174,11 +174,11 @@ class PasswordResetTokenTest {
                     .resetPassword(account, NEW_PASSWORD_HASH, ISSUED_AT));
             assertThatIllegalArgumentException().isThrownBy(() -> PasswordResetToken.issue(TOKEN_VALUE, JUNGHOON, ISSUED_AT)
                     .resetPassword(account, NEW_PASSWORD_HASH, ISSUED_AT));
-            assertThat(account.passwordHash()).isEqualTo(AudienceAccountFixtures.PASSWORD_HASH);
+            assertThat(account.passwordHash()).contains(AudienceAccountFixtures.PASSWORD_HASH);
         }
 
         private static AudienceAccount storedAudience(AudienceAccount account) {
-            return AudienceAccount.restore(ACCOUNT_ID, account.personalInformation(), account.passwordHash(),
+            return AudienceAccount.restore(ACCOUNT_ID, account.personalInformation(), account.passwordHash().orElse(null),
                     account.signedUpAt(), account.consentRecords(), account.status(), account.emailVerifiedAt().orElse(null),
                     account.suspensions());
         }

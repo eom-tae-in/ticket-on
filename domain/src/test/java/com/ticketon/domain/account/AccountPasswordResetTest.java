@@ -32,7 +32,7 @@ class AccountPasswordResetTest {
             assertThat(account.can(AudienceAction.RESET_PASSWORD)).isTrue();
             account.resetPassword(NEW_PASSWORD_HASH);
 
-            assertThat(account.passwordHash()).isEqualTo(NEW_PASSWORD_HASH);
+            assertThat(account.passwordHash()).contains(NEW_PASSWORD_HASH);
         }
 
         @Test
@@ -44,7 +44,7 @@ class AccountPasswordResetTest {
             assertThat(account.can(AudienceAction.RESET_PASSWORD)).isTrue();
             account.resetPassword(NEW_PASSWORD_HASH);
 
-            assertThat(account.passwordHash()).isEqualTo(NEW_PASSWORD_HASH);
+            assertThat(account.passwordHash()).contains(NEW_PASSWORD_HASH);
         }
 
         @Test
@@ -54,7 +54,7 @@ class AccountPasswordResetTest {
 
             assertThat(account.can(AudienceAction.RESET_PASSWORD)).isFalse();
             assertRejected(() -> account.resetPassword(NEW_PASSWORD_HASH), AccountErrorCode.AUDIENCE_NOT_ACTIVE);
-            assertThat(account.passwordHash()).isEqualTo(AudienceAccountFixtures.PASSWORD_HASH);
+            assertThat(account.passwordHash()).contains(AudienceAccountFixtures.PASSWORD_HASH);
         }
 
         @Test
@@ -62,7 +62,7 @@ class AccountPasswordResetTest {
         void withdrawnAccountCannotReset() {
             AudienceAccount active = AudienceAccountFixtures.activeAccount();
             AudienceAccount account = AudienceAccount.restore(ACCOUNT_ID, active.personalInformation(),
-                    active.passwordHash(), active.signedUpAt(), active.consentRecords(), AudienceAccountStatus.WITHDRAWN,
+                    active.passwordHash().orElse(null), active.signedUpAt(), active.consentRecords(), AudienceAccountStatus.WITHDRAWN,
                     active.emailVerifiedAt().orElse(null), active.suspensions());
 
             assertThat(account.can(AudienceAction.RESET_PASSWORD)).isFalse();

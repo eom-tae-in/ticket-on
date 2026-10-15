@@ -98,7 +98,7 @@ class AudienceAccountPersistenceAdapterTest {
         AudienceAccount found = adapter.findById(saved.id().getAsLong()).orElseThrow();
         assertThat(found.personalInformation()).isEqualTo(new AudiencePersonalInformation("한서윤",
                 LocalDate.of(1998, 4, 2), EmailAddress.of(SEOYUN_EMAIL), PhoneNumber.of(SEOYUN_PHONE)));
-        assertThat(found.passwordHash()).isEqualTo(PASSWORD_HASH);
+        assertThat(found.passwordHash()).contains(PASSWORD_HASH);
         assertThat(found.status()).isEqualTo(AudienceAccountStatus.PENDING_VERIFICATION);
         assertThat(found.signedUpAt()).isEqualTo(SIGNUP_TIME);
         assertThat(found.emailVerifiedAt()).isEmpty();
@@ -207,7 +207,7 @@ class AudienceAccountPersistenceAdapterTest {
 
             assertThat(found.id()).hasValue(id);
             assertThat(found.personalInformation().email()).isEqualTo(EmailAddress.of(SEOYUN_EMAIL));
-            assertThat(found.passwordHash()).isEqualTo(PASSWORD_HASH);
+            assertThat(found.passwordHash()).contains(PASSWORD_HASH);
         }
 
         @Test
@@ -382,7 +382,7 @@ class AudienceAccountPersistenceAdapterTest {
 
             adapter.savePassword(account);
 
-            assertThat(adapter.findById(id).orElseThrow().passwordHash()).isEqualTo(NEW_PASSWORD_HASH);
+            assertThat(adapter.findById(id).orElseThrow().passwordHash()).contains(NEW_PASSWORD_HASH);
         }
 
         @Test
@@ -411,7 +411,7 @@ class AudienceAccountPersistenceAdapterTest {
             markWithdrawn(id);
 
             assertConflict(() -> adapter.savePassword(account), AccountErrorCode.AUDIENCE_NOT_ACTIVE);
-            assertThat(adapter.findById(id).orElseThrow().passwordHash()).isEqualTo(PASSWORD_HASH);
+            assertThat(adapter.findById(id).orElseThrow().passwordHash()).contains(PASSWORD_HASH);
         }
 
         /** 가입하고 이메일 인증까지 마친 계정을 저장하고 id를 돌려준다. */

@@ -56,8 +56,9 @@ class AudienceAccountSuspensionTest {
 
         @ParameterizedTest(name = "{0}")
         @EnumSource(value = AudienceAction.class,
-                names = {"LOG_IN", "VIEW_ACCOUNT", "VIEW_TICKETS", "SHOW_TICKET_QR", "CANCEL_TICKET", "RESET_PASSWORD"})
-        @DisplayName("되는 것 — 로그인·계정 정보 보기·기존 티켓 보기·QR·취소·비밀번호 찾기, 산 표는 뺏지 않는다 (docs/01)")
+                names = {"LOG_IN", "VIEW_ACCOUNT", "VIEW_TICKETS", "SHOW_TICKET_QR", "CANCEL_TICKET", "RESET_PASSWORD",
+                        "MANAGE_LOGIN_METHODS"})
+        @DisplayName("되는 것 — 로그인·계정 정보 보기·기존 티켓 보기·QR·취소·비밀번호 찾기·카카오·구글 연결 관리, 산 표는 뺏지 않는다 (docs/01)")
         void allowedActions(AudienceAction action) {
             assertThat(suspendedAccount().can(action)).isTrue();
         }

@@ -70,8 +70,8 @@ class SignUpAudienceServiceTest {
         SignUpAudienceResult result = service.signUp(command("seoyun@example.com", "010-1234-5678", false));
 
         AudienceAccount saved = accountRepository.findById(result.audienceAccountId()).orElseThrow();
-        assertThat(saved.passwordHash()).isEqualTo(FakePasswordHashPort.hashOf(RAW_PASSWORD));
-        assertThat(saved.passwordHash().value()).doesNotContain(RAW_PASSWORD);
+        assertThat(saved.passwordHash()).contains(FakePasswordHashPort.hashOf(RAW_PASSWORD));
+        assertThat(saved.passwordHash().orElseThrow().value()).doesNotContain(RAW_PASSWORD);
     }
 
     @Test

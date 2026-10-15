@@ -71,7 +71,7 @@ final class StoredAudienceAccounts {
     long withdrawn(String email, String phoneNumber) {
         long id = active(email, phoneNumber);
         AudienceAccount account = repository.findById(id).orElseThrow();
-        repository.replace(AudienceAccount.restore(id, account.personalInformation(), account.passwordHash(),
+        repository.replace(AudienceAccount.restore(id, account.personalInformation(), account.passwordHash().orElse(null),
                 account.signedUpAt(), account.consentRecords(), AudienceAccountStatus.WITHDRAWN,
                 account.emailVerifiedAt().orElse(null), account.suspensions()));
         return id;

@@ -129,8 +129,8 @@ class ResetPasswordServiceTest {
             service.resetPassword(audienceReset(FIRST_TOKEN));
 
             AudienceAccount saved = audienceAccountRepository.findById(id).orElseThrow();
-            assertThat(saved.passwordHash()).isEqualTo(FakePasswordHashPort.hashOf(NEW_PASSWORD));
-            assertThat(saved.passwordHash().value()).doesNotContain(NEW_PASSWORD);
+            assertThat(saved.passwordHash()).contains(FakePasswordHashPort.hashOf(NEW_PASSWORD));
+            assertThat(saved.passwordHash().orElseThrow().value()).doesNotContain(NEW_PASSWORD);
         }
     }
 
@@ -234,7 +234,7 @@ class ResetPasswordServiceTest {
             assertThatExceptionOfType(NotFoundException.class)
                     .isThrownBy(() -> service.resetPassword(audienceReset(FIRST_TOKEN)));
             assertThat(audienceAccountRepository.findById(audienceId).orElseThrow().passwordHash())
-                    .isEqualTo(FakePasswordHashPort.hashOf(StoredAudienceAccounts.RAW_PASSWORD));
+                    .contains(FakePasswordHashPort.hashOf(StoredAudienceAccounts.RAW_PASSWORD));
             assertThat(staffAccountRepository.savedAccounts()).singleElement().satisfies(account -> assertThat(
                     account.passwordHash()).isEqualTo(FakePasswordHashPort.hashOf(StoredStaffAccounts.RAW_PASSWORD)));
         }
@@ -249,7 +249,7 @@ class ResetPasswordServiceTest {
             assertRejected(() -> service.resetPassword(new ResetPasswordCommand(AccountKind.AUDIENCE, FIRST_TOKEN,
                     new NewPassword("another-password-9"))), AccountErrorCode.PASSWORD_RESET_LINK_ALREADY_USED);
             assertThat(audienceAccountRepository.findById(id).orElseThrow().passwordHash())
-                    .isEqualTo(FakePasswordHashPort.hashOf(NEW_PASSWORD));
+                    .contains(FakePasswordHashPort.hashOf(NEW_PASSWORD));
         }
 
         @Test
@@ -285,7 +285,7 @@ class ResetPasswordServiceTest {
             requestAudienceReset(SEOYUN_EMAIL);
             AudienceAccount account = audienceAccountRepository.findById(id).orElseThrow();
             audienceAccountRepository.replace(AudienceAccount.restore(id, account.personalInformation(),
-                    account.passwordHash(), account.signedUpAt(), account.consentRecords(), AudienceAccountStatus.WITHDRAWN,
+                    account.passwordHash().orElse(null), account.signedUpAt(), account.consentRecords(), AudienceAccountStatus.WITHDRAWN,
                     account.emailVerifiedAt().orElse(null), account.suspensions()));
 
             assertRejected(() -> service.resetPassword(audienceReset(FIRST_TOKEN)), AccountErrorCode.AUDIENCE_WITHDRAWN);
