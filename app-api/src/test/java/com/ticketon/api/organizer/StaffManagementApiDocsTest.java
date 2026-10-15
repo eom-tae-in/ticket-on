@@ -12,6 +12,7 @@ import com.ticketon.application.organizer.port.in.GetStaffListUseCase;
 import com.ticketon.application.organizer.port.in.InviteOperatorUseCase;
 import com.ticketon.application.organizer.port.in.LeaveOrganizerUseCase;
 import com.ticketon.application.organizer.port.in.RemoveOperatorUseCase;
+import com.ticketon.application.organizer.port.in.SubmitOwnershipClaimUseCase;
 import com.ticketon.application.organizer.port.in.TransferOwnershipUseCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,10 +59,29 @@ class StaffManagementApiDocsTest {
     private TransferOwnershipUseCase transferOwnershipUseCase;
 
     @MockitoBean
+    private SubmitOwnershipClaimUseCase submitOwnershipClaimUseCase;
+
+    @MockitoBean
     private AcceptStaffInvitationUseCase acceptStaffInvitationUseCase;
 
     @MockitoBean
     private DeclineStaffInvitationUseCase declineStaffInvitationUseCase;
+
+    @Test
+    @DisplayName("소유자 이전 신청은 경로의 organizerId와 사유(필수)를 받아 201에 신청 id · 신청 일시를 돌려준다")
+    void ownershipClaimOperation() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(ORGANIZER_PATH + "/ownership-claims'].post.parameters[*].name")
+                        .value(containsInAnyOrder("organizerId")))
+                .andExpect(jsonPath(ORGANIZER_PATH + "/ownership-claims'].post.responses['201']"
+                        + ".content['application/json'].schema['$ref']")
+                        .value("#/components/schemas/SubmitOwnershipClaimResponse"))
+                .andExpect(jsonPath("$.components.schemas.SubmitOwnershipClaimRequest.required",
+                        containsInAnyOrder("reason")))
+                .andExpect(jsonPath("$.components.schemas.SubmitOwnershipClaimResponse.required",
+                        containsInAnyOrder("ownershipClaimId", "submittedAt")));
+    }
 
     @Test
     @DisplayName("운영자 초대는 경로의 organizerId와 이메일 하나를 받아 201에 보낸 초대를 돌려준다")
