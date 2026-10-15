@@ -89,10 +89,11 @@ public final class OrganizerStaff {
      * 초대를 수락한 사람을 운영자로 들인다. 운영자는 심사를 받지 않는다(docs/01 "운영자 초대"). 전에 나갔던 사람이면 새 소속으로 다시 시작하고
      * 지난 소속은 이력으로 남는다.
      *
+     * @return 막 시작한 운영자 소속 — 저장소에 이 한 줄을 더한다
      * @throws RuleViolationException 이미 이 주최자에 소속돼 있으면({@link OrganizerErrorCode#ALREADY_ORGANIZER_STAFF})
      * @throws IllegalStateException  소유자가 없는 명단(닫힘·영구 정지된 주최자)이면 — 주최자 상태를 먼저 본다
      */
-    public void addOperator(long staffAccountId, Instant now) {
+    public StaffMembership addOperator(long staffAccountId, Instant now) {
         Objects.requireNonNull(now, "now");
         if (currentOwner().isEmpty()) {
             throw new IllegalStateException("소유자가 없는 주최자에는 운영자를 들일 수 없습니다: 주최자 " + organizerId);
@@ -101,7 +102,9 @@ public final class OrganizerStaff {
             throw new RuleViolationException(OrganizerErrorCode.ALREADY_ORGANIZER_STAFF,
                     "주최자 " + organizerId + ", 운영진 " + staffAccountId);
         }
-        memberships.add(StaffMembership.startingAt(organizerId, staffAccountId, StaffRole.OPERATOR, now));
+        StaffMembership joined = StaffMembership.startingAt(organizerId, staffAccountId, StaffRole.OPERATOR, now);
+        memberships.add(joined);
+        return joined;
     }
 
     /**
@@ -137,10 +140,11 @@ public final class OrganizerStaff {
      * 주최자에서 나간다. 운영자는 언제든 나갈 수 있고, 소유자는 먼저 소유자를 넘기거나 주최자를 닫아야 한다(docs/01 "탈퇴와 주최자 닫기").
      * 운영진 로그인을 탈퇴할 때도 소속 주최자마다 이것으로 나간다({@link StaffAffiliations}).
      *
+     * @return 끝난 소속 — 사람·역할·시작은 그대로이고 끝난 일시가 붙었다. 저장소에 이 끝을 남긴다
      * @throws PermissionDeniedException 지금 소속된 운영진이 아니면({@link OrganizerErrorCode#NOT_ORGANIZER_STAFF})
      * @throws RuleViolationException    소유자면({@link OrganizerErrorCode#OWNER_MUST_HAND_OVER_FIRST})
      */
-    public void leave(long staffAccountId, Instant now) {
+    public StaffMembership leave(long staffAccountId, Instant now) {
         Objects.requireNonNull(now, "now");
         StaffMembership membership = activeMembershipOf(staffAccountId).orElseThrow(() -> new PermissionDeniedException(
                 OrganizerErrorCode.NOT_ORGANIZER_STAFF, notStaffDetail(staffAccountId)));
@@ -148,7 +152,7 @@ public final class OrganizerStaff {
             throw new RuleViolationException(OrganizerErrorCode.OWNER_MUST_HAND_OVER_FIRST,
                     "주최자 " + organizerId + "의 소유자 " + staffAccountId);
         }
-        end(membership, now);
+        return end(membership, now);
     }
 
     /**
@@ -156,18 +160,19 @@ public final class OrganizerStaff {
      *
      * @param requestedByStaffAccountId 내보내는 사람 — 소유자
      * @param operatorStaffAccountId    내보낼 운영자
+     * @return 끝난 소속 — 저장소에 이 끝을 남긴다
      * @throws PermissionDeniedException 내보내는 사람이 소유자가 아니면
      *                                   ({@link OrganizerErrorCode#NOT_ORGANIZER_STAFF}, {@link OrganizerErrorCode#OWNER_ONLY_ACTION})
      * @throws RuleViolationException    내보낼 사람이 이 주최자의 운영자가 아니면({@link OrganizerErrorCode#NOT_AN_OPERATOR})
      */
-    public void removeOperator(long requestedByStaffAccountId, long operatorStaffAccountId, Instant now) {
+    public StaffMembership removeOperator(long requestedByStaffAccountId, long operatorStaffAccountId, Instant now) {
         Objects.requireNonNull(now, "now");
         requirePermission(requestedByStaffAccountId, StaffAction.REMOVE_STAFF);
         StaffMembership operator = activeMembershipOf(operatorStaffAccountId)
                 .filter(membership -> membership.role() == StaffRole.OPERATOR)
                 .orElseThrow(() -> new RuleViolationException(OrganizerErrorCode.NOT_AN_OPERATOR,
                         "주최자 " + organizerId + ", 운영진 " + operatorStaffAccountId));
-        end(operator, now);
+        return end(operator, now);
     }
 
     /** 그 사람의 지금 역할. 지금 소속돼 있지 않으면 비어 있다. */
@@ -208,8 +213,10 @@ public final class OrganizerStaff {
         memberships.add(StaffMembership.startingAt(organizerId, membership.staffAccountId(), newRole, now));
     }
 
-    private void end(StaffMembership membership, Instant now) {
-        memberships.set(memberships.indexOf(membership), membership.endAt(now));
+    private StaffMembership end(StaffMembership membership, Instant now) {
+        StaffMembership ended = membership.endAt(now);
+        memberships.set(memberships.indexOf(membership), ended);
+        return ended;
     }
 
     private String notStaffDetail(long staffAccountId) {

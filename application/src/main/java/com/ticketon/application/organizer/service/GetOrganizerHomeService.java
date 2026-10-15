@@ -11,6 +11,8 @@ import com.ticketon.application.organizer.port.in.OrganizerHomeResult.Reopenable
 import com.ticketon.application.organizer.port.out.OrganizerHomeQueryPort;
 import com.ticketon.application.organizer.query.LatestOrganizerApplication;
 import com.ticketon.domain.organizer.OrganizerApplicationStatus;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -20,19 +22,23 @@ import org.springframework.transaction.annotation.Transactional;
  * 내 주최 홈 상태 조회 — 읽기 전용이라 도메인을 거치지 않고 조회 포트가 돌려준 칸을 모은다.
  * <p>
  * 가장 최근 신청이 심사 중이면 심사 중인 신청으로, 반려면 반려된 신청(사유)으로 보인다. 승인됐으면 신청은 보이지 않고 소속에 나온다.
+ * 받은 초대는 지금 시각에 유효 기간이 남은 것만 보인다 — 지난 초대는 답할 수 없다.
  */
 @Service
 public class GetOrganizerHomeService implements GetOrganizerHomeUseCase {
 
     private final OrganizerHomeQueryPort homeQueryPort;
+    private final Clock clock;
 
-    public GetOrganizerHomeService(OrganizerHomeQueryPort homeQueryPort) {
+    public GetOrganizerHomeService(OrganizerHomeQueryPort homeQueryPort, Clock clock) {
         this.homeQueryPort = homeQueryPort;
+        this.clock = clock;
     }
 
     @Override
     @Transactional(readOnly = true)
     public OrganizerHomeResult getHome(GetOrganizerHomeQuery query) {
+        Instant now = clock.instant();
         long staffAccountId = query.account().id();
         Optional<LatestOrganizerApplication> latestApplication = homeQueryPort.latestApplicationOf(staffAccountId);
         return new OrganizerHomeResult(
@@ -43,7 +49,7 @@ public class GetOrganizerHomeService implements GetOrganizerHomeUseCase {
                 latestApplication.filter(application -> application.status() == OrganizerApplicationStatus.REJECTED)
                         .map(GetOrganizerHomeService::toRejected)
                         .orElse(null),
-                receivedInvitationsOf(staffAccountId),
+                receivedInvitationsOf(staffAccountId, now),
                 reopenableOrganizersOf(staffAccountId));
     }
 
@@ -54,9 +60,10 @@ public class GetOrganizerHomeService implements GetOrganizerHomeUseCase {
                 .toList();
     }
 
-    private List<ReceivedInvitation> receivedInvitationsOf(long staffAccountId) {
-        return homeQueryPort.receivedInvitationsOf(staffAccountId).stream()
-                .map(invitation -> new ReceivedInvitation(invitation.organizerId(), invitation.organizerName()))
+    private List<ReceivedInvitation> receivedInvitationsOf(long staffAccountId, Instant now) {
+        return homeQueryPort.receivedInvitationsOf(staffAccountId, now).stream()
+                .map(invitation -> new ReceivedInvitation(invitation.invitationId(), invitation.organizerId(),
+                        invitation.organizerName(), invitation.invitedAt(), invitation.expiresAt()))
                 .toList();
     }
 

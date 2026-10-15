@@ -14,10 +14,12 @@ import com.ticketon.application.organizer.query.LatestOrganizerApplication;
 import com.ticketon.application.organizer.query.ReceivedOrganizerInvitation;
 import com.ticketon.application.organizer.query.ReopenableClosedOrganizer;
 import com.ticketon.common.KoreanTime;
+import com.ticketon.common.MutableClock;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.organizer.OrganizerApplicationStatus;
 import com.ticketon.domain.organizer.StaffRole;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,9 +38,12 @@ class GetOrganizerHomeServiceTest {
 
     private static final Instant REVIEWED_AT = KoreanTime.toInstant(LocalDateTime.of(2026, 10, 17, 15, 0));
 
+    /** 홈을 여는 시각 — 2026-10-18 09:00 (한국 시각). */
+    private static final Instant NOW = KoreanTime.toInstant(LocalDateTime.of(2026, 10, 18, 9, 0));
+
     private final FakeOrganizerHomeQueryPort homeQueryPort = new FakeOrganizerHomeQueryPort();
 
-    private final GetOrganizerHomeService service = new GetOrganizerHomeService(homeQueryPort);
+    private final GetOrganizerHomeService service = new GetOrganizerHomeService(homeQueryPort, MutableClock.at(NOW));
 
     @Test
     @DisplayName("신청도 소속도 없으면 모두 비어 있다 — 화면은 '새 주최자 신청'과 '받은 초대'를 보인다")
@@ -102,15 +107,18 @@ class GetOrganizerHomeServiceTest {
     }
 
     @Test
-    @DisplayName("받은 초대와 다시 열 수 있는 닫힌 주최자를 조회 포트가 돌려준 그대로 담는다")
+    @DisplayName("받은 초대와 다시 열 수 있는 닫힌 주최자를 조회 포트가 돌려준 그대로 담는다 — 받은 초대의 유효 기간은 지금 시각으로 본다")
     void invitationsAndReopenableOrganizers() {
-        homeQueryPort.addInvitation(JUNGHOON.id(), new ReceivedOrganizerInvitation(30, "늦여름"));
+        Instant expiresAt = SUBMITTED_AT.plus(Duration.ofDays(7));
+        homeQueryPort.addInvitation(JUNGHOON.id(), new ReceivedOrganizerInvitation(51, 30, "늦여름", SUBMITTED_AT, expiresAt));
         homeQueryPort.addReopenableOrganizer(JUNGHOON.id(), new ReopenableClosedOrganizer(8, "극단 봄날"));
 
         OrganizerHomeResult home = service.getHome(new GetOrganizerHomeQuery(JUNGHOON));
 
-        assertThat(home.receivedInvitations()).containsExactly(new ReceivedInvitation(30, "늦여름"));
+        assertThat(home.receivedInvitations())
+                .containsExactly(new ReceivedInvitation(51, 30, "늦여름", SUBMITTED_AT, expiresAt));
         assertThat(home.reopenableOrganizers()).containsExactly(new ReopenableOrganizer(8, "극단 봄날"));
+        assertThat(homeQueryPort.lastInvitationQueryTime()).isEqualTo(NOW);
     }
 
     @Test

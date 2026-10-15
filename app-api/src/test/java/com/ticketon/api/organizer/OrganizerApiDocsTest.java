@@ -63,7 +63,7 @@ class OrganizerApiDocsTest {
     }
 
     @Test
-    @DisplayName("내 주최 홈은 200에 소속·심사 중·반려·받은 초대·다시 열기 자리를 돌려준다 — 심사 중·반려는 없으면 null")
+    @DisplayName("내 주최 홈은 200에 소속·심사 중·반려·받은 초대(초대 id·유효 기간 포함)·다시 열기 자리를 돌려준다 — 심사 중·반려는 없으면 null")
     void homeOperation() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
@@ -77,6 +77,8 @@ class OrganizerApiDocsTest {
                 .andExpect(jsonPath("$.components.schemas.OrganizerAffiliation.properties.role.enum",
                         containsInAnyOrder("OWNER", "OPERATOR")))
                 .andExpect(jsonPath("$.components.schemas.RejectedOrganizerApplication.required", containsInAnyOrder(
-                        "applicationId", "organizerName", "submittedAt", "rejectedAt", "rejectionReason")));
+                        "applicationId", "organizerName", "submittedAt", "rejectedAt", "rejectionReason")))
+                .andExpect(jsonPath("$.components.schemas.ReceivedOrganizerInvitation.required", containsInAnyOrder(
+                        "invitationId", "organizerId", "organizerName", "invitedAt", "expiresAt")));
     }
 }

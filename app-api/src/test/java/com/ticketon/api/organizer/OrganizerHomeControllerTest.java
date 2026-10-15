@@ -23,6 +23,7 @@ import com.ticketon.common.KoreanTime;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.organizer.StaffRole;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -106,13 +107,13 @@ class OrganizerHomeControllerTest {
     }
 
     @Test
-    @DisplayName("소속은 역할 이름과 함께, 받은 초대와 다시 열 수 있는 주최자는 id·이름으로 돌려준다")
+    @DisplayName("소속은 역할 이름과 함께, 받은 초대는 초대 id·주최자·보낸 일시·유효 기간(한국 시각)으로, 다시 열 수 있는 주최자는 id·이름으로 돌려준다")
     void affiliationsInvitationsAndReopenable() throws Exception {
         given(getOrganizerHomeUseCase.getHome(any())).willReturn(new OrganizerHomeResult(
                 List.of(new Affiliation(12, "극단 열두달", StaffRole.OWNER, REVIEWED_AT),
                         new Affiliation(30, "늦여름", StaffRole.OPERATOR, REVIEWED_AT)),
                 null, null,
-                List.of(new ReceivedInvitation(41, "새 극단")),
+                List.of(new ReceivedInvitation(51, 41, "새 극단", SUBMITTED_AT, SUBMITTED_AT.plus(Duration.ofDays(7)))),
                 List.of(new ReopenableOrganizer(8, "극단 봄날"))));
 
         mockMvc.perform(get(HOME_PATH).with(loggedInAs(JUNGHOON)))
@@ -124,7 +125,9 @@ class OrganizerHomeControllerTest {
                             {"organizerId": 30, "organizerName": "늦여름", "role": "OPERATOR",
                              "since": "2026-10-17T15:00:00+09:00"}],
                          "applicationUnderReview": null, "rejectedApplication": null,
-                         "receivedInvitations": [{"organizerId": 41, "organizerName": "새 극단"}],
+                         "receivedInvitations": [{"invitationId": 51, "organizerId": 41, "organizerName": "새 극단",
+                                                  "invitedAt": "2026-10-15T10:00:00+09:00",
+                                                  "expiresAt": "2026-10-22T10:00:00+09:00"}],
                          "reopenableOrganizers": [{"organizerId": 8, "organizerName": "극단 봄날"}]}""",
                         JsonCompareMode.STRICT));
     }

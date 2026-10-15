@@ -15,7 +15,7 @@ import java.util.Objects;
  * @param affiliations           지금 소속된 주최자 — 소속을 시작한 순서. 없으면 빈 목록.
  * @param applicationUnderReview 심사 중인 신청. 없으면 null.
  * @param rejectedApplication    가장 최근 신청이 반려됐으면 그 신청. 아니면 null.
- * @param receivedInvitations    받은 운영자 초대 — 초대(#25)가 채운다. 없으면 빈 목록.
+ * @param receivedInvitations    받은 운영자 초대 — 답을 기다리고 유효 기간이 남은 것, 보낸 순서. 없으면 빈 목록.
  * @param reopenableOrganizers   다시 열기를 신청할 수 있는 닫힌 주최자 — 닫기·다시 열기(#134)가 채운다. 없으면 빈 목록.
  */
 public record OrganizerHomeResult(List<Affiliation> affiliations, ApplicationUnderReview applicationUnderReview,
@@ -84,15 +84,21 @@ public record OrganizerHomeResult(List<Affiliation> affiliations, ApplicationUnd
     }
 
     /**
-     * 받은 운영자 초대 하나(docs/01 "운영자 초대").
+     * 받은 운영자 초대 하나(docs/01 "운영자 초대") — 수락하면 그 주최자의 운영자가 된다.
      *
+     * @param invitationId  초대 id — 수락 · 거절할 때 쓴다
      * @param organizerId   초대한 주최자 id
      * @param organizerName 초대한 주최자명
+     * @param invitedAt     보낸 일시
+     * @param expiresAt     이 순간부터 답할 수 없다
      */
-    public record ReceivedInvitation(long organizerId, String organizerName) {
+    public record ReceivedInvitation(long invitationId, long organizerId, String organizerName, Instant invitedAt,
+            Instant expiresAt) {
 
         public ReceivedInvitation {
             Objects.requireNonNull(organizerName, "organizerName");
+            Objects.requireNonNull(invitedAt, "invitedAt");
+            Objects.requireNonNull(expiresAt, "expiresAt");
         }
     }
 

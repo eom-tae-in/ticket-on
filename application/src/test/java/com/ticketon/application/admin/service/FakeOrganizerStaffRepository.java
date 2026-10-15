@@ -24,4 +24,14 @@ final class FakeOrganizerStaffRepository implements OrganizerStaffRepository {
     public OrganizerStaff findByOrganizerId(long organizerId) {
         return OrganizerStaff.restore(organizerId, membershipsByOrganizer.getOrDefault(organizerId, List.of()));
     }
+
+    @Override
+    public void addJoinedOperator(StaffMembership joinedMembership) {
+        throw new UnsupportedOperationException("주최자 심사에서는 운영자를 들이지 않습니다");
+    }
+
+    @Override
+    public void saveEnded(StaffMembership endedMembership) {
+        throw new UnsupportedOperationException("주최자 심사에서는 소속을 끝내지 않습니다");
+    }
 }

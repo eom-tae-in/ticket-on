@@ -2,9 +2,11 @@ package com.ticketon.persistence.organizer;
 
 import static com.ticketon.persistence.jooq.Tables.ORGANIZER;
 import static com.ticketon.persistence.jooq.Tables.STAFF_ACCOUNT;
+import static com.ticketon.persistence.jooq.Tables.STAFF_INVITATION;
 import static com.ticketon.persistence.jooq.Tables.STAFF_MEMBERSHIP;
 
 import com.ticketon.domain.organizer.OrganizerStatus;
+import com.ticketon.domain.organizer.StaffInvitationStatus;
 import com.ticketon.domain.organizer.StaffRole;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -12,8 +14,8 @@ import java.time.ZoneOffset;
 import org.jooq.DSLContext;
 
 /**
- * 주최자 쪽 저장 테스트가 함께 쓰는 줄 넣기 — 운영진 로그인 · 주최자 · 소속을 표에 바로 넣는다. 소속 저장 어댑터는 승인으로 여는 소유자 한 줄만
- * 넣으므로(#23), 운영자·끝난 소속(이력)·닫힌 주최자처럼 아직 기능이 없는 줄은 여기서 넣는다.
+ * 주최자 쪽 저장 테스트가 함께 쓰는 줄 넣기 — 운영진 로그인 · 주최자 · 소속 · 운영자 초대를 표에 바로 넣는다. 끝난 소속(이력)·닫힌 주최자·
+ * 지난 초대처럼 기능을 거치면 만들기 번거로운 줄은 여기서 넣는다.
  */
 public final class OrganizerRows {
 
@@ -74,6 +76,30 @@ public final class OrganizerRows {
                 .set(STAFF_MEMBERSHIP.STARTED_AT, toDatabaseTime(startedAt))
                 .set(STAFF_MEMBERSHIP.ENDED_AT, endedAt == null ? null : toDatabaseTime(endedAt))
                 .execute();
+    }
+
+    /**
+     * 운영자 초대 한 줄 — 박정훈 같은 소유자가 그 이메일로 보낸 것.
+     *
+     * @param status     상태. 답했으면 답한 일시는 보낸 일시 1분 뒤, 답한 사람은 보낸 사람이다(표의 CHECK만 맞춘다).
+     * @return 초대 id
+     */
+    public long invitation(long organizerId, String inviteeEmail, long invitedByStaffAccountId, Instant invitedAt,
+            Instant expiresAt, StaffInvitationStatus status) {
+        boolean answered = status != StaffInvitationStatus.PENDING;
+        return dsl.insertInto(STAFF_INVITATION)
+                .set(STAFF_INVITATION.ORGANIZER_ID, organizerId)
+                .set(STAFF_INVITATION.INVITEE_EMAIL, inviteeEmail)
+                .set(STAFF_INVITATION.INVITEE_EMAIL_LOWERCASE, inviteeEmail.toLowerCase())
+                .set(STAFF_INVITATION.INVITED_BY_STAFF_ACCOUNT_ID, invitedByStaffAccountId)
+                .set(STAFF_INVITATION.INVITED_AT, toDatabaseTime(invitedAt))
+                .set(STAFF_INVITATION.EXPIRES_AT, toDatabaseTime(expiresAt))
+                .set(STAFF_INVITATION.STATUS, status.name())
+                .set(STAFF_INVITATION.ANSWERED_AT, answered ? toDatabaseTime(invitedAt.plusSeconds(60)) : null)
+                .set(STAFF_INVITATION.ANSWERED_BY_STAFF_ACCOUNT_ID, answered ? invitedByStaffAccountId : null)
+                .returningResult(STAFF_INVITATION.ID)
+                .fetchSingle()
+                .value1();
     }
 
     private static OffsetDateTime toDatabaseTime(Instant instant) {
