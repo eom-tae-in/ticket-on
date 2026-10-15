@@ -264,7 +264,30 @@ class OwnershipClaimIntegrationTest {
     }
 
     @Test
-    @DisplayName("신청한 사람이 운영진 로그인을 탈퇴했으면 승인하지 못한다 (409 CLAIMANT_NOT_OPERATOR) — 탈퇴한 계정에 소유자를 넘기지 않는다")
+    @DisplayName("결과 전에 주최자에서 나간 신청자도 반려 메일을 한 번 받고, 운영진 전원도 한 번씩 받는다")
+    void claimantWhoLeftStillGetsRejectionMail() throws Exception {
+        String adminEmail = "admin-" + suffix + "@ticket-on.example";
+        storeAdmin(adminEmail);
+        try (Browser claimant = new Browser(); Browser admin = new Browser()) {
+            claimant.logInStaff(plannerEmail);
+            admin.logInAdmin(adminEmail);
+            long claimId = submitClaim(claimant);
+            assertThat(claimant.post("/api/organizer/organizers/" + twelveMonths + "/departure", null).statusCode())
+                    .isEqualTo(204);
+
+            assertThat(admin.post(rejectionPath(claimId), Map.of("reason", REJECTION_REASON)).statusCode()).isEqualTo(204);
+
+            String subject = "[주최] '" + twelveMonthsName + "' 소유자 이전 신청이 반려되었습니다";
+            for (String address : List.of(plannerEmail, junghoonEmail, promoterEmail)) {
+                assertThat(mailsTo(address)).filteredOn(mail -> mail.subject().value().equals(subject)).singleElement()
+                        .satisfies(mail -> assertThat(mail.body()).contains("반려 사유: " + REJECTION_REASON));
+            }
+            assertThat(mailsTo(dohyunEmail)).isEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("신청한 사람이 운영진 로그인을 탈퇴했으면 승인하지 못한다 (409 CLAIMANT_NOT_OPERATOR) — 탈퇴한 계정에 소유자를 넘기지 않고, 반려 메일도 보내지 않는다")
     void withdrawnClaimantCannotBecomeOwner() throws Exception {
         String adminEmail = "admin-" + suffix + "@ticket-on.example";
         storeAdmin(adminEmail);
@@ -283,6 +306,9 @@ class OwnershipClaimIntegrationTest {
             assertThat(count("SELECT count(*) FROM ownership_change WHERE organizer_id = ?", twelveMonths)).isZero();
             assertThat(admin.post(rejectionPath(claimId), Map.of("reason", "신청한 분이 탈퇴함")).statusCode())
                     .isEqualTo(204);
+            String subject = "[주최] '" + twelveMonthsName + "' 소유자 이전 신청이 반려되었습니다";
+            assertThat(mailsTo(plannerEmail)).noneMatch(mail -> mail.subject().value().equals(subject));
+            assertThat(mailsTo(junghoonEmail)).filteredOn(mail -> mail.subject().value().equals(subject)).hasSize(1);
         }
     }
 

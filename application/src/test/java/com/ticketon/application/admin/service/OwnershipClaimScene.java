@@ -43,6 +43,8 @@ final class OwnershipClaimScene {
     final FakeOrganizerApplicationRepository applicationRepository = new FakeOrganizerApplicationRepository();
     final RecordingAdminOperationRecordRepository recordRepository = new RecordingAdminOperationRecordRepository();
     final RecordingSendNotificationUseCase sendNotificationUseCase = new RecordingSendNotificationUseCase();
+    final FakeOrganizerStaffContactPort staffContactPort =
+            new FakeOrganizerStaffContactPort(staffRepository, staffAccountRepository);
 
     final long twelveMonths;
     final long plannerClaim;
@@ -79,7 +81,8 @@ final class OwnershipClaimScene {
 
     RejectOwnershipClaimService rejectService() {
         return new RejectOwnershipClaimService(adminAccountRepository, claimRepository, organizerRepository,
-                staffAccountRepository, new AdminOperationRecorder(recordRepository), sendNotificationUseCase, clock);
+                staffAccountRepository, staffContactPort, new AdminOperationRecorder(recordRepository),
+                sendNotificationUseCase, clock);
     }
 
     GetOwnershipClaimReviewService reviewService() {

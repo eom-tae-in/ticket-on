@@ -113,10 +113,10 @@ class NotificationKindTest {
         }
 
         @Test
-        @DisplayName("소유자 이전 신청 반려는 운영진 전원에게 — 신청한 운영자도 운영진이다 (#27, docs/12 \"주최자 대상 — 받는 사람\")")
-        void ownershipClaimRejectionGoesToAllStaff() {
+        @DisplayName("소유자 이전 신청 반려는 신청한 사람과 운영진 전원에게 한 사람씩 — 결과 전에 나간 신청자도 받는다 (#27, docs/12 \"주최자 대상 — 받는 사람\")")
+        void ownershipClaimRejectionGoesToEachPerson() {
             assertThat(NotificationKind.OWNERSHIP_CLAIM_REJECTED.organizerRecipientScope())
-                    .contains(OrganizerRecipientScope.ALL_STAFF);
+                    .contains(OrganizerRecipientScope.INDIVIDUAL);
         }
 
         @Test
@@ -151,20 +151,20 @@ class NotificationKindTest {
         }
 
         @Test
-        @DisplayName("그 사람에게 가는 종류는 위의 일곱이 전부다")
-        void individualKindsAreExactlySeven() {
+        @DisplayName("그 사람에게 가는 종류는 위의 일곱과 표 밖의 소유자 이전 신청 반려가 전부다")
+        void individualKindsAreExactlyEight() {
             assertThat(kindsWithScope(OrganizerRecipientScope.INDIVIDUAL)).containsExactlyInAnyOrder(
                     NotificationKind.OPERATOR_INVITED, NotificationKind.REMOVED_FROM_STAFF,
                     NotificationKind.STAFF_PROFILE_RESET, NotificationKind.ORGANIZER_APPLICATION_APPROVED,
                     NotificationKind.ORGANIZER_APPLICATION_REJECTED, NotificationKind.REOPEN_APPROVED,
-                    NotificationKind.REOPEN_REJECTED);
+                    NotificationKind.REOPEN_REJECTED, NotificationKind.OWNERSHIP_CLAIM_REJECTED);
         }
 
         @Test
         @DisplayName("나머지 주최자에 관한 알림은 소유자와 운영자 전원에게 — 소유자 변경·주최자명 변경·로고 초기화 포함")
         void restGoToAllStaff() {
             assertThat(kindsWithScope(OrganizerRecipientScope.ALL_STAFF))
-                    .hasSize(15)
+                    .hasSize(14)
                     .contains(NotificationKind.OWNER_CHANGED, NotificationKind.ORGANIZER_NAME_CHANGED,
                             NotificationKind.ORGANIZER_LOGO_RESET, NotificationKind.SETTLEMENT_COMPLETED,
                             NotificationKind.ORGANIZER_SUSPENDED);

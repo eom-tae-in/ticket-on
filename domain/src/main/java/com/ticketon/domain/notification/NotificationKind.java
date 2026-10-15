@@ -200,11 +200,13 @@ public enum NotificationKind {
     // ── 주최자 대상, '주최자 대상' 표 밖 ──
 
     /**
-     * 소유자 이전 신청 반려 — 사유 포함, 운영진 전원에게(신청한 운영자 포함). 소유자와 연락이 끊겨 운영자가 낸 신청의 결과다(docs/01 "소유자와
-     * 연락이 끊긴 경우", #27 "결과를 신청자와 운영진 전원에게"). 주최자에 관한 알림이라 소유자와 운영자 전원에게 간다(docs/12 "주최자 대상 —
-     * 받는 사람"). 승인은 소유자가 바뀌는 일이라 표의 {@link #OWNER_CHANGED}로 보낸다.
+     * 소유자 이전 신청 반려 — 사유 포함, <b>신청한 운영자와 운영진 전원에게</b> 한 사람에 한 통씩. 소유자와 연락이 끊겨 운영자가 낸 신청의
+     * 결과다(docs/01 "소유자와 연락이 끊긴 경우", #27 "결과를 신청자와 운영진 전원에게"). 주최자에 관한 알림이라 소유자와 운영자 전원이 받고
+     * (docs/12 "주최자 대상 — 받는 사람"), 신청한 사람은 결과 전에 주최자에서 나갔어도 받는다. 그래서 주최자로 펼치지 않고 받는 사람마다 그
+     * 이메일로 보낸다 — 신청한 사람이 아직 운영진이면 한 번만 간다. 운영진 로그인을 탈퇴한 신청자는 이메일을 파기해 받지 않는다. 승인은 소유자가
+     * 바뀌는 일이라 표의 {@link #OWNER_CHANGED}로 보낸다.
      */
-    OWNERSHIP_CLAIM_REJECTED(OrganizerRecipientScope.ALL_STAFF);
+    OWNERSHIP_CLAIM_REJECTED(OrganizerRecipientScope.INDIVIDUAL);
 
     private final RecipientSide side;
     private final Set<NotificationChannel> channels;
