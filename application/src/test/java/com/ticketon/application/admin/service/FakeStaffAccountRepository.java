@@ -69,6 +69,11 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
         return findById(id);
     }
 
+    @Override
+    public Optional<StaffAccount> findByIdForKeyShare(long id) {
+        throw new UnsupportedOperationException("주최자 심사 · 소유자 이전 신청 심사에서는 계정 줄에 외래 키 확인 잠금을 걸지 않습니다");
+    }
+
     /** 다음 계정 잠금 바로 전에 할 일 — 잠금을 기다리는 사이 다른 트랜잭션이 먼저 커밋한 일을 흉내 낸다. */
     void runOnNextLock(Runnable action) {
         nextLockAction = action;

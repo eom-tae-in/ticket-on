@@ -40,10 +40,11 @@ final class OrganizerStaffScene {
     static final WebAddress WEB_ADDRESS = WebAddress.of("https://ticket-on.example");
 
     final MutableClock clock = MutableClock.at(NOW);
-    final FakeOrganizerRepository organizerRepository = new FakeOrganizerRepository();
+    final RowLockLog rowLockLog = new RowLockLog();
+    final FakeOrganizerRepository organizerRepository = new FakeOrganizerRepository(rowLockLog);
     final FakeOrganizerStaffRepository staffRepository = new FakeOrganizerStaffRepository();
     final FakeStaffInvitationRepository invitationRepository = new FakeStaffInvitationRepository();
-    final FakeStaffAccountRepository staffAccountRepository = new FakeStaffAccountRepository();
+    final FakeStaffAccountRepository staffAccountRepository = new FakeStaffAccountRepository(rowLockLog);
     final FakeOwnershipChangeRepository ownershipChangeRepository = new FakeOwnershipChangeRepository();
     final FakeOwnershipClaimRepository ownershipClaimRepository = new FakeOwnershipClaimRepository();
     final FakeOrganizerNameChangeRepository nameChangeRepository = new FakeOrganizerNameChangeRepository();
@@ -117,17 +118,17 @@ final class OrganizerStaffScene {
 
     ChangeOrganizerPublicProfileService changeOrganizerPublicProfileService() {
         return new ChangeOrganizerPublicProfileService(checkStaffPermissionService, recordStaffOperationService,
-                organizerRepository, logoStorage, clock);
+                organizerRepository, staffAccountRepository, logoStorage, clock);
     }
 
     UploadOrganizerLogoService uploadOrganizerLogoService(TokenGenerator tokenGenerator) {
         return new UploadOrganizerLogoService(checkStaffPermissionService, recordStaffOperationService,
-                organizerRepository, logoStorage, tokenGenerator, clock);
+                organizerRepository, staffAccountRepository, logoStorage, tokenGenerator, clock);
     }
 
     RemoveOrganizerLogoService removeOrganizerLogoService() {
         return new RemoveOrganizerLogoService(checkStaffPermissionService, recordStaffOperationService,
-                organizerRepository, logoStorage, clock);
+                organizerRepository, staffAccountRepository, logoStorage, clock);
     }
 
     RenameOrganizerService renameOrganizerService() {

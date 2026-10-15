@@ -73,6 +73,25 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("교착처럼 데이터베이스가 잠금 경합으로 끊은 요청은 500이 아니라 409 CONCURRENT_REQUEST이고, 내부 내용은 응답에 없이 warn 로그에만 남는다 (#195)")
+    void deadlockIsConflictAndHidesInternals(CapturedOutput output) throws Exception {
+        mockMvc.perform(get("/test/errors/deadlock"))
+                .andExpect(status().isConflict())
+                .andExpect(errorBody("CONCURRENT_REQUEST", "다른 요청과 겹쳐 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."))
+                .andExpect(content().string(not(containsString("deadlock"))));
+
+        assertThat(output).contains("잠금 경합으로 데이터베이스가 끊은 요청").contains(ErrorTestController.DEADLOCK_DETAIL);
+    }
+
+    @Test
+    @DisplayName("잠금 대기 실패도 같은 409 CONCURRENT_REQUEST다")
+    void lockNotAvailableIsConflict() throws Exception {
+        mockMvc.perform(get("/test/errors/lock-not-available"))
+                .andExpect(status().isConflict())
+                .andExpect(errorBody("CONCURRENT_REQUEST", "다른 요청과 겹쳐 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."));
+    }
+
+    @Test
     @DisplayName("찾을 수 없음은 404다")
     void notFoundIs404() throws Exception {
         mockMvc.perform(get("/test/errors/not-found"))

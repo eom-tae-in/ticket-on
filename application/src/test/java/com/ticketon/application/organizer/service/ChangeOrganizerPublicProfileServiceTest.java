@@ -79,6 +79,41 @@ class ChangeOrganizerPublicProfileServiceTest {
     }
 
     @Test
+    @DisplayName("잠금 순서 — 고치는 운영진의 계정 줄에 외래 키 확인 잠금을 주최자 줄보다 먼저 건다 (계정 줄 → 주최자 줄, #195)")
+    void locksEditorAccountBeforeOrganizer() {
+        change(PLANNER, scene.twelveMonths, INTRODUCTION, LINKS);
+
+        assertThat(scene.rowLockLog.locks()).containsExactly("계정 " + PLANNER + " FOR KEY SHARE",
+                "주최자 " + scene.twelveMonths + " FOR UPDATE");
+        assertThat(scene.staffAccountRepository.lockedAccountIds()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("계정 줄을 기다리는 사이 내보내졌으면 잠근 뒤 다시 확인해 막는다 (NOT_ORGANIZER_STAFF) — 저장도 조작 기록도 없다")
+    void removedWhileWaitingForLock() {
+        scene.staffAccountRepository.runOnNextLock(() -> scene.staffRepository.saveEnded(
+                scene.staffRepository.findByOrganizerId(scene.twelveMonths).removeOperator(JUNGHOON, PLANNER, NOW)));
+
+        assertThatExceptionOfType(PermissionDeniedException.class)
+                .isThrownBy(() -> change(PLANNER, scene.twelveMonths, INTRODUCTION, LINKS))
+                .satisfies(denied -> assertThat(denied.errorCode()).isEqualTo(OrganizerErrorCode.NOT_ORGANIZER_STAFF));
+        assertThat(scene.organizerRepository.publicProfileSaves()).isZero();
+        assertThat(scene.recordRepository.records()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("계정 줄을 기다리는 사이 소유자를 넘겨받았으면 조작 기록에 잠근 뒤의 역할(소유자)이 남는다")
+    void recordsRoleRecheckedAfterLock() {
+        scene.staffAccountRepository.runOnNextLock(() -> scene.staffRepository.saveOwnershipTransfer(
+                scene.staffRepository.findByOrganizerId(scene.twelveMonths).transferOwnership(JUNGHOON, PLANNER, NOW)));
+
+        change(PLANNER, scene.twelveMonths, INTRODUCTION, LINKS);
+
+        assertThat(scene.recordRepository.records()).singleElement()
+                .satisfies(record -> assertThat(record.staffRole()).isEqualTo(StaffRole.OWNER));
+    }
+
+    @Test
     @DisplayName("소개를 비우고 링크를 빼면 지운다")
     void clears() {
         change(JUNGHOON, scene.twelveMonths, INTRODUCTION, LINKS);
@@ -112,6 +147,7 @@ class ChangeOrganizerPublicProfileServiceTest {
                 .isThrownBy(() -> change(YEOREUM, scene.twelveMonths, INTRODUCTION, LINKS));
         assertThat(scene.organizerRepository.publicProfileSaves()).isZero();
         assertThat(scene.recordRepository.records()).isEmpty();
+        assertThat(scene.rowLockLog.locks()).isEmpty();
     }
 
     @Test

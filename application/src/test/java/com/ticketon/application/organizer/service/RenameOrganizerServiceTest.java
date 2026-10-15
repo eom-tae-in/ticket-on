@@ -112,6 +112,40 @@ class RenameOrganizerServiceTest {
     }
 
     @Test
+    @DisplayName("잠금 순서 — 바꾸는 사람의 계정 줄에 외래 키 확인 잠금을 주최자 줄보다 먼저 건다 (계정 줄 → 주최자 줄, #195)")
+    void locksChangerAccountBeforeOrganizer() {
+        rename(JUNGHOON, "열두달 프로젝트");
+
+        assertThat(scene.rowLockLog.locks()).containsExactly("계정 " + JUNGHOON + " FOR KEY SHARE",
+                "주최자 " + scene.twelveMonths + " FOR UPDATE");
+        assertThat(scene.staffAccountRepository.lockedAccountIds()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("지금 이름과 같아 아무것도 바꾸지 않아도 잠금 순서는 같다")
+    void sameNameKeepsLockOrder() {
+        rename(JUNGHOON, "극단 열두달");
+
+        assertThat(scene.rowLockLog.locks()).containsExactly("계정 " + JUNGHOON + " FOR KEY SHARE",
+                "주최자 " + scene.twelveMonths + " FOR UPDATE");
+    }
+
+    @Test
+    @DisplayName("계정 줄을 기다리는 사이 소유자를 넘겼으면 잠근 뒤 다시 확인해 막는다 (OWNER_ONLY_ACTION) — 이름 · 이력 · 기록 · 메일 모두 그대로다")
+    void ownerTransferredWhileWaitingForLock() {
+        scene.staffAccountRepository.runOnNextLock(() -> scene.staffRepository.saveOwnershipTransfer(
+                scene.staffRepository.findByOrganizerId(scene.twelveMonths).transferOwnership(JUNGHOON, PLANNER, NOW)));
+
+        assertThatExceptionOfType(PermissionDeniedException.class)
+                .isThrownBy(() -> rename(JUNGHOON, "열두달 프로젝트"))
+                .satisfies(denied -> assertThat(denied.errorCode()).isEqualTo(OrganizerErrorCode.OWNER_ONLY_ACTION));
+
+        assertNothingChanged();
+        assertThat(scene.rowLockLog.locks()).containsExactly("계정 " + JUNGHOON + " FOR KEY SHARE",
+                "주최자 " + scene.twelveMonths + " FOR UPDATE");
+    }
+
+    @Test
     @DisplayName("운영자는 바꾸지 못한다 (OWNER_ONLY_ACTION) — 이름 · 이력 · 기록 · 메일 모두 그대로다")
     void operatorCannotRename() {
         assertThatExceptionOfType(PermissionDeniedException.class)
@@ -119,6 +153,7 @@ class RenameOrganizerServiceTest {
                 .satisfies(denied -> assertThat(denied.errorCode()).isEqualTo(OrganizerErrorCode.OWNER_ONLY_ACTION));
 
         assertNothingChanged();
+        assertThat(scene.rowLockLog.locks()).isEmpty();
     }
 
     @Test
@@ -131,6 +166,7 @@ class RenameOrganizerServiceTest {
                 .isThrownBy(() -> rename(DOHYUN, "열두달 프로젝트"));
 
         assertNothingChanged();
+        assertThat(scene.rowLockLog.locks()).isEmpty();
     }
 
     @Test

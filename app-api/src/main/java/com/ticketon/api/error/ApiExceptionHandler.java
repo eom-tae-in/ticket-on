@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Hidden;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -40,6 +41,22 @@ public class ApiExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorResponse handleRuleViolation(DomainException exception) {
         return rejected(exception);
+    }
+
+    /**
+     * 데이터베이스가 잠금 경합으로 끊은 요청 — 교착(40P01), 직렬화 실패(40001), 잠금 대기 실패(55P03). jOOQ와 JDBC가 Spring의
+     * {@link PessimisticLockingFailureException}으로 바꿔 던지고, 트랜잭션은 이미 되돌려졌다. 처리하지 못한 오류(500)가 아니라 정해진 409
+     * {@link ApiErrorCode#CONCURRENT_REQUEST}로 답해 화면이 다시 시도를 안내하게 한다.
+     * <p>
+     * 서버가 다시 시도하지는 않는다. 잠금 순서(organizer 서비스의 StaffAccountLocks)를 지키는 흐름끼리는 생기지 않으므로, 생겼다면 순서를 어긴
+     * 흐름이 있다는 뜻이라 감추지 않고 드러낸다 — 예외 전체를 warn으로 남긴다. 또 트랜잭션 밖의 일(파일 저장, 메일)이 섞인 흐름을 통째로 다시
+     * 돌리면 메일이 두 번 나갈 수 있다.
+     */
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse handleLockFailure(PessimisticLockingFailureException exception) {
+        log.warn("잠금 경합으로 데이터베이스가 끊은 요청 — 잠금 순서를 어긴 흐름인지 본다", exception);
+        return ErrorResponse.of(ApiErrorCode.CONCURRENT_REQUEST);
     }
 
     @ExceptionHandler(NotFoundException.class)
