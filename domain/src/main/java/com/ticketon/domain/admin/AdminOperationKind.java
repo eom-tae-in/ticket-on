@@ -9,7 +9,13 @@ package com.ticketon.domain.admin;
 public enum AdminOperationKind {
 
     /** 관리자 계정 발급 — 최고 관리자만(docs/01 "관리자 2등급"). 대상은 발급한 관리자 계정이다. */
-    ISSUE_ADMIN_ACCOUNT(AdminOperationTargetKind.ADMIN_ACCOUNT);
+    ISSUE_ADMIN_ACCOUNT(AdminOperationTargetKind.ADMIN_ACCOUNT),
+
+    /** 주최자 신청 승인 — 주최자가 활동이 되고 신청한 사람이 소유자가 된다(docs/01 "주최자 신청과 승인"). 대상은 승인한 신청서다. */
+    APPROVE_ORGANIZER_APPLICATION(AdminOperationTargetKind.ORGANIZER_APPLICATION),
+
+    /** 주최자 신청 반려 — 사유를 반드시 남긴다(docs/01 "반려"). 대상은 반려한 신청서다. */
+    REJECT_ORGANIZER_APPLICATION(AdminOperationTargetKind.ORGANIZER_APPLICATION);
 
     private final AdminOperationTargetKind targetKind;
 

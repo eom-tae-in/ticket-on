@@ -4,6 +4,8 @@ import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.account.AdminGrade;
 import com.ticketon.domain.account.EmailAddress;
+import com.ticketon.domain.organizer.OrganizerName;
+import com.ticketon.domain.organizer.RejectionReason;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -15,7 +17,9 @@ import java.util.Optional;
  * 조작과 같은 트랜잭션에서 남겨, 조작이 이뤄졌는데 기록이 없는 일이 없게 한다(application의 관리자 조작 기록기).
  * <p>
  * 요약은 사람이 목록에서 읽는 한 줄이다(운영진 쪽 예: "초대권 10장 발권 · 운영자 김○○", docs/01). 조작마다 만드는 방법을 이 클래스의
- * 정적 메서드로 둔다({@link #adminAccountIssued}). 사유는 관리자가 적은 사유가 있는 조작(정지 사유, 반려 사유 등)만 남기고, 없으면 비어 있다.
+ * 정적 메서드로 둔다({@link #adminAccountIssued}, {@link #organizerApplicationApproved},
+ * {@link #organizerApplicationRejected}).
+ * 사유는 관리자가 적은 사유가 있는 조작(정지 사유, 반려 사유 등)만 남기고, 없으면 비어 있다.
  * <p>
  * 보관 기간은 문서에 정해져 있지 않아 지우지 않는다(docs/11 "데이터 보관"에 없음 — 정해지면 파기 작업을 더한다).
  */
@@ -82,6 +86,37 @@ public final class AdminOperationRecord {
         Objects.requireNonNull(grade, "grade");
         return of(issuer, AdminOperationKind.ISSUE_ADMIN_ACCOUNT, issuedAccountId,
                 "관리자 계정 발급 — " + email.value() + " (" + grade.displayName() + ")", null, issuedAt);
+    }
+
+    /**
+     * 주최자 신청 승인 기록 — 대상은 승인한 신청서이고, 요약은 "주최자 신청 승인 — 신청한 이름 또는 단체명"이다. 사유는 없다.
+     *
+     * @param reviewer      승인한 관리자
+     * @param applicationId 승인한 신청서 id
+     * @param organizerName 신청한 이름 또는 단체명 — 승인으로 주최자명이 된다
+     */
+    public static AdminOperationRecord organizerApplicationApproved(AccountRef reviewer, long applicationId,
+            OrganizerName organizerName, Instant approvedAt) {
+        Objects.requireNonNull(organizerName, "organizerName");
+        return of(reviewer, AdminOperationKind.APPROVE_ORGANIZER_APPLICATION, applicationId,
+                "주최자 신청 승인 — " + organizerName.value(), null, approvedAt);
+    }
+
+    /**
+     * 주최자 신청 반려 기록 — 대상은 반려한 신청서이고, 요약은 "주최자 신청 반려 — 신청한 이름 또는 단체명"이다. 사유는 신청한 사람에게 전달한
+     * 반려 사유 그대로다(docs/01 "반려 — 사유를 반드시 남기고 전달합니다").
+     *
+     * @param reviewer      반려한 관리자
+     * @param applicationId 반려한 신청서 id
+     * @param organizerName 신청한 이름 또는 단체명
+     * @param reason        반려 사유
+     */
+    public static AdminOperationRecord organizerApplicationRejected(AccountRef reviewer, long applicationId,
+            OrganizerName organizerName, RejectionReason reason, Instant rejectedAt) {
+        Objects.requireNonNull(organizerName, "organizerName");
+        Objects.requireNonNull(reason, "reason");
+        return of(reviewer, AdminOperationKind.REJECT_ORGANIZER_APPLICATION, applicationId,
+                "주최자 신청 반려 — " + organizerName.value(), reason.text(), rejectedAt);
     }
 
     /** 조작한 관리자. */

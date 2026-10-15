@@ -8,6 +8,9 @@ import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.account.AdminGrade;
 import com.ticketon.domain.account.EmailAddress;
+import com.ticketon.domain.organizer.OrganizerName;
+import com.ticketon.domain.organizer.RejectionReason;
+import com.ticketon.domain.organizer.RejectionReasonTemplate;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
@@ -55,6 +58,44 @@ class AdminOperationRecordTest {
     }
 
     @Nested
+    @DisplayName("주최자 신청 심사 기록")
+    class OrganizerApplicationReviewed {
+
+        private static final AccountRef DOHYUN = AccountRef.of(AccountKind.ADMIN, 4);
+
+        @Test
+        @DisplayName("승인은 누가(관리자) · 언제 · 무엇을(주최자 신청 승인) · 대상(신청서 id) · 요약(신청한 이름)을 남기고, 사유는 없다")
+        void recordsApproval() {
+            AdminOperationRecord record = AdminOperationRecord.organizerApplicationApproved(DOHYUN, 3,
+                    OrganizerName.of("극단 열두달"), OPERATED_AT);
+
+            assertThat(record.operator()).isEqualTo(DOHYUN);
+            assertThat(record.operatedAt()).isEqualTo(OPERATED_AT);
+            assertThat(record.kind()).isEqualTo(AdminOperationKind.APPROVE_ORGANIZER_APPLICATION);
+            assertThat(record.targetKind()).isEqualTo(AdminOperationTargetKind.ORGANIZER_APPLICATION);
+            assertThat(record.targetId()).isEqualTo(3);
+            assertThat(record.summary()).isEqualTo("주최자 신청 승인 — 극단 열두달");
+            assertThat(record.reason()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("반려는 신청한 사람에게 전달한 사유를 그대로 사유로 남긴다 — 템플릿이든 직접 입력이든")
+        void recordsRejectionWithReason() {
+            AdminOperationRecord template = AdminOperationRecord.organizerApplicationRejected(DOHYUN, 3,
+                    OrganizerName.of("극단 열두달"), RejectionReasonTemplate.UNREACHABLE.reason(), OPERATED_AT);
+            AdminOperationRecord custom = AdminOperationRecord.organizerApplicationRejected(DOHYUN, 5,
+                    OrganizerName.of("늦여름"), RejectionReason.of("사업자등록번호가 확인되지 않습니다."), OPERATED_AT);
+
+            assertThat(template.kind()).isEqualTo(AdminOperationKind.REJECT_ORGANIZER_APPLICATION);
+            assertThat(template.targetKind()).isEqualTo(AdminOperationTargetKind.ORGANIZER_APPLICATION);
+            assertThat(template.targetId()).isEqualTo(3);
+            assertThat(template.summary()).isEqualTo("주최자 신청 반려 — 극단 열두달");
+            assertThat(template.reason()).hasValue("연락이 닿지 않음");
+            assertThat(custom.reason()).hasValue("사업자등록번호가 확인되지 않습니다.");
+        }
+    }
+
+    @Nested
     @DisplayName("한 줄의 규칙")
     class Rules {
 
@@ -69,9 +110,13 @@ class AdminOperationRecordTest {
         }
 
         @Test
-        @DisplayName("대상 종류는 조작 종류가 정한다 — 관리자 계정 발급의 대상은 관리자 계정이다")
+        @DisplayName("대상 종류는 조작 종류가 정한다 — 관리자 계정 발급의 대상은 관리자 계정, 주최자 신청 심사의 대상은 신청서다")
         void targetKindFollowsOperationKind() {
             assertThat(AdminOperationKind.ISSUE_ADMIN_ACCOUNT.targetKind()).isEqualTo(AdminOperationTargetKind.ADMIN_ACCOUNT);
+            assertThat(AdminOperationKind.APPROVE_ORGANIZER_APPLICATION.targetKind())
+                    .isEqualTo(AdminOperationTargetKind.ORGANIZER_APPLICATION);
+            assertThat(AdminOperationKind.REJECT_ORGANIZER_APPLICATION.targetKind())
+                    .isEqualTo(AdminOperationTargetKind.ORGANIZER_APPLICATION);
         }
 
         @ParameterizedTest(name = "{0}")

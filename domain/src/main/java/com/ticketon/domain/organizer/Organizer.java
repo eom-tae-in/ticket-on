@@ -13,7 +13,8 @@ import java.util.OptionalLong;
  * <p>
  * 이름 · 상태 · 공개 정보를 갖는다. 소유자·운영자 소속은 {@link OrganizerStaff}가, 심사용 신청 내용은 {@link OrganizerApplication}이 갖는다.
  * <ul>
- *   <li><b>상태</b>({@link OrganizerStatus}) — 심사 중으로 시작해 {@link #approve 승인}되면 활동이 된다. 닫혀도 지우지 않는다.</li>
+ *   <li><b>상태</b>({@link OrganizerStatus}) — 심사 중으로 시작해 {@link #approve 승인}되면 활동이 된다. 신청이 반려되면 심사 중으로
+ *       남는다({@link OrganizerApplication#reject}). 닫혀도 지우지 않는다.</li>
  *   <li><b>주최자명</b> — 소유자가 바로 바꾸고({@link StaffAction#RENAME_ORGANIZER}), 변경 이력({@link OrganizerNameChange})을 남긴다.</li>
  *   <li><b>공개 정보</b>({@link OrganizerPublicProfile}) — 소개 · SNS 링크 · 로고(선택). 운영진 누구나 편집한다.
  *       로고가 없으면 {@link #initialAvatar 이름 첫 글자 + 정해진 색}으로 보인다.</li>

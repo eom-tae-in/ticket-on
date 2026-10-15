@@ -81,6 +81,15 @@ public final class ProposedPolicy {
      */
     public static final boolean BOOKING_OPEN_NOTICE_RECEIVED_BY_DEFAULT = true;
 
+    /**
+     * 확인 필요 (#23, 문서에 없음) — 관리자 처리 목록에서 주최자 신청을 강조하기 시작하는 때: 심사 목표일(제출일부터 영업일 3일,
+     * {@link TimePolicy#ORGANIZER_REVIEW_TARGET})까지 남은 영업일이 이 수 이하면 강조한다. 목표일 당일과 지난 신청도 강조한다.
+     * 1영업일을 제안한다: 처리 목록은 공연이 임박한 건과 기한이 다가오는 건을 강조하는데(docs/12 "관리자 대상", docs/04 "처리 목록 — 정산 기한이
+     * 다가오는 건은 강조") 주최자 신청에는 공연이 없어 심사 목표일을 기한으로 본다. 하루 전부터 눈에 띄면 목표일 안에 처리할 여유가 있고,
+     * 목표가 영업일 3일뿐이라 2일 이상으로 잡으면 들어온 다음 영업일부터 강조돼 강조의 뜻이 옅어진다.
+     */
+    public static final BusinessDays ORGANIZER_REVIEW_DEADLINE_APPROACHING_WITHIN = BusinessDays.of(1);
+
     private ProposedPolicy() {
     }
 }

@@ -14,7 +14,12 @@ package com.ticketon.domain.organizer;
  */
 public enum OrganizerStatus {
 
-    /** 심사 중 — 신청을 받았고 아직 승인되지 않았다. 행사를 열 수 없다. */
+    /**
+     * 심사 중 — 신청을 받았고 아직 승인되지 않았다. 행사를 열 수 없다.
+     * <p>
+     * 신청이 반려돼도 이 상태로 남는다 — '반려' 상태를 따로 두지 않고 지우지도 않는다(반려된 신청서가 사유와 함께 이 주최자를 가리킨다).
+     * 소속도 행사도 없어 공개되지 않는다. 다시 신청하면 새 주최자가 심사 중으로 생긴다({@link OrganizerApplication#reject}).
+     */
     UNDER_REVIEW,
 
     /** 활동 — 승인되어 운영진이 행사를 열고 운영한다. */
