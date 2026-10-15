@@ -33,8 +33,12 @@
  *       <td>예매, 마이페이지, 알림함, 알림 받기, 신고. 주최자 쪽 로그인으로는 예매할 수 없다(docs/01 "같은 이메일로 양쪽 가입").</td></tr>
  *   <tr><td>{@code /api/organizer/**}</td><td>운영진(STAFF)</td>
  *       <td>주최 관리. 소유자·운영자 권한은 주최자마다 다르므로 여기서 나누지 않고 유스케이스가 확인한다(docs/01 "권한 두 가지").</td></tr>
- *   <tr><td>{@code /api/admin/**}</td><td>관리자(ADMIN)</td>
- *       <td>플랫폼 관리. 최고 관리자 전용 구분은 관리자 계정 이슈(#21)에서 정한다.</td></tr>
+ *   <tr><td>{@code /api/admin/super/**}</td><td>최고 관리자(ADMIN 중 등급 SUPER_ADMIN)</td>
+ *       <td>최고 관리자만 하는 일 — 관리자 계정 발급, 영구 정지(docs/01 "관리자 2등급", docs/13 "※ 최고 관리자만").
+ *           관리자 로그인이 세션에 등급을 담는다({@link com.ticketon.api.security.SessionLogin#logInAdmin}).
+ *           관리자(ADMIN 등급)로 오면 403이다. 규칙의 마지막 판정은 유스케이스가 저장소의 등급으로 한 번 더 한다.</td></tr>
+ *   <tr><td>{@code /api/admin/**}</td><td>관리자(ADMIN) — 두 등급 모두</td>
+ *       <td>플랫폼 관리. 최고 관리자만 하는 일은 위 {@code /api/admin/super/**} 아래에 둔다.</td></tr>
  *   <tr><td>{@code /api/checkin/**}</td><td>검표(CHECKIN), 운영진(STAFF)</td>
  *       <td>검표 화면. 운영진도 같은 화면을 연다(docs/13 "검표 화면 열기 — 운영진도 같은 화면").
  *           검표 계정은 이 영역만 들어간다(docs/01 "검표 계정"). 운영진만 되는 동작(티켓 없이 입장 처리)을 막는 방법은

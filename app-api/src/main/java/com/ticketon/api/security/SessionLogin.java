@@ -1,6 +1,7 @@
 package com.ticketon.api.security;
 
 import com.ticketon.domain.account.AccountRef;
+import com.ticketon.domain.account.AdminGrade;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
@@ -28,6 +29,7 @@ import org.springframework.security.web.csrf.CsrfTokenRepository;
  *   <li>세션 고정 공격을 막으려고 로그인 전에 세션 id를 바꾼다.</li>
  *   <li>로그인 전에 받아 둔 CSRF 토큰을 버린다. 다음 요청에서 새 토큰을 받는다.</li>
  *   <li>한 세션에는 주체 하나만 로그인한다. 같은 세션에서 다른 계정으로 로그인하면 이전 주체를 대신한다.</li>
+ *   <li>관리자는 {@link #logInAdmin}으로 등급을 함께 담는다 — 최고 관리자 전용 경로가 세션의 등급을 본다.</li>
  * </ul>
  * {@link #logOut}은 <b>지금 세션 하나만</b> 끝낸다. 같은 주체가 다른 기기에서 로그인한 세션은 그대로 둔다. 관리자 정지·탈퇴처럼
  * 그 주체의 세션을 모두 끊어야 할 때는 application의 SessionTerminationPort를 쓴다.
@@ -53,7 +55,15 @@ public class SessionLogin {
     }
 
     public void logIn(AccountRef account, HttpServletRequest request, HttpServletResponse response) {
-        Authentication authentication = AccountAuthentication.of(account);
+        logIn(AccountAuthentication.of(account), request, response);
+    }
+
+    /** 관리자를 등급과 함께 로그인시킨다({@link AccountAuthentication#ofAdmin}). 그 밖은 {@link #logIn}과 같다. */
+    public void logInAdmin(AccountRef admin, AdminGrade grade, HttpServletRequest request, HttpServletResponse response) {
+        logIn(AccountAuthentication.ofAdmin(admin, grade), request, response);
+    }
+
+    private void logIn(Authentication authentication, HttpServletRequest request, HttpServletResponse response) {
         sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
 
         SecurityContext context = securityContextHolderStrategy.createEmptyContext();

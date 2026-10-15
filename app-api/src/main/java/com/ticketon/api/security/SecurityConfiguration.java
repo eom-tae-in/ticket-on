@@ -39,6 +39,8 @@ public class SecurityConfiguration {
                         .requestMatchers(PUBLIC_PATHS).permitAll()
                         .requestMatchers("/api/audience/**").hasRole(AccountKind.AUDIENCE.name())
                         .requestMatchers("/api/organizer/**").hasRole(AccountKind.STAFF.name())
+                        // 최고 관리자 전용 경로를 관리자 영역보다 먼저 건다 — 먼저 맞는 규칙 하나만 본다
+                        .requestMatchers("/api/admin/super/**").hasRole(AccountAuthentication.SUPER_ADMIN_ROLE)
                         .requestMatchers("/api/admin/**").hasRole(AccountKind.ADMIN.name())
                         .requestMatchers("/api/checkin/**").hasAnyRole(AccountKind.CHECKIN.name(), AccountKind.STAFF.name())
                         .anyRequest().denyAll())
