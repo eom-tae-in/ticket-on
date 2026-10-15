@@ -16,15 +16,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ticketon.api.security.SecurityConfiguration;
+import com.ticketon.application.account.port.in.MarketingConsentResult;
 import com.ticketon.application.notification.port.in.ChangeNotificationPreferenceCommand;
 import com.ticketon.application.notification.port.in.ChangeNotificationPreferenceUseCase;
 import com.ticketon.application.notification.port.in.GetNotificationSettingsQuery;
 import com.ticketon.application.notification.port.in.GetNotificationSettingsUseCase;
 import com.ticketon.application.notification.port.in.NotificationSettingsResult;
+import com.ticketon.common.KoreanTime;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.notification.NotificationPreference;
 import com.ticketon.domain.notification.NotificationSettings;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -53,8 +57,10 @@ class NotificationSettingsControllerTest {
 
     private static final AccountRef SEOYUN = AccountRef.of(AccountKind.AUDIENCE, 7);
 
+    private static final MarketingConsentResult NOT_AGREED = new MarketingConsentResult(false, null);
+
     private static final NotificationSettingsResult DEFAULTS =
-            NotificationSettingsResult.from(NotificationSettings.defaultsFor(SEOYUN.id()));
+            NotificationSettingsResult.from(NotificationSettings.defaultsFor(SEOYUN.id()), NOT_AGREED);
 
     @Autowired
     private MockMvc mockMvc;
@@ -70,7 +76,7 @@ class NotificationSettingsControllerTest {
     class GetSettings {
 
         @Test
-        @DisplayName("로그인한 관객의 설정을 세 묶음, 화면 순서대로 돌려준다")
+        @DisplayName("로그인한 관객의 설정을 세 묶음, 화면 순서대로 돌려주고 마케팅 수신은 따로 담는다")
         void returnsSettingsOfLoggedInAudience() throws Exception {
             given(getNotificationSettingsUseCase.getSettings(any())).willReturn(DEFAULTS);
 
@@ -81,11 +87,25 @@ class NotificationSettingsControllerTest {
                               {"preference": "BOOKING_CONFIRMATION", "receives": true},
                               {"preference": "DAY_BEFORE_REMINDER", "receives": true},
                               {"preference": "BOOKING_OPEN", "receives": true}
-                            ]}""", JsonCompareMode.STRICT));
+                            ],
+                            "marketing": {"agreed": false, "agreedAt": null}}""", JsonCompareMode.STRICT));
 
             ArgumentCaptor<GetNotificationSettingsQuery> query = ArgumentCaptor.forClass(GetNotificationSettingsQuery.class);
             verify(getNotificationSettingsUseCase).getSettings(query.capture());
             assertThat(query.getValue().account()).isEqualTo(SEOYUN);
+        }
+
+        @Test
+        @DisplayName("마케팅 수신에 동의한 상태면 동의 일시를 한국 시각으로 돌려준다 — \"2026-03-01 동의\" (docs/12 예시)")
+        void returnsMarketingAgreedAtInKoreanTime() throws Exception {
+            Instant agreedAt = KoreanTime.toInstant(LocalDateTime.of(2026, 3, 1, 9, 30));
+            given(getNotificationSettingsUseCase.getSettings(any())).willReturn(NotificationSettingsResult.from(
+                    NotificationSettings.defaultsFor(SEOYUN.id()), new MarketingConsentResult(true, agreedAt)));
+
+            mockMvc.perform(get(SETTINGS_PATH).with(loggedInAs(SEOYUN)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.marketing.agreed").value(true))
+                    .andExpect(jsonPath("$.marketing.agreedAt").value("2026-03-01T09:30:00+09:00"));
         }
 
         @Test
@@ -116,13 +136,15 @@ class NotificationSettingsControllerTest {
         @DisplayName("주소의 묶음과 본문의 받을지를 Command로 넘기고, 바뀐 뒤의 설정 전체를 돌려준다")
         void convertsRequestToCommand() throws Exception {
             given(changeNotificationPreferenceUseCase.changePreference(any())).willReturn(NotificationSettingsResult.from(
-                    NotificationSettings.defaultsFor(SEOYUN.id()).change(NotificationPreference.DAY_BEFORE_REMINDER, false)));
+                    NotificationSettings.defaultsFor(SEOYUN.id()).change(NotificationPreference.DAY_BEFORE_REMINDER, false),
+                    NOT_AGREED));
 
             mockMvc.perform(change("DAY_BEFORE_REMINDER", "{\"receives\": false}").with(loggedInAs(SEOYUN)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.preferences", hasSize(3)))
                     .andExpect(jsonPath("$.preferences[1].preference").value("DAY_BEFORE_REMINDER"))
-                    .andExpect(jsonPath("$.preferences[1].receives").value(false));
+                    .andExpect(jsonPath("$.preferences[1].receives").value(false))
+                    .andExpect(jsonPath("$.marketing.agreed").value(false));
 
             ArgumentCaptor<ChangeNotificationPreferenceCommand> command =
                     ArgumentCaptor.forClass(ChangeNotificationPreferenceCommand.class);

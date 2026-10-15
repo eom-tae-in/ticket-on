@@ -56,11 +56,24 @@ class NotificationSettingsApiDocsTest {
     void responseShape() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.components.schemas.NotificationSettingsResponse.required", contains("preferences")))
+                .andExpect(jsonPath("$.components.schemas.NotificationSettingsResponse.required",
+                        containsInAnyOrder("preferences", "marketing")))
                 .andExpect(jsonPath("$.components.schemas.NotificationPreferenceItem.required",
                         containsInAnyOrder("preference", "receives")))
                 .andExpect(jsonPath("$.components.schemas.NotificationPreferenceItem.properties.preference.enum",
                         contains("BOOKING_CONFIRMATION", "DAY_BEFORE_REMINDER", "BOOKING_OPEN")));
+    }
+
+    @Test
+    @DisplayName("마케팅 수신은 동의 여부가 필수이고, 동의 일시는 동의한 상태에만 있다")
+    void marketingShape() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.components.schemas.NotificationSettingsResponse.properties.marketing['$ref']")
+                        .value("#/components/schemas/MarketingConsentResponse"))
+                .andExpect(jsonPath("$.components.schemas.MarketingConsentResponse.required", contains("agreed")))
+                .andExpect(jsonPath("$.components.schemas.MarketingConsentResponse.properties.agreedAt.format")
+                        .value("date-time"));
     }
 
     @Test

@@ -99,7 +99,8 @@ class NotificationIntegrationTest {
                           {"preference": "BOOKING_CONFIRMATION", "receives": true},
                           {"preference": "DAY_BEFORE_REMINDER", "receives": false},
                           {"preference": "BOOKING_OPEN", "receives": true}
-                        ]}""", JsonCompareMode.STRICT));
+                        ],
+                        "marketing": {"agreed": false, "agreedAt": null}}""", JsonCompareMode.STRICT));
 
         send(accountId, NotificationKind.DAY_BEFORE_REMINDER);
         send(accountId, NotificationKind.SESSION_CANCELLED);
@@ -136,7 +137,8 @@ class NotificationIntegrationTest {
                           {"preference": "BOOKING_CONFIRMATION", "receives": true},
                           {"preference": "DAY_BEFORE_REMINDER", "receives": true},
                           {"preference": "BOOKING_OPEN", "receives": true}
-                        ]}""", JsonCompareMode.STRICT));
+                        ],
+                        "marketing": {"agreed": false, "agreedAt": null}}""", JsonCompareMode.STRICT));
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM audience_notification_preference WHERE audience_account_id = ?", Long.class,
                 accountId)).isZero();
