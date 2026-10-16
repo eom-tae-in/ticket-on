@@ -84,6 +84,10 @@ INSERT INTO event_category (event_type, name, display_order) VALUES
 --   알림(docs/12)에 쓴다.
 -- deleted_at: 행사 삭제(#66)가 채운다. 지운 행사는 없는 행사로 다룬다(docs/01 "작성 중 · 삭제된 행사 — 없는 행사").
 --
+-- CHECK와 NULL: PostgreSQL CHECK는 식이 NULL이면 통과한다. 그래서 NULL이 될 수 있는 칸이 든 CHECK는 그 칸을 IS NULL / IS NOT NULL로 먼저
+--   가른다 — 1인 총 매수의 (한도 없음, 세는 범위 있음) 같은 조합이 비교식의 NULL로 빠져나가지 않게. NOT NULL 칸끼리의 비교는 NULL이 되지 않는다.
+--   또 PostgreSQL은 어긋난 CHECK가 여럿이면 이름 차례로 처음 것을 알리므로, CHECK마다 제 규칙 하나만 맡는다(상태 값 자체는 event_status_ck가,
+--   상태와 예매가 열린 시각의 관계는 event_booking_opened_at_ck가).
 -- 동시성: 위저드 단계 저장은 이 줄을 FOR UPDATE로 잠그고 읽은 뒤 고친다 — 두 운영진이 거의 동시에 저장하면 뒤의 저장이 앞의 저장을 기다렸다가
 --   바뀐 값을 읽는다. 잠금 순서는 운영진 계정 줄 → 주최자 줄 → 행사 줄이다(application의 StaffAccountLocks).
 -- 보관: 지우지 않는다(삭제는 deleted_at). 정해진 보관 기간이 문서에 없다.
@@ -134,24 +138,26 @@ CREATE TABLE event (
     CONSTRAINT event_introduction_ck CHECK (char_length(introduction) > 0),
     CONSTRAINT event_venue_ck CHECK (char_length(venue_name) > 0 AND char_length(venue_address) > 0),
     CONSTRAINT event_visibility_ck CHECK (visibility IN ('PUBLIC', 'LINK_ONLY', 'PASSWORD_PROTECTED')),
-    -- 암호 보호일 때만 암호 해시가 있다(도메인 EventVisibilitySetting)
+    -- 암호 보호일 때만 암호 해시가 있다(도메인 EventVisibilitySetting). visibility는 NOT NULL이라 비교가 NULL이 되지 않는다
     CONSTRAINT event_password_hash_ck CHECK (
         (visibility = 'PASSWORD_PROTECTED' AND password_hash IS NOT NULL)
         OR (visibility <> 'PASSWORD_PROTECTED' AND password_hash IS NULL)),
     CONSTRAINT event_lead_minutes_ck CHECK (booking_close_lead_minutes >= 0 AND checkin_open_lead_minutes >= 0),
     CONSTRAINT event_max_seats_per_selection_ck CHECK (max_seats_per_selection >= 1),
-    -- 1인 총 매수는 한도와 세는 범위가 함께 있거나 함께 없다(도메인 TicketsPerPersonLimit)
+    -- 1인 총 매수는 한도와 세는 범위가 함께 있거나 함께 없다(도메인 TicketsPerPersonLimit). 한쪽만 NULL인 줄이 비교식의 NULL로 통과하지 않게
+    -- 둘 다 IS NOT NULL을 먼저 본다
     CONSTRAINT event_tickets_per_person_ck CHECK (
         (max_tickets_per_person IS NULL AND tickets_per_person_basis IS NULL)
-        OR (max_tickets_per_person >= 1 AND tickets_per_person_basis IN ('PER_DATE', 'EVENT_TOTAL'))),
+        OR (max_tickets_per_person IS NOT NULL AND tickets_per_person_basis IS NOT NULL
+            AND max_tickets_per_person >= 1 AND tickets_per_person_basis IN ('PER_DATE', 'EVENT_TOTAL'))),
     CONSTRAINT event_session_choice_ck CHECK (session_choice IN ('NONE', 'ONE_SESSION_PER_DATE', 'ONE_SESSION_PER_EVENT')),
     CONSTRAINT event_reentry_ck CHECK (reentry IN ('NOT_ALLOWED', 'ALLOWED')),
     CONSTRAINT event_minimum_age_ck CHECK (minimum_age >= 0),
-    -- 작성 중 · 판매 대기에는 예매가 열린 시각이 없고, 판매 중이면 있다(도메인 Event)
+    -- 작성 중 · 판매 대기에는 예매가 열린 시각이 없고, 판매 중이면 있다(도메인 Event). 그 밖의 상태는 어느 쪽이든 된다 — 판매 대기에서 관리자
+    -- 조치로 멈췄거나 오픈 전에 판매 종료가 되면 예매가 열린 적이 없다. status는 NOT NULL이라 비교가 NULL이 되지 않는다
     CONSTRAINT event_booking_opened_at_ck CHECK (
-        (status IN ('DRAFT', 'AWAITING_OPEN') AND booking_opened_at IS NULL)
-        OR (status = 'ON_SALE' AND booking_opened_at IS NOT NULL)
-        OR status IN ('SALES_PAUSED', 'SALES_CLOSED', 'ENDED', 'SETTLED', 'CANCELLED')),
+        (status NOT IN ('DRAFT', 'AWAITING_OPEN') OR booking_opened_at IS NULL)
+        AND (status <> 'ON_SALE' OR booking_opened_at IS NOT NULL)),
     CONSTRAINT event_wizard_progress_step_ck CHECK (wizard_progress_step IN ('BASIC_INFORMATION', 'SCHEDULE', 'SEATING', 'PRICING',
                                                                              'BOOKING_SETTINGS', 'ENTRANCES_AND_CHECKIN_ACCOUNTS',
                                                                              'REVIEW'))
