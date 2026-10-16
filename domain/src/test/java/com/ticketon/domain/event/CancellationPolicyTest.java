@@ -28,6 +28,25 @@ class CancellationPolicyTest {
         return Arrays.asList(tiers);
     }
 
+    /** 넣는 순서를 모두 늘어놓는다. */
+    private static List<List<CancellationFeeTier>> permutations(List<CancellationFeeTier> tiers) {
+        if (tiers.isEmpty()) {
+            return List.of(List.of());
+        }
+        List<List<CancellationFeeTier>> orders = new ArrayList<>();
+        for (int index = 0; index < tiers.size(); index++) {
+            List<CancellationFeeTier> rest = new ArrayList<>(tiers);
+            CancellationFeeTier first = rest.remove(index);
+            for (List<CancellationFeeTier> restOrder : permutations(rest)) {
+                List<CancellationFeeTier> order = new ArrayList<>();
+                order.add(first);
+                order.addAll(restOrder);
+                orders.add(order);
+            }
+        }
+        return orders;
+    }
+
     @Nested
     @DisplayName("기준표")
     class Standard {
@@ -194,6 +213,20 @@ class CancellationPolicyTest {
         @DisplayName("같은 날에서 시작하는 구간이 둘이면 받지 않는다")
         void duplicateBoundaryRejected() {
             assertThatIllegalArgumentException().isThrownBy(() -> CancellationPolicy.of(tiers(tier(3, 0), tier(3, 10), tier(0, 90))));
+        }
+
+        @Test
+        @DisplayName("같은 날 중복은 넣은 순서와 상관없이 막는다 — 중복 하나가 이웃과 공제율이 같아 합쳐질 자리여도")
+        void duplicateBoundaryRejectedInAnyOrder() {
+            List<List<CancellationFeeTier>> duplicated = List.of(
+                    tiers(tier(0, 30), tier(2, 30), tier(2, 0)),
+                    tiers(tier(0, 30), tier(2, 30), tier(2, 30)));
+
+            for (List<CancellationFeeTier> tierSet : duplicated) {
+                for (List<CancellationFeeTier> order : permutations(tierSet)) {
+                    assertThatIllegalArgumentException().as("넣은 순서 %s", order).isThrownBy(() -> CancellationPolicy.of(order));
+                }
+            }
         }
 
         @Test

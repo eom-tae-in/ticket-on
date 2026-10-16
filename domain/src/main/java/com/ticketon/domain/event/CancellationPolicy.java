@@ -104,21 +104,24 @@ public record CancellationPolicy(List<CancellationFeeTier> tiers) {
         if (nearestFirst.getFirst().fromDaysBefore() != 0) {
             throw new IllegalArgumentException("취소 규정에 관람일 당일부터 시작하는 구간이 없습니다: " + tiers);
         }
+        requireDistinctStartDays(nearestFirst);
         List<CancellationFeeTier> merged = new ArrayList<>();
         for (CancellationFeeTier tier : nearestFirst) {
-            if (merged.isEmpty()) {
-                merged.add(tier);
-                continue;
-            }
-            CancellationFeeTier nearer = merged.getLast();
-            if (nearer.fromDaysBefore() == tier.fromDaysBefore()) {
-                throw new IllegalArgumentException("같은 날에서 시작하는 구간이 둘입니다: 관람일 " + tier.fromDaysBefore() + "일 전");
-            }
-            if (!nearer.deductionRate().equals(tier.deductionRate())) {
+            if (merged.isEmpty() || !merged.getLast().deductionRate().equals(tier.deductionRate())) {
                 merged.add(tier);
             }
         }
         return List.copyOf(merged.reversed());
+    }
+
+    /** 합치기 전에 입력 전체를 본다 — 합쳐져 사라질 구간이 끼어 있어도 넣은 순서와 상관없이 같은 날 중복을 막는다. */
+    private static void requireDistinctStartDays(List<CancellationFeeTier> nearestFirst) {
+        for (int index = 1; index < nearestFirst.size(); index++) {
+            int startDay = nearestFirst.get(index).fromDaysBefore();
+            if (nearestFirst.get(index - 1).fromDaysBefore() == startDay) {
+                throw new IllegalArgumentException("같은 날에서 시작하는 구간이 둘입니다: 관람일 " + startDay + "일 전");
+            }
+        }
     }
 
     private static void requireNoStricterThanStandard(List<CancellationFeeTier> tiers) {
