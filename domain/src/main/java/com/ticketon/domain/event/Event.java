@@ -7,19 +7,22 @@ import java.util.OptionalLong;
 /**
  * 행사 — 주최자가 여는 하나의 공연 · 전시 · 페스티벌. 주최자에 속한다(docs/00 "용어", docs/14 "무엇이 무엇을 가리키나").
  * <p>
- * 지금은 위저드 1단계의 기본 정보와 공개 수준, 공개 주소를 갖는다.
+ * 지금은 위저드 1단계의 기본 정보, 5단계의 공개 수준 · 예매 설정 · 취소 규정, 공개 주소를 갖는다.
  * <ul>
  *   <li><b>기본 정보</b>({@link EventBasicInformation}) — 제목 · 유형 · 카테고리 · 소개 · 장소 등. 행사를 만들 때 함께 받는다 — 위저드는
  *       단계를 넘길 때마다 저장하므로(docs/03 "임시저장은 자동으로") 1단계를 마쳐야 처음 저장된다.</li>
  *   <li><b>포스터</b>({@link EventPoster}) — 1단계의 필수 항목이지만 행사를 만든 뒤 따로 올린다. 그래서 작성 중에는 없을 수 있고, 판매를
  *       시작하기 전에 갖춰야 한다({@link #isBasicInformationComplete}).</li>
  *   <li><b>공개 수준</b>({@link EventVisibilitySetting}) — 공개로 시작한다(docs/04 "행사 복제 — 공개 수준은 기본값 공개로 시작").</li>
+ *   <li><b>예매 설정</b>({@link BookingSettings}) — 오픈 시각 · 예매 종료 · 검표 시작 · 매수 제한 · 회차 선택 제약 · 재입장 · 연령 제한.
+ *       처음 값으로 시작한다 — 위저드 5단계는 전부 처음 값이 있어 건너뛸 수 있다(docs/03 "행사 만들기 위저드").</li>
+ *   <li><b>취소 규정</b>({@link CancellationPolicy}) — 소비자분쟁해결기준 그대로 시작하고, 관객에게 더 유리한 쪽으로만 조정한다(docs/08).</li>
  *   <li><b>공개 주소</b>({@link EventPublicAddress}) — 만들 때 발급하고 바뀌지 않는다. 공개 수준을 바꿔도 같은 링크다.</li>
  * </ul>
  * 화면마다 부르는 이름이 다르다 — 관객 화면은 유형 이름, 주최자 화면은 "행사"({@link #nameOn}).
  * <p>
- * 언제 무엇을 고칠 수 있는지(상태별 수정 범위, 장소 변경의 관리자 승인, 제목 · 소개 · 포스터의 변경 이력)는 이 객체가 아직 보지 않는다
- * (docs/04 "상태별로 할 수 있는 것", "예매가 열린 뒤 수정 범위", docs/03 "변경 이력").
+ * 언제 무엇을 고칠 수 있는지(상태별 수정 범위, 판매 중 취소 규정 잠금, 장소 변경의 관리자 승인, 제목 · 소개 · 포스터의 변경 이력)는 이 객체가
+ * 아직 보지 않는다(docs/04 "상태별로 할 수 있는 것", "예매가 열린 뒤 수정 범위", docs/03 "변경 이력").
  * <p>
  * 저장소에서 다시 읽을 때는 {@link #restore}를 쓴다. 저장 전 행사는 id가 없다.
  */
@@ -31,9 +34,12 @@ public final class Event {
     private EventBasicInformation basicInformation;
     private EventPoster poster;
     private EventVisibilitySetting visibility;
+    private BookingSettings bookingSettings;
+    private CancellationPolicy cancellationPolicy;
 
     private Event(Long id, long organizerId, EventPublicAddress publicAddress, EventBasicInformation basicInformation,
-            EventPoster poster, EventVisibilitySetting visibility) {
+            EventPoster poster, EventVisibilitySetting visibility, BookingSettings bookingSettings,
+            CancellationPolicy cancellationPolicy) {
         if (organizerId < 1) {
             throw new IllegalArgumentException("주최자 id는 1 이상이어야 합니다: " + organizerId);
         }
@@ -43,17 +49,21 @@ public final class Event {
         this.basicInformation = Objects.requireNonNull(basicInformation, "basicInformation");
         this.poster = poster;
         this.visibility = Objects.requireNonNull(visibility, "visibility");
+        this.bookingSettings = Objects.requireNonNull(bookingSettings, "bookingSettings");
+        this.cancellationPolicy = Objects.requireNonNull(cancellationPolicy, "cancellationPolicy");
     }
 
     /**
-     * 위저드 1단계를 마친 새 행사를 만든다. 포스터는 아직 없고 공개 수준은 공개다.
+     * 위저드 1단계를 마친 새 행사를 만든다. 포스터는 아직 없고, 공개 수준은 공개, 예매 설정은 처음 값({@link BookingSettings#defaults}),
+     * 취소 규정은 기준표 그대로({@link CancellationPolicy#standard})다.
      *
      * @param organizerId      행사를 여는 주최자의 id
      * @param publicAddress    새로 발급한 공개 주소 — 서비스가 TokenGenerator로 만든 값으로 발급한다({@link EventPublicAddress#issue})
      * @param basicInformation 1단계에서 적은 기본 정보
      */
     public static Event create(long organizerId, EventPublicAddress publicAddress, EventBasicInformation basicInformation) {
-        return new Event(null, organizerId, publicAddress, basicInformation, null, EventVisibilitySetting.publicByDefault());
+        return new Event(null, organizerId, publicAddress, basicInformation, null, EventVisibilitySetting.publicByDefault(),
+                BookingSettings.defaults(), CancellationPolicy.standard());
     }
 
     /**
@@ -62,11 +72,13 @@ public final class Event {
      * @param poster 포스터. 아직 올리지 않았으면 null
      */
     public static Event restore(long id, long organizerId, EventPublicAddress publicAddress,
-            EventBasicInformation basicInformation, EventPoster poster, EventVisibilitySetting visibility) {
+            EventBasicInformation basicInformation, EventPoster poster, EventVisibilitySetting visibility,
+            BookingSettings bookingSettings, CancellationPolicy cancellationPolicy) {
         if (id < 1) {
             throw new IllegalArgumentException("행사 id는 1 이상이어야 합니다: " + id);
         }
-        return new Event(id, organizerId, publicAddress, basicInformation, poster, visibility);
+        return new Event(id, organizerId, publicAddress, basicInformation, poster, visibility, bookingSettings,
+                cancellationPolicy);
     }
 
     /**
@@ -114,6 +126,35 @@ public final class Event {
     }
 
     /**
+     * 예매 설정을 바꾼다(위저드 5단계를 다시 저장).
+     *
+     * @return 바뀌었는지 — 지금과 같으면 아무것도 바꾸지 않고 false
+     */
+    public boolean changeBookingSettings(BookingSettings newBookingSettings) {
+        Objects.requireNonNull(newBookingSettings, "newBookingSettings");
+        if (newBookingSettings.equals(bookingSettings)) {
+            return false;
+        }
+        bookingSettings = newBookingSettings;
+        return true;
+    }
+
+    /**
+     * 취소 규정을 바꾼다(위저드 5단계의 취소 규정 조정). 기준보다 불리한 규정은 만들 때 이미 막혔다({@link CancellationPolicy#of}).
+     * 기준표로 되돌리려면 {@link CancellationPolicy#standard}를 넘긴다.
+     *
+     * @return 바뀌었는지 — 지금과 같으면 false
+     */
+    public boolean changeCancellationPolicy(CancellationPolicy newCancellationPolicy) {
+        Objects.requireNonNull(newCancellationPolicy, "newCancellationPolicy");
+        if (newCancellationPolicy.equals(cancellationPolicy)) {
+            return false;
+        }
+        cancellationPolicy = newCancellationPolicy;
+        return true;
+    }
+
+    /**
      * 위저드 1단계의 필수 항목이 모두 찼는지. 기본 정보는 저장할 때 이미 필수 항목을 확인했으므로 따로 올리는 포스터만 빠질 수 있다.
      * 판매를 시작하기 전에 확인한다(docs/03 "판매 시작 직전에 검증").
      */
@@ -150,5 +191,13 @@ public final class Event {
 
     public EventVisibilitySetting visibility() {
         return visibility;
+    }
+
+    public BookingSettings bookingSettings() {
+        return bookingSettings;
+    }
+
+    public CancellationPolicy cancellationPolicy() {
+        return cancellationPolicy;
     }
 }
