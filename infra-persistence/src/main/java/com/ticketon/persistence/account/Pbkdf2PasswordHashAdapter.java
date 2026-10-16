@@ -48,7 +48,10 @@ public class Pbkdf2PasswordHashAdapter implements PasswordHashPort {
         this.hashForMissingAccount = passwordEncoder.encode(MISSING_ACCOUNT_PASSWORD);
     }
 
-    static PasswordEncoder defaultPasswordEncoder() {
+    /**
+     * 서버가 쓰는 PBKDF2 인코더 — 방식 이름을 붙여 해시를 만들고 읽는다. 행사 암호 해시 어댑터도 같은 방식을 쓴다(persistence.event).
+     */
+    public static PasswordEncoder defaultPasswordEncoder() {
         return new DelegatingPasswordEncoder(ENCODING_ID,
                 Map.of(ENCODING_ID, Pbkdf2PasswordEncoder.defaultsForSpringSecurity_v5_8()));
     }

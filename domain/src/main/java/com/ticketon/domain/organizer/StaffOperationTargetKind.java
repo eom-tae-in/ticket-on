@@ -22,5 +22,8 @@ public enum StaffOperationTargetKind {
     STAFF_MEMBER,
 
     /** 소유자 이전 신청 — 운영자가 관리자에게 낸 조작. 대상 id는 신청({@link OwnershipClaim})의 id다. */
-    OWNERSHIP_CLAIM
+    OWNERSHIP_CLAIM,
+
+    /** 행사 — 행사를 만들거나 위저드 단계를 저장한 조작. 대상 id는 행사({@code domain.event.Event})의 id다. */
+    EVENT
 }

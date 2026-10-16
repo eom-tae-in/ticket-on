@@ -2,7 +2,9 @@ package com.ticketon.domain.event;
 
 import com.ticketon.domain.error.RuleViolationException;
 import com.ticketon.domain.organizer.ExternalLink;
+import java.util.EnumSet;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * 행사 기본 정보 — 위저드 1단계에서 적는 것(docs/03 "기본 정보", "행사 만들기 위저드").
@@ -19,6 +21,9 @@ import java.util.Objects;
  * <p>
  * 소개 · 상세 안내는 앞뒤 공백을 걷는다. 상세 안내가 비었거나 공백뿐이면 없는 것(null)으로 둔다. 소개 · 장소 · 상세 안내의 길이는 문서에
  * 상한이 없어 두지 않는다.
+ * <p>
+ * 언제 무엇을 고칠 수 있는지는 항목마다 다르다 — 예매가 열린 뒤에도 제목 · 소개는 자유지만 장소는 관리자 승인을 거친다(docs/04 "예매가 열린 뒤
+ * 수정 범위"). 그래서 바꿀 때는 바뀐 항목을 상태별 수정 범위 표의 단위로 나눠 본다({@link #changedEditTargets}).
  *
  * @param title         제목
  * @param type          유형
@@ -52,5 +57,35 @@ public record EventBasicInformation(EventTitle title, EventType type, EventCateg
                 venueDetails = null;
             }
         }
+    }
+
+    /**
+     * 이 기본 정보를 그 기본 정보로 바꾸면 바뀌는 수정 항목 — 상태별 수정 범위 표({@link EventEditScope})가 판정하는 단위로 나눈다.
+     * <ul>
+     *   <li>제목 · 소개 → {@link EventEditTarget#TITLE_POSTER_DESCRIPTION}</li>
+     *   <li>유형 · 카테고리 → {@link EventEditTarget#TYPE_AND_CATEGORY}</li>
+     *   <li>장소(공연장 이름 · 주소) → {@link EventEditTarget#VENUE}</li>
+     *   <li>상세 안내 · 지도 링크 · 공개용 연락처 → {@link EventEditTarget#VENUE_GUIDE_AND_CONTACT}</li>
+     * </ul>
+     * 위저드는 단계의 칸을 모두 다시 보내므로, 바뀌지 않은 항목은 담지 않는다 — 예매가 열린 뒤 제목만 고치면서 장소를 그대로 보내도 장소 변경으로
+     * 보지 않는다. 같으면 빈 집합이다.
+     */
+    public Set<EventEditTarget> changedEditTargets(EventBasicInformation changed) {
+        Objects.requireNonNull(changed, "changed");
+        Set<EventEditTarget> targets = EnumSet.noneOf(EventEditTarget.class);
+        if (!title.equals(changed.title) || !introduction.equals(changed.introduction)) {
+            targets.add(EventEditTarget.TITLE_POSTER_DESCRIPTION);
+        }
+        if (type != changed.type || !category.equals(changed.category)) {
+            targets.add(EventEditTarget.TYPE_AND_CATEGORY);
+        }
+        if (!venue.equals(changed.venue)) {
+            targets.add(EventEditTarget.VENUE);
+        }
+        if (!Objects.equals(venueDetails, changed.venueDetails) || !Objects.equals(mapLink, changed.mapLink)
+                || !Objects.equals(publicContact, changed.publicContact)) {
+            targets.add(EventEditTarget.VENUE_GUIDE_AND_CONTACT);
+        }
+        return targets;
     }
 }

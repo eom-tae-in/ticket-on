@@ -26,6 +26,9 @@ import java.util.Set;
  *       처음 값으로 시작한다 — 위저드 5단계는 전부 처음 값이 있어 건너뛸 수 있다(docs/03 "행사 만들기 위저드").</li>
  *   <li><b>취소 규정</b>({@link CancellationPolicy}) — 소비자분쟁해결기준 그대로 시작하고, 관객에게 더 유리한 쪽으로만 조정한다(docs/08).</li>
  *   <li><b>공개 주소</b>({@link EventPublicAddress}) — 만들 때 발급하고 바뀌지 않는다. 공개 수준을 바꿔도 같은 링크다.</li>
+ *   <li><b>작성 진행 단계</b>({@link EventWizardStep}) · <b>마지막 수정 시각</b> — 위저드는 단계를 넘길 때마다 자동으로 저장하고, 나갔다
+ *       들어오면 이어서 한다(docs/03 "임시저장은 자동으로"). 작성 중 행사 목록이 진행률 · 마지막 수정일 · 멈춘 단계로 가는 버튼을 이것으로
+ *       보인다(docs/04 "작성 중 행사 관리").</li>
  * </ul>
  * 화면마다 부르는 이름이 다르다 — 관객 화면은 유형 이름, 주최자 화면은 "행사"({@link #nameOn}).
  * <p>
@@ -44,8 +47,8 @@ import java.util.Set;
  * ({@link #requireEditable}), 회차 시간은 그 회차 시작 1주일 전 잠금까지 본다({@link #requireSessionTimeEditable}). '예매가 열린 뒤'의 범위는
  * 상태 이름이 아니라 <b>예매가 한 번이라도 열렸는지</b>로 정한다({@link #hasBookingOpened}) — 판매 대기에서 관리자 조치로 멈춘 판매 중단은 예매가
  * 열린 적이 없어 판매 대기와 같다. 이 판정은 저장된 상태로 하므로, 시간이 움직이는 상태의 행사는 먼저 {@link #advanceByTime}으로 지금 시각을
- * 반영한다. 각 수정 메서드(기본 정보 · 공개 수준 · 예매 설정 ·
- * 취소 규정)에 이 판정을 거는 일과 제목 · 소개 · 포스터의 변경 이력은 수정 유스케이스가 한다(#65, #46).
+ * 반영한다. 위저드 단계 저장({@link #saveBasicInformationStep}, {@link #saveBookingStep})은 바뀐 항목마다 이 판정을 건다. 낱낱의 수정
+ * 메서드(기본 정보 · 공개 수준 · 예매 설정 · 취소 규정)에 이 판정을 거는 일과 제목 · 소개 · 포스터의 변경 이력은 수정 유스케이스가 한다(#65, #46).
  * <p>
  * <b>삭제</b>는 상태가 아니라 팔린 표나 초대권이 있었는지로 정한다({@link #requireDeletable}). 누가 지울 수 있는지는 판매를 시작했는지로 갈린다
  * ({@link #deleteAction}).
@@ -65,10 +68,13 @@ public final class Event {
     private EventStatus status;
     private Instant bookingOpenedAt;
     private final List<SalesPause> salesPauses;
+    private EventWizardStep wizardProgress;
+    private Instant lastModifiedAt;
 
     private Event(Long id, long organizerId, EventPublicAddress publicAddress, EventBasicInformation basicInformation,
             EventPoster poster, EventVisibilitySetting visibility, BookingSettings bookingSettings,
-            CancellationPolicy cancellationPolicy, EventStatus status, Instant bookingOpenedAt, List<SalesPause> salesPauses) {
+            CancellationPolicy cancellationPolicy, EventStatus status, Instant bookingOpenedAt, List<SalesPause> salesPauses,
+            EventWizardStep wizardProgress, Instant lastModifiedAt) {
         if (organizerId < 1) {
             throw new IllegalArgumentException("주최자 id는 1 이상이어야 합니다: " + organizerId);
         }
@@ -83,21 +89,27 @@ public final class Event {
         this.status = Objects.requireNonNull(status, "status");
         this.bookingOpenedAt = bookingOpenedAt;
         this.salesPauses = new ArrayList<>(salesPauses);
+        this.wizardProgress = Objects.requireNonNull(wizardProgress, "wizardProgress");
+        this.lastModifiedAt = Objects.requireNonNull(lastModifiedAt, "lastModifiedAt");
         requireConsistentBookingOpening();
         requireConsistentSalesPauses();
     }
 
     /**
-     * 위저드 1단계를 마친 새 행사를 만든다. 작성 중이고, 포스터는 아직 없고, 공개 수준은 공개, 예매 설정은 처음 값({@link BookingSettings#defaults}),
-     * 취소 규정은 기준표 그대로({@link CancellationPolicy#standard})다.
+     * 위저드 1단계를 마친 새 행사를 만든다 — 빈 초안은 없다. 1단계를 넘길 때 처음 저장되므로(docs/03 "임시저장은 자동으로") 기본 정보와 함께
+     * 만든다. 작성 중이고, 포스터는 아직 없고, 공개 수준은 공개, 예매 설정은 처음 값({@link BookingSettings#defaults}), 취소 규정은 기준표
+     * 그대로({@link CancellationPolicy#standard})다. 진행 단계는 1단계이고, 마지막 수정 시각은 만든 시각이다.
      *
      * @param organizerId      행사를 여는 주최자의 id
      * @param publicAddress    새로 발급한 공개 주소 — 서비스가 TokenGenerator로 만든 값으로 발급한다({@link EventPublicAddress#issue})
      * @param basicInformation 1단계에서 적은 기본 정보
+     * @param now              만드는 시각
      */
-    public static Event create(long organizerId, EventPublicAddress publicAddress, EventBasicInformation basicInformation) {
+    public static Event create(long organizerId, EventPublicAddress publicAddress, EventBasicInformation basicInformation,
+            Instant now) {
         return new Event(null, organizerId, publicAddress, basicInformation, null, EventVisibilitySetting.publicByDefault(),
-                BookingSettings.defaults(), CancellationPolicy.standard(), EventStatus.DRAFT, null, List.of());
+                BookingSettings.defaults(), CancellationPolicy.standard(), EventStatus.DRAFT, null, List.of(),
+                EventWizardStep.BASIC_INFORMATION, now);
     }
 
     /**
@@ -107,19 +119,86 @@ public final class Event {
      * @param status          저장된 행사 상태 — 시간이 지나 바뀌었어야 할 상태라도 그대로 되살린다. 지금 시각은 {@link #advanceByTime}이 반영한다
      * @param bookingOpenedAt 처음 판매 중이 된 시각({@link #bookingOpenedAt}). 예매가 열린 적이 없으면 null
      * @param salesPauses     판매 중단 이력 — 멈춘 순서대로
+     * @param wizardProgress  작성 진행 단계 — 저장한 가장 뒤의 위저드 단계({@link #wizardProgress})
+     * @param lastModifiedAt  마지막 수정 시각({@link #lastModifiedAt})
      * @throws IllegalArgumentException 작성 중 · 판매 대기인데 예매가 열린 시각이 있거나 판매 중인데 없으면, 작성 중인데 판매 중단 이력이 있거나,
      *                                  같은 까닭의 끝나지 않은 중단이 둘이면
      */
     public static Event restore(long id, long organizerId, EventPublicAddress publicAddress,
             EventBasicInformation basicInformation, EventPoster poster, EventVisibilitySetting visibility,
             BookingSettings bookingSettings, CancellationPolicy cancellationPolicy, EventStatus status, Instant bookingOpenedAt,
-            List<SalesPause> salesPauses) {
+            List<SalesPause> salesPauses, EventWizardStep wizardProgress, Instant lastModifiedAt) {
         if (id < 1) {
             throw new IllegalArgumentException("행사 id는 1 이상이어야 합니다: " + id);
         }
         Objects.requireNonNull(salesPauses, "salesPauses");
         return new Event(id, organizerId, publicAddress, basicInformation, poster, visibility, bookingSettings,
-                cancellationPolicy, status, bookingOpenedAt, salesPauses);
+                cancellationPolicy, status, bookingOpenedAt, salesPauses, wizardProgress, lastModifiedAt);
+    }
+
+    /**
+     * 위저드 1단계(기본 정보)를 저장한다 — 단계를 넘길 때마다 부르는 자동 임시저장이다(docs/03 "임시저장은 자동으로").
+     * <ol>
+     *   <li><b>바뀐 항목마다 지금 상태의 수정 범위를 확인한다</b>({@link EventBasicInformation#changedEditTargets}, {@link #requireEditable}).
+     *       위저드는 단계의 칸을 모두 다시 보내므로 바뀌지 않은 항목은 보지 않는다 — 예매가 열린 뒤 제목만 고치면서 장소를 그대로 보내도 막지
+     *       않는다. 하나라도 막히면 아무것도 바꾸지 않는다.</li>
+     *   <li>기본 정보를 바꾼다.</li>
+     *   <li>작성 중이면 진행 단계를 이 단계까지로 올린다 — 앞 단계를 다시 저장해도 내려가지 않는다.</li>
+     *   <li>무엇이든 바뀌었으면 마지막 수정 시각을 지금으로 한다.</li>
+     * </ol>
+     * <b>같은 값을 몇 번 저장해도 안전하다</b> — 바뀐 것이 없으면 아무것도 바꾸지 않고 false다. {@link #requireEditable}처럼 저장된 상태로
+     * 판정하므로, 시간이 움직이는 상태의 행사는 먼저 {@link #advanceByTime}으로 지금 시각을 반영한다.
+     *
+     * @return 바뀐 것(기본 정보 · 진행 단계)이 있는지
+     * @throws RuleViolationException 바뀐 항목을 지금 상태에서 고칠 수 없으면({@link #requireEditable}과 같은 오류)
+     */
+    public boolean saveBasicInformationStep(EventBasicInformation newBasicInformation, Instant now) {
+        Objects.requireNonNull(newBasicInformation, "newBasicInformation");
+        Objects.requireNonNull(now, "now");
+        Set<EventEditTarget> changedTargets = basicInformation.changedEditTargets(newBasicInformation);
+        changedTargets.forEach(this::requireEditable);
+        basicInformation = newBasicInformation;
+        return completeWizardStep(EventWizardStep.BASIC_INFORMATION, !changedTargets.isEmpty(), now);
+    }
+
+    /**
+     * 위저드 5단계(공개 수준 · 예매 설정 · 취소 규정)를 저장한다 — 단계를 넘길 때마다 부르는 자동 임시저장이다. 5단계는 전부 처음 값이 있어
+     * 건너뛸 수 있다 — 건너뛰면 행사를 만들 때의 처음 값 그대로다({@link #create}).
+     * <ol>
+     *   <li>공개 수준을 바꾼 설정을 만든다({@link EventVisibilitySetting#change}) — 암호 보호로 두면서 새 암호를 적지 않으면 걸려 있던 암호를
+     *       그대로 쓴다.</li>
+     *   <li><b>바뀐 항목마다 지금 상태의 수정 범위를 확인한다</b> — 공개 수준({@link EventEditTarget#VISIBILITY}), 예매 종료 · 그 밖의 예매
+     *       설정({@link BookingSettings#changedEditTargets}), 취소 규정({@link EventEditTarget#CANCELLATION_POLICY}). 바뀌지 않은 항목은 보지
+     *       않는다 — 예매가 열린 뒤 예매 종료만 고치면서 취소 규정을 그대로 보내도 막지 않는다. 하나라도 막히면 아무것도 바꾸지 않는다.</li>
+     *   <li>셋을 바꾸고, 작성 중이면 진행 단계를 이 단계까지로 올리고, 무엇이든 바뀌었으면 마지막 수정 시각을 지금으로 한다.</li>
+     * </ol>
+     * 같은 값을 몇 번 저장해도 안전하다 — 바뀐 것이 없으면 아무것도 바꾸지 않고 false다. {@link #requireEditable}처럼 저장된 상태로 판정한다.
+     *
+     * @param newPasswordHash 새로 정한 암호의 해시 — 암호 보호로 두면서 암호를 새로 적었을 때만. 아니면 null
+     * @return 바뀐 것(공개 수준 · 예매 설정 · 취소 규정 · 진행 단계)이 있는지
+     * @throws RuleViolationException   암호 보호인데 새 암호도 걸려 있던 암호도 없으면({@link EventErrorCode#EVENT_PASSWORD_REQUIRED}), 바뀐
+     *                                  항목을 지금 상태에서 고칠 수 없으면({@link #requireEditable}과 같은 오류)
+     * @throws IllegalArgumentException 암호 보호가 아닌데 새 암호 해시를 넘기면
+     */
+    public boolean saveBookingStep(EventVisibility newVisibility, EventPasswordHash newPasswordHash,
+            BookingSettings newBookingSettings, CancellationPolicy newCancellationPolicy, Instant now) {
+        Objects.requireNonNull(newBookingSettings, "newBookingSettings");
+        Objects.requireNonNull(newCancellationPolicy, "newCancellationPolicy");
+        Objects.requireNonNull(now, "now");
+        EventVisibilitySetting newVisibilitySetting = visibility.change(newVisibility, newPasswordHash);
+        Set<EventEditTarget> changedTargets = EnumSet.noneOf(EventEditTarget.class);
+        if (!newVisibilitySetting.equals(visibility)) {
+            changedTargets.add(EventEditTarget.VISIBILITY);
+        }
+        changedTargets.addAll(bookingSettings.changedEditTargets(newBookingSettings));
+        if (!newCancellationPolicy.equals(cancellationPolicy)) {
+            changedTargets.add(EventEditTarget.CANCELLATION_POLICY);
+        }
+        changedTargets.forEach(this::requireEditable);
+        visibility = newVisibilitySetting;
+        bookingSettings = newBookingSettings;
+        cancellationPolicy = newCancellationPolicy;
+        return completeWizardStep(EventWizardStep.BOOKING_SETTINGS, !changedTargets.isEmpty(), now);
     }
 
     /**
@@ -570,6 +649,20 @@ public final class Event {
         return Collections.unmodifiableList(salesPauses);
     }
 
+    /**
+     * 작성 진행 단계 — 작성 중에 저장한 가장 뒤의 위저드 단계. 만들 때 1단계이고, 앞 단계를 다시 저장해도 내려가지 않는다. 작성 중 행사 목록이
+     * "4/7 단계 · 가격 설정까지 완료"처럼 보이고, [이어서 작성]이 그다음 단계를 연다(docs/04 "작성 중 행사 관리"). 판매를 시작한 뒤에는 더
+     * 움직이지 않는다 — 위저드는 설정 편집 화면으로 다시 쓰이지만 작성은 끝났다.
+     */
+    public EventWizardStep wizardProgress() {
+        return wizardProgress;
+    }
+
+    /** 마지막 수정 시각 — 단계를 저장해 무엇이든 바뀐 시각. 같은 값을 다시 저장하면 그대로다. 작성 중 행사 목록의 "마지막 수정 3일 전". */
+    public Instant lastModifiedAt() {
+        return lastModifiedAt;
+    }
+
     /** 걸려 있는(아직 풀리지 않은) 관리자 조치. 판매가 끝난 뒤에도 풀기 전까지 남는다. */
     public Set<SalesPauseCause> activeSalesHolds() {
         Set<SalesPauseCause> holds = EnumSet.noneOf(SalesPauseCause.class);
@@ -589,6 +682,24 @@ public final class Event {
         return salesPauses.stream()
                 .filter(pause -> pause.cause() == SalesPauseCause.ORGANIZER && pause.isActive())
                 .findFirst();
+    }
+
+    /**
+     * 위저드 단계를 저장한 뒤의 공통 처리 — 작성 중이면 진행 단계를 그 단계까지로 올리고(내려가지 않는다), 값이나 진행 단계가 바뀌었으면 마지막
+     * 수정 시각을 지금으로 한다.
+     *
+     * @return 값이나 진행 단계가 바뀌었는지
+     */
+    private boolean completeWizardStep(EventWizardStep savedStep, boolean valuesChanged, Instant now) {
+        boolean progressed = status == EventStatus.DRAFT && savedStep.isAfter(wizardProgress);
+        if (progressed) {
+            wizardProgress = savedStep;
+        }
+        boolean changed = valuesChanged || progressed;
+        if (changed) {
+            lastModifiedAt = now;
+        }
+        return changed;
     }
 
     private static EventErrorCode lockedErrorCode(EventEditScope scope) {

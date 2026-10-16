@@ -246,7 +246,7 @@ class EventTransitionTest {
         @Test
         @DisplayName("저장 전 행사에는 일정이 없고, 다른 행사의 일정은 받지 않는다")
         void requiresOwnSchedule() {
-            Event unsaved = Event.create(TWELVE_MONTHS_ORGANIZER, ADDRESS, twelveMonthsSpringPlay());
+            Event unsaved = Event.create(TWELVE_MONTHS_ORGANIZER, ADDRESS, twelveMonthsSpringPlay(), BEFORE_OPEN);
             EventSchedule otherEventSchedule = EventSchedule.timed(EVENT_ID + 1);
 
             assertThatIllegalStateException().isThrownBy(() -> unsaved.startSales(singlePerformance(), false, BEFORE_OPEN));

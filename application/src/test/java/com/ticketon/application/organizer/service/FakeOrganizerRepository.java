@@ -66,6 +66,13 @@ final class FakeOrganizerRepository implements OrganizerRepository {
         return findById(id);
     }
 
+    /** 외래 키 확인 잠금도 잠금 기록에 차례만 남기고 지금 저장된 값을 돌려준다. */
+    @Override
+    public Optional<Organizer> findByIdForKeyShare(long id) {
+        rowLockLog.record("주최자 " + id + " FOR KEY SHARE");
+        return findById(id);
+    }
+
     @Override
     public void saveApproval(Organizer approvedOrganizer, OrganizerBusinessDetails businessDetails) {
         throw new UnsupportedOperationException("주최자 신청 제출·주최 홈·운영진 권한 확인에서는 승인을 저장하지 않습니다");

@@ -310,6 +310,37 @@ class OrganizerPersistenceAdapterTest {
     }
 
     @Test
+    @DisplayName("외래 키 확인 잠금으로 읽는 동안 다른 트랜잭션은 그 줄을 FOR UPDATE로 잠그지 못하고, 외래 키 확인 잠금은 함께 걸 수 있다")
+    void findByIdForKeyShareBlocksOnlyForUpdate() throws Exception {
+        long id = activeOrganizer("극단 열두달");
+        assertThat(adapter.findByIdForKeyShare(id).orElseThrow().name()).isEqualTo(OrganizerName.of("극단 열두달"));
+        assertThat(adapter.findByIdForKeyShare(id + 1000)).isEmpty();
+        CountDownLatch keyShared = new CountDownLatch(1);
+        CountDownLatch checked = new CountDownLatch(1);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<Boolean> holder = executor.submit(() -> inOwnTransaction(transactionAdapter -> {
+                boolean found = transactionAdapter.findByIdForKeyShare(id).isPresent();
+                keyShared.countDown();
+                assertThat(checked.await(10, TimeUnit.SECONDS)).isTrue();
+                return found;
+            }));
+            assertThat(keyShared.await(10, TimeUnit.SECONDS)).isTrue();
+
+            assertThatExceptionOfType(DataAccessException.class)
+                    .isThrownBy(() -> dsl.selectFrom(ORGANIZER).where(ORGANIZER.ID.eq(id)).forUpdate().noWait().fetch())
+                    .satisfies(lockNotAvailable -> assertThat(lockNotAvailable.sqlState()).isEqualTo("55P03"));
+            assertThat(dsl.selectFrom(ORGANIZER).where(ORGANIZER.ID.eq(id)).forKeyShare().noWait().fetch()).hasSize(1);
+            checked.countDown();
+
+            assertThat(holder.get(30, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            checked.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     @DisplayName("잠그고 읽으면 다른 운영진이 로고를 바꾸는 중인 주최자는 그쪽이 커밋할 때까지 기다렸다가 바뀐 로고를 읽는다")
     void lockedReadWaitsForCommittedLogoChange() throws Exception {
         long id = activeOrganizer("극단 열두달");

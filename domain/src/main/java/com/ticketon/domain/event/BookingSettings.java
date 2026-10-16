@@ -2,7 +2,9 @@ package com.ticketon.domain.event;
 
 import com.ticketon.domain.policy.TimePolicy;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * 예매 설정 — 위저드 5단계에서 정하는 것 가운데 공개 수준({@link EventVisibilitySetting})과 취소 규정({@link CancellationPolicy})을 뺀
@@ -29,7 +31,8 @@ import java.util.Objects;
  * 회차의 시각이 고른다({@link SessionTimes}). 회차를 나중에 추가해도 이 설정이 그대로 적용된다(docs/04 "회차 추가는 허용").
  * <p>
  * 언제 무엇을 바꿀 수 있는지(판매 중에도 예매 종료 시각은 변경 가능 등)는 상태별 수정 범위가 정한다(docs/04 "예매가 열린 뒤 수정 범위",
- * {@link EventEditTarget#BOOKING_CLOSE_TIME}, {@link EventEditTarget#OTHER_BOOKING_SETTINGS}).
+ * {@link EventEditTarget#BOOKING_CLOSE_TIME}, {@link EventEditTarget#OTHER_BOOKING_SETTINGS}). 바꿀 때 어느 항목이 바뀌는지는
+ * {@link #changedEditTargets}가 나눈다.
  *
  * @param bookingOpensAt       예매 오픈 시각. 비워 두면 null — 판매를 시작하는 순간 연다
  * @param bookingCloseLeadTime 예매 종료 — 회차 시작(종일형은 마지막 입장)보다 이만큼 앞에서 닫는다
@@ -67,5 +70,30 @@ public record BookingSettings(Instant bookingOpensAt, LeadTime bookingCloseLeadT
     /** 처음 값 — 5단계를 건너뛰면 이대로 판다(위 표). */
     public static BookingSettings defaults() {
         return DEFAULTS;
+    }
+
+    /**
+     * 이 설정을 그 설정으로 바꾸면 바뀌는 수정 항목 — 상태별 수정 범위 표({@link EventEditScope})가 판정하는 단위로 나눈다. 예매 종료가 바뀌면
+     * {@link EventEditTarget#BOOKING_CLOSE_TIME}, 그 밖의 칸(오픈 시각 · 검표 시작 · 1회 선택 매수 · 1인 총 매수 · 회차 선택 제약 · 재입장 ·
+     * 연령 제한) 가운데 하나라도 바뀌면 {@link EventEditTarget#OTHER_BOOKING_SETTINGS}. 위저드는 단계의 칸을 모두 다시 보내므로 바뀌지 않은
+     * 항목은 담지 않는다 — 같으면 빈 집합이다.
+     */
+    public Set<EventEditTarget> changedEditTargets(BookingSettings changed) {
+        Objects.requireNonNull(changed, "changed");
+        Set<EventEditTarget> targets = EnumSet.noneOf(EventEditTarget.class);
+        if (!bookingCloseLeadTime.equals(changed.bookingCloseLeadTime)) {
+            targets.add(EventEditTarget.BOOKING_CLOSE_TIME);
+        }
+        boolean othersChanged = !Objects.equals(bookingOpensAt, changed.bookingOpensAt)
+                || !checkinOpenLeadTime.equals(changed.checkinOpenLeadTime)
+                || !seatsPerSelection.equals(changed.seatsPerSelection)
+                || !ticketsPerPerson.equals(changed.ticketsPerPerson)
+                || sessionChoice != changed.sessionChoice
+                || reentry != changed.reentry
+                || !ageRestriction.equals(changed.ageRestriction);
+        if (othersChanged) {
+            targets.add(EventEditTarget.OTHER_BOOKING_SETTINGS);
+        }
+        return targets;
     }
 }

@@ -37,7 +37,8 @@ import org.springframework.stereotype.Component;
  * 공개 정보 편집과 주최자명 변경은 {@link #findByIdForUpdate}({@code SELECT … FOR UPDATE})로 줄을 잠그고 읽은 뒤 저장하므로, 저장은 조건
  * 없이 그 주최자의 공개 정보 칸 · 이름 칸만 바꾼다. 로고 열쇠는 유일 칸이라 로고를 바꾸는 저장은 줄을 FOR UPDATE와 같은 세기로 잠근다 — 이
  * 주최자를 가리키는 줄을 넣는 외래 키 확인 잠금(FOR KEY SHARE)과 부딪힌다. 그래서 줄을 잠그는 흐름은 운영진 계정 줄을 먼저 잡는다(잠금 순서 —
- * application의 StaffAccountLocks).
+ * application의 StaffAccountLocks). 행사를 만들거나 고치는 흐름은 같은 외래 키 확인 잠금을 {@link #findByIdForKeyShare}로 행사 줄보다 먼저
+ * 건다.
  */
 @Component
 public class OrganizerPersistenceAdapter implements OrganizerRepository {
@@ -74,6 +75,11 @@ public class OrganizerPersistenceAdapter implements OrganizerRepository {
     @Override
     public Optional<Organizer> findByIdForUpdate(long id) {
         return find(organizerRow(id).forUpdate());
+    }
+
+    @Override
+    public Optional<Organizer> findByIdForKeyShare(long id) {
+        return find(organizerRow(id).forKeyShare());
     }
 
     @Override
