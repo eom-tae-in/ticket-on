@@ -40,11 +40,12 @@ class EventTest {
     class Create {
 
         @Test
-        @DisplayName("1단계 기본 정보로 만든다 — 저장 전이라 id가 없고, 포스터는 아직 없고, 공개로 시작한다")
+        @DisplayName("1단계 기본 정보로 만든다 — 저장 전이라 id가 없고, 작성 중이고, 포스터는 아직 없고, 공개로 시작한다")
         void createsWithBasicInformation() {
             Event event = newSpringPlay();
 
             assertThat(event.id()).isEmpty();
+            assertThat(event.status()).isEqualTo(EventStatus.DRAFT);
             assertThat(event.organizerId()).isEqualTo(TWELVE_MONTHS_ORGANIZER);
             assertThat(event.publicAddress()).isEqualTo(ADDRESS);
             assertThat(event.basicInformation()).isEqualTo(twelveMonthsSpringPlay());
@@ -69,9 +70,10 @@ class EventTest {
 
             Event event = Event.restore(7L, TWELVE_MONTHS_ORGANIZER, ADDRESS, twelveMonthsSpringPlay(),
                     new EventPoster("poster-key.jpg"), protectedSetting, adjustedBookingSettings(),
-                    FULL_REFUND_UNTIL_THREE_DAYS_BEFORE);
+                    FULL_REFUND_UNTIL_THREE_DAYS_BEFORE, EventStatus.ON_SALE);
 
             assertThat(event.id()).hasValue(7L);
+            assertThat(event.status()).isEqualTo(EventStatus.ON_SALE);
             assertThat(event.poster()).contains(new EventPoster("poster-key.jpg"));
             assertThat(event.visibility()).isEqualTo(protectedSetting);
             assertThat(event.bookingSettings()).isEqualTo(adjustedBookingSettings());
@@ -84,7 +86,7 @@ class EventTest {
             assertThatIllegalArgumentException().isThrownBy(() -> Event.create(0L, ADDRESS, twelveMonthsSpringPlay()));
             assertThatIllegalArgumentException().isThrownBy(() -> Event.restore(0L, TWELVE_MONTHS_ORGANIZER, ADDRESS,
                     twelveMonthsSpringPlay(), null, EventVisibilitySetting.publicByDefault(), BookingSettings.defaults(),
-                    CancellationPolicy.standard()));
+                    CancellationPolicy.standard(), EventStatus.DRAFT));
         }
     }
 

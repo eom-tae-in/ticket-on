@@ -19,5 +19,9 @@
  * 위치. 좌석의 정체성은 좌석 id이고 도면을 고쳐도 좌석 번호는 다시 매기지 않는다. 좌석 표기("12열 7번" / "1층 12열 7번")는 티켓에 복사하지 않고
  * 그릴 때마다 만든다({@link com.ticketon.domain.event.SeatLabel}). 회차마다 다른 판매 상태 · 판매 제외는 재고(inventory)가 갖는다. 입구 목록도
  * 도면에 속하지만 판매가 끝난 뒤에도 고칠 수 있어 따로 둔다({@link com.ticketon.domain.event.EventEntrances}).
+ * <p>
+ * 행사 상태({@link com.ticketon.domain.event.EventStatus} — 작성 중 · 판매 대기 · 판매 중 · 판매 중단 · 판매 종료 · 행사 종료 · 정산 완료 · 취소됨)는
+ * 행사가 저장해 갖는다. 사람이 누르는 전환과 시간이 정하는 전환({@link com.ticketon.domain.event.Event#advanceByTime})이 섞여 있고, 겹치면 시간이
+ * 이긴다. "매진"은 상태가 아니라 잔여가 0인 순간의 표시다.
  */
 package com.ticketon.domain.event;
