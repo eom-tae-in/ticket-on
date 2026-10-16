@@ -227,6 +227,15 @@ public final class ProposedPolicy {
      */
     public static final int SEAT_BLOCK_MAXIMUM_COLUMNS = 50;
 
+    /**
+     * 확인 필요 (#37, 문서에 없음) — 입구 이름 최대 길이(글자 수). 이보다 긴 이름은 받지 않는다({@code domain.event.EntranceName}).
+     * 글자 수는 앞뒤 공백을 걷고 NFC로 맞춘 뒤 사람이 세는 대로 센다(유니코드 code point).
+     * 20자를 제안한다: 입구 이름은 검표 시작 때 고르는 목록과 검표 화면의 입구 변경, 게이트별 입장 현황에 한 줄로 보인다(docs/02 "입구 (게이트)",
+     * docs/13 "검표"). 문서 예시 "정문" · "2층 전용" · "VIP 입구"(docs/02, 6자 이하)와 "옆문"(docs/04)보다 넉넉하고, 블록 · 구역 이름
+     * ({@link #BLOCK_NAME_MAXIMUM_LENGTH}, {@link #ZONE_NAME_MAXIMUM_LENGTH})과 같은 한 줄 이름의 상한으로 둔다. 문서에는 입구 이름의 길이가 없다.
+     */
+    public static final int ENTRANCE_NAME_MAXIMUM_LENGTH = 20;
+
     private ProposedPolicy() {
     }
 }

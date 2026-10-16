@@ -98,7 +98,16 @@ public enum EventErrorCode implements ErrorCode {
     BLOCK_NOT_FOUND("블록을 찾을 수 없습니다."),
 
     /** 이 행사의 도면에 없는 좌석이다. */
-    SEAT_NOT_FOUND("좌석을 찾을 수 없습니다.");
+    SEAT_NOT_FOUND("좌석을 찾을 수 없습니다."),
+
+    /**
+     * 확인 필요 (#37) — 같은 행사에 같은 이름의 입구가 이미 있다. 검표원이 고르는 목록과 게이트별 입장 현황이 이름으로 입구를 보여 주므로 같은 이름
+     * 둘은 가를 수 없다(docs/02 "입구 (게이트)", docs/11).
+     */
+    ENTRANCE_NAME_ALREADY_TAKEN("이미 있는 입구 이름입니다. 다른 이름을 입력해 주세요."),
+
+    /** 이 행사의 입구 목록에 없는 입구다. */
+    ENTRANCE_NOT_FOUND("입구를 찾을 수 없습니다.");
 
     private final String message;
 
