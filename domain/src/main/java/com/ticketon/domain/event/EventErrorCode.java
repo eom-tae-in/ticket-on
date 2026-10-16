@@ -26,7 +26,13 @@ public enum EventErrorCode implements ErrorCode {
      * 암호 보호로 두는데 암호가 없다 — 새로 적지 않았고 걸려 있던 암호도 없다. 암호 보호는 링크와 암호를 함께 알아야 연다(docs/03 "공개 수준
      * 3단계"). 이미 암호 보호인 행사는 새로 적지 않으면 걸려 있던 암호를 그대로 쓴다({@link EventVisibilitySetting#change}).
      */
-    EVENT_PASSWORD_REQUIRED("암호 보호 행사는 암호를 입력해 주세요.");
+    EVENT_PASSWORD_REQUIRED("암호 보호 행사는 암호를 입력해 주세요."),
+
+    /**
+     * 조정한 취소 규정이 어느 날이라도 기준(소비자분쟁해결기준)보다 공제율이 높다. 규정은 기준을 처음 값으로 고정하고 관객에게 더 유리한 쪽으로만
+     * 조정한다 — "7일 전부터 환불 불가"는 막는다(docs/08 "규정은 기준 고정, 관대한 방향만 조정 가능", {@link CancellationPolicy}).
+     */
+    CANCELLATION_POLICY_STRICTER_THAN_STANDARD("취소 규정은 기준보다 관객에게 불리하게 정할 수 없습니다. 모든 구간의 공제율을 기준 이하로 정해 주세요.");
 
     private final String message;
 
