@@ -61,6 +61,12 @@ public enum EventErrorCode implements ErrorCode {
      */
     SESSION_END_TIME_ALREADY_ENTERED("이미 종료 시각이 입력된 회차입니다."),
 
+    /**
+     * 없는 행사다 — 지운 행사도, 다른 주최자의 행사도 이 주최자 안에서는 없는 것으로 다룬다(운영진 권한 확인의 {@code covers}). 경로의 주최자 id만
+     * 자기 주최자로 바꿔 다른 주최자의 행사에 닿거나, 행사 id를 바꿔 넣어 보며 어느 행사가 있는지 알아낼 수 없게 같은 답을 준다.
+     */
+    EVENT_NOT_FOUND("행사를 찾을 수 없습니다."),
+
     /** 이 행사의 일정에 없는 회차다. */
     SESSION_NOT_FOUND("회차를 찾을 수 없습니다."),
 

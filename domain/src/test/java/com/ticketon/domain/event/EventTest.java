@@ -20,6 +20,7 @@ class EventTest {
 
     private static final EventPublicAddress ADDRESS = new EventPublicAddress("Xb3kQ9-_mN2pL7vR4tY8wZ1aC5dE6fG0");
     private static final EventPasswordHash HASH_OF_0315 = new EventPasswordHash("{test}0315");
+    private static final Instant CREATED_AT = Instant.parse("2026-02-01T01:00:00Z");
     private static final CancellationPolicy FULL_REFUND_UNTIL_THREE_DAYS_BEFORE = CancellationPolicy.of(List.of(
             CancellationFeeTier.of(3, 0), CancellationFeeTier.of(1, 30), CancellationFeeTier.of(0, 90)));
 
@@ -32,7 +33,7 @@ class EventTest {
     }
 
     private static Event newSpringPlay() {
-        return Event.create(TWELVE_MONTHS_ORGANIZER, ADDRESS, twelveMonthsSpringPlay());
+        return Event.create(TWELVE_MONTHS_ORGANIZER, ADDRESS, twelveMonthsSpringPlay(), CREATED_AT);
     }
 
     @Nested
@@ -55,6 +56,15 @@ class EventTest {
         }
 
         @Test
+        @DisplayName("빈 초안 없이 1단계를 넘길 때 처음 저장된다 — 진행 단계는 1단계, 마지막 수정 시각은 만든 시각")
+        void startsAtFirstWizardStep() {
+            Event event = newSpringPlay();
+
+            assertThat(event.wizardProgress()).isEqualTo(EventWizardStep.BASIC_INFORMATION);
+            assertThat(event.lastModifiedAt()).isEqualTo(CREATED_AT);
+        }
+
+        @Test
         @DisplayName("5단계를 건너뛰어도 판매할 수 있게 예매 설정은 처음 값, 취소 규정은 기준표로 시작한다")
         void startsWithBookingDefaults() {
             Event event = newSpringPlay();
@@ -71,7 +81,8 @@ class EventTest {
 
             Event event = Event.restore(7L, TWELVE_MONTHS_ORGANIZER, ADDRESS, twelveMonthsSpringPlay(),
                     new EventPoster("poster-key.jpg"), protectedSetting, adjustedBookingSettings(),
-                    FULL_REFUND_UNTIL_THREE_DAYS_BEFORE, EventStatus.ON_SALE, Instant.parse("2026-03-01T05:00:00Z"), List.of());
+                    FULL_REFUND_UNTIL_THREE_DAYS_BEFORE, EventStatus.ON_SALE, Instant.parse("2026-03-01T05:00:00Z"), List.of(),
+                    EventWizardStep.ENTRANCES_AND_CHECKIN_ACCOUNTS, Instant.parse("2026-02-10T12:00:00Z"));
 
             assertThat(event.id()).hasValue(7L);
             assertThat(event.status()).isEqualTo(EventStatus.ON_SALE);
@@ -80,15 +91,19 @@ class EventTest {
             assertThat(event.visibility()).isEqualTo(protectedSetting);
             assertThat(event.bookingSettings()).isEqualTo(adjustedBookingSettings());
             assertThat(event.cancellationPolicy()).isEqualTo(FULL_REFUND_UNTIL_THREE_DAYS_BEFORE);
+            assertThat(event.wizardProgress()).isEqualTo(EventWizardStep.ENTRANCES_AND_CHECKIN_ACCOUNTS);
+            assertThat(event.lastModifiedAt()).isEqualTo(Instant.parse("2026-02-10T12:00:00Z"));
         }
 
         @Test
         @DisplayName("행사 id와 주최자 id는 1 이상이다")
         void idsArePositive() {
-            assertThatIllegalArgumentException().isThrownBy(() -> Event.create(0L, ADDRESS, twelveMonthsSpringPlay()));
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> Event.create(0L, ADDRESS, twelveMonthsSpringPlay(), CREATED_AT));
             assertThatIllegalArgumentException().isThrownBy(() -> Event.restore(0L, TWELVE_MONTHS_ORGANIZER, ADDRESS,
                     twelveMonthsSpringPlay(), null, EventVisibilitySetting.publicByDefault(), BookingSettings.defaults(),
-                    CancellationPolicy.standard(), EventStatus.DRAFT, null, List.of()));
+                    CancellationPolicy.standard(), EventStatus.DRAFT, null, List.of(), EventWizardStep.BASIC_INFORMATION,
+                    CREATED_AT));
         }
     }
 
@@ -227,7 +242,7 @@ class EventTest {
         @DisplayName("관객 화면에서는 유형 이름, 주최자 화면에서는 '행사'로 부른다")
         void nameOnScreen() {
             Event play = newSpringPlay();
-            Event festival = Event.create(TWELVE_MONTHS_ORGANIZER, ADDRESS, lateSummerFestival());
+            Event festival = Event.create(TWELVE_MONTHS_ORGANIZER, ADDRESS, lateSummerFestival(), CREATED_AT);
 
             assertThat(play.nameOn(ScreenSide.AUDIENCE)).isEqualTo("공연");
             assertThat(festival.nameOn(ScreenSide.AUDIENCE)).isEqualTo("페스티벌");

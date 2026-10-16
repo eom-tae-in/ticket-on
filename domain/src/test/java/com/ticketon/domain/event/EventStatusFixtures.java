@@ -30,6 +30,9 @@ final class EventStatusFixtures {
     static final LocalDate MARCH_21 = LocalDate.of(2026, 3, 21);
     static final LocalDate MARCH_22 = LocalDate.of(2026, 3, 22);
 
+    /** 위저드를 마지막으로 저장한 시각 — 2/10 21:00. */
+    static final Instant LAST_MODIFIED_AT = korean(LocalDate.of(2026, 2, 10), 21, 0);
+
     /** 예매 오픈 — 3/1 14:00. */
     static final Instant OPENS_AT = korean(LocalDate.of(2026, 3, 1), 14, 0);
 
@@ -113,7 +116,7 @@ final class EventStatusFixtures {
             Instant bookingOpenedAt) {
         return Event.restore(EVENT_ID, TWELVE_MONTHS_ORGANIZER, ADDRESS, twelveMonthsSpringPlay(), new EventPoster("poster-key.jpg"),
                 EventVisibilitySetting.publicByDefault(), bookingSettings, CancellationPolicy.standard(), status, bookingOpenedAt,
-                salesPauses);
+                salesPauses, EventWizardStep.ENTRANCES_AND_CHECKIN_ACCOUNTS, LAST_MODIFIED_AT);
     }
 
     /** 판매 대기에서 관리자 조치(정지 2단계)로 2/20 12:00에 멈춰 예매가 한 번도 열리지 않은 판매 중단 — 3/1 14:00 오픈. */
