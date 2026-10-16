@@ -152,6 +152,16 @@ public final class ProposedPolicy {
      */
     public static final int SETTLEMENT_ACCOUNT_VISIBLE_TRAILING_DIGITS = 4;
 
+    /**
+     * 확인 필요 (#34, 문서에 없음) — 행사 카테고리 이름과 '기타' 장르명의 최대 길이(글자 수). 이보다 긴 장르명은 받지 않는다. 관리자가 장르명을
+     * 정식 카테고리로 승격하면 그 이름이 그대로 카테고리 이름이 되므로 둘이 같은 값을 쓴다({@code domain.event.EventCategoryName}).
+     * 글자 수는 앞뒤 공백을 걷고 NFC로 맞춘 뒤 사람이 세는 대로 센다(유니코드 code point).
+     * 20자를 제안한다: 카테고리는 목록의 필터 칩과 위저드의 고르기 칸에 한 줄로 보이고, 처음 목록에서 가장 긴 이름이 "미디어아트"(5자)이며 문서
+     * 예시 장르명 "낭독극"(3자)이다(docs/03 "카테고리"). "어린이 인형극" · "스탠드업 코미디" 같은 이름도 넉넉히 들어간다. 장르명은 주최자가
+     * 자유 입력하고 관리자가 모아 보는 목록에 그대로 실리므로 상한이 없으면 아주 긴 글이 들어온다. 문서에는 "장르명을 자유 입력"만 있고 길이가 없다.
+     */
+    public static final int EVENT_CATEGORY_NAME_MAXIMUM_LENGTH = 20;
+
     private ProposedPolicy() {
     }
 }
