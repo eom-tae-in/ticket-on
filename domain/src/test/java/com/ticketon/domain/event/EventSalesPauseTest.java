@@ -109,6 +109,48 @@ class EventSalesPauseTest {
     }
 
     @Nested
+    @DisplayName("먼저 지금 시각을 반영한다 — 판매 중으로 저장돼 있어도 예매 종료가 지났으면 판매 종료")
+    class TimeFirst {
+
+        private final Instant salesEnded = korean(MARCH_14, 18, 0);
+
+        @Test
+        @DisplayName("주최자 중단은 판매 종료를 반영한 뒤 판매 중이 아니라 막힌다")
+        void organizerPauseRejectedAfterSalesEnd() {
+            Event event = onSale();
+
+            assertRejected(() -> event.pauseSales(STAFF_ACCOUNT_ID, CAST_ILLNESS, singlePerformance(), salesEnded),
+                    EventErrorCode.SALES_NOT_PAUSABLE);
+
+            assertThat(event.status()).isEqualTo(EventStatus.SALES_CLOSED);
+            assertThat(event.salesPauses()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("관리자 조치는 판매 종료를 반영한 뒤 멈출 판매가 없어 걸리지 않는다")
+        void adminHoldIgnoredAfterSalesEnd() {
+            Event event = onSale();
+
+            assertThat(event.holdSales(SalesPauseCause.ADMIN_SUSPENSION, ADMIN_ACCOUNT_ID, singlePerformance(), salesEnded)).isFalse();
+
+            assertThat(event.status()).isEqualTo(EventStatus.SALES_CLOSED);
+            assertThat(event.activeSalesHolds()).isEmpty();
+            assertThat(event.salesPauses()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("판매 대기로 저장돼 있어도 오픈 시각이 지났으면 판매 중을 반영한 뒤 주최자가 멈출 수 있다")
+        void organizerPauseAfterOpeningReflected() {
+            Event event = springPlayIn(EventStatus.AWAITING_OPEN);
+
+            event.pauseSales(STAFF_ACCOUNT_ID, null, singlePerformance(), DURING_SALES);
+
+            assertThat(event.status()).isEqualTo(EventStatus.SALES_PAUSED);
+            assertThat(event.bookingOpenedAt()).contains(DURING_SALES);
+        }
+    }
+
+    @Nested
     @DisplayName("관리자 조치 — 정지 2단계 · 페이지 내리기")
     class AdminHold {
 
