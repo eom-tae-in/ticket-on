@@ -20,7 +20,13 @@ public enum EventErrorCode implements ErrorCode {
      * 정식 카테고리를 골랐는데 장르명을 적었다. 장르명은 "기타"를 고를 때만 받는다(docs/03 "카테고리") — 관리자가 승격할 장르를 고르는 '기타'
      * 장르명 목록에 정식 카테고리 행사의 값이 섞이지 않게, 고른 카테고리와 어긋난 값을 받아 두지 않는다.
      */
-    EVENT_GENRE_NAME_ONLY_FOR_OTHER("장르명은 카테고리 '기타'를 고를 때만 입력합니다.");
+    EVENT_GENRE_NAME_ONLY_FOR_OTHER("장르명은 카테고리 '기타'를 고를 때만 입력합니다."),
+
+    /**
+     * 암호 보호로 두는데 암호가 없다 — 새로 적지 않았고 걸려 있던 암호도 없다. 암호 보호는 링크와 암호를 함께 알아야 연다(docs/03 "공개 수준
+     * 3단계"). 이미 암호 보호인 행사는 새로 적지 않으면 걸려 있던 암호를 그대로 쓴다({@link EventVisibilitySetting#change}).
+     */
+    EVENT_PASSWORD_REQUIRED("암호 보호 행사는 암호를 입력해 주세요.");
 
     private final String message;
 
