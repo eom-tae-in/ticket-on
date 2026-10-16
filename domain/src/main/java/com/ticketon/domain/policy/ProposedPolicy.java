@@ -176,6 +176,16 @@ public final class ProposedPolicy {
      */
     public static final int EVENT_TITLE_MAXIMUM_LENGTH = 100;
 
+    /**
+     * 확인 필요 (#36, 문서에 없음) — 회차 출연의 최대 길이(글자 수). 이보다 긴 출연은 받지 않는다({@code domain.event.SessionPerformers}).
+     * 글자 수는 앞뒤 공백을 걷고 NFC로 맞춘 뒤 사람이 세는 대로 센다(유니코드 code point).
+     * 100자를 제안한다: 출연은 관객 화면의 회차 목록 · 회차 선택 화면에서 회차 시간 아래 "한 줄"로 보이는 칸이다(docs/02 "출연 (선택)"). 문서
+     * 예시 "김배우 · 박배우"(9자) 같은 더블 캐스팅 표기는 서너 명을 적어도 30자 안팎이고, 페스티벌 날짜의 출연 팀 여럿을 " · "로 이어 적어도
+     * 들어가게 행사 제목 상한({@link #EVENT_TITLE_MAXIMUM_LENGTH})과 같게 둔다 — 화면에서 넘치는 부분은 줄임표로 자른다. 상한이 없으면 아주 긴
+     * 글이 회차 목록과 변경 이력(#46)에 실린다. 문서에는 "선택. 자유 입력 한 줄"만 있고 길이가 없다.
+     */
+    public static final int SESSION_PERFORMERS_MAXIMUM_LENGTH = 100;
+
     private ProposedPolicy() {
     }
 }
