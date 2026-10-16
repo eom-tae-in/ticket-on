@@ -102,6 +102,8 @@ class OrganizerTableConstraintsTest {
         return Stream.of(
                 breaking("넷 밖의 주최자 상태", "organizer_status_ck", values(ORGANIZER.STATUS, "SUSPENDED")),
                 breaking("빈 소개", "organizer_introduction_not_empty_ck", values(ORGANIZER.INTRODUCTION, "")),
+                breaking("사업자 여부 없이 사업자 정보 다섯 칸이 모두 채워졌다 (#205)", BUSINESS_INFORMATION_CHECK,
+                        BUSINESS_INFORMATION),
                 breaking("사업자 여부 없이 사업자 정보 한 칸만 채워졌다", BUSINESS_INFORMATION_CHECK,
                         values(ORGANIZER.BUSINESS_TRADE_NAME, "늦여름 레코드")),
                 breaking("사업자인데 사업자 정보 한 칸이 비었다", BUSINESS_INFORMATION_CHECK,
