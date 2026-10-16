@@ -1,5 +1,6 @@
 package com.ticketon.common;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -16,6 +17,13 @@ public final class KoreanTime {
 
     /** 문서의 모든 날짜·시각('낮 12시', '전날 자정' 등)은 이 시간대 기준이다. */
     public static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
+
+    /**
+     * 서비스 시계가 시각을 끊는 단위 (1마이크로초).
+     * <p>
+     * PostgreSQL {@code timestamptz}가 저장하는 정밀도와 같다. 정책 숫자가 아니라 저장소에 맞춘 기술값이다(#207).
+     */
+    public static final Duration PRECISION = Duration.ofNanos(1_000);
 
     private KoreanTime() {
     }
