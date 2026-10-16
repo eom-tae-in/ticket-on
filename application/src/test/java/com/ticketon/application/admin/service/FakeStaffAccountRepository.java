@@ -21,7 +21,8 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * 메모리 운영진 계정 저장소 — 주최자 심사 · 소유자 이전 신청 심사가 쓰는 찾기(id · 잠그고 찾기)만 한다. 잠근 계정 id를 부른 차례대로 남긴다. 가입 · 인증 · 닉네임 ·
+ * 메모리 운영진 계정 저장소 — 주최자 심사 · 소유자 이전 신청 심사 · 정산 계좌 · 사업자 정보 변경 확인이 쓰는 찾기(id · 잠그고 찾기)만 한다.
+ * 잠근 계정 id를 부른 차례대로 남긴다. 가입 · 인증 · 닉네임 ·
  * 비밀번호 · 탈퇴 저장은 계정 유스케이스의 테스트가 본다.
  */
 final class FakeStaffAccountRepository implements StaffAccountRepository {
@@ -30,7 +31,17 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
 
     private final Map<Long, StaffAccount> accounts = new LinkedHashMap<>();
     private final List<Long> lockedAccountIds = new ArrayList<>();
+    private final RowLockLog rowLockLog;
     private Runnable nextLockAction;
+
+    FakeStaffAccountRepository() {
+        this(new RowLockLog());
+    }
+
+    /** 다른 메모리 저장소와 같은 잠금 기록에 계정 줄 잠금을 적는다 — 줄 사이의 잠금 순서를 보려고. */
+    FakeStaffAccountRepository(RowLockLog rowLockLog) {
+        this.rowLockLog = rowLockLog;
+    }
 
     /** 이메일 인증을 마친 운영진 로그인을 그 id로 바로 둔다. */
     void storeActive(long id, String name, String nickname, String email) {
@@ -60,21 +71,29 @@ final class FakeStaffAccountRepository implements StaffAccountRepository {
      */
     @Override
     public Optional<StaffAccount> findByIdForUpdate(long id) {
+        runActionWhileWaiting();
+        lockedAccountIds.add(id);
+        rowLockLog.record("계정 " + id + " FOR UPDATE");
+        return findById(id);
+    }
+
+    /** 외래 키 확인 잠금은 잠금 기록에만 차례대로 남긴다. 잠근 계정 id({@link #lockedAccountIds})에는 FOR UPDATE만 담는다. */
+    @Override
+    public Optional<StaffAccount> findByIdForKeyShare(long id) {
+        runActionWhileWaiting();
+        rowLockLog.record("계정 " + id + " FOR KEY SHARE");
+        return findById(id);
+    }
+
+    private void runActionWhileWaiting() {
         Runnable whileWaiting = nextLockAction;
         nextLockAction = null;
         if (whileWaiting != null) {
             whileWaiting.run();
         }
-        lockedAccountIds.add(id);
-        return findById(id);
     }
 
-    @Override
-    public Optional<StaffAccount> findByIdForKeyShare(long id) {
-        throw new UnsupportedOperationException("주최자 심사 · 소유자 이전 신청 심사에서는 계정 줄에 외래 키 확인 잠금을 걸지 않습니다");
-    }
-
-    /** 다음 계정 잠금 바로 전에 할 일 — 잠금을 기다리는 사이 다른 트랜잭션이 먼저 커밋한 일을 흉내 낸다. */
+    /** 다음 계정 잠금(FOR UPDATE · FOR KEY SHARE) 바로 전에 할 일 — 잠금을 기다리는 사이 다른 트랜잭션이 먼저 커밋한 일을 흉내 낸다. */
     void runOnNextLock(Runnable action) {
         nextLockAction = action;
     }

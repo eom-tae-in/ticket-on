@@ -2,6 +2,7 @@ package com.ticketon.application.organizer.port.out;
 
 import com.ticketon.domain.error.ConflictException;
 import com.ticketon.domain.organizer.Organizer;
+import com.ticketon.domain.organizer.OrganizerBusinessDetails;
 import java.util.Optional;
 
 /**
@@ -12,6 +13,10 @@ import java.util.Optional;
  * 주최자명은 소유자가 바꾸면 그 자리에서 고친다 — 바꾸기 전 이름은 주최자명 변경 이력({@link OrganizerNameChangeRepository})에 남는다.
  * 공개 정보(소개 · SNS 링크 · 로고 열쇠)도 주최자와 함께 저장한다. 로고 파일 자체는 파일 저장소({@link OrganizerLogoStoragePort})에 있고
  * 여기에는 그 열쇠만 둔다.
+ * <p>
+ * 사업자 여부 · 사업자 정보 · 정산 계좌({@link OrganizerBusinessDetails})도 주최자와 함께 저장하지만 {@link Organizer}에는 싣지 않는다 — 공개
+ * 페이지처럼 주최자를 읽는 곳마다 민감한 값이 따라다니지 않게 따로 읽고 쓴다. 승인할 때 신청서의 값을 옮겨 적고({@link #saveApproval}), 그
+ * 뒤로는 관리자가 승인한 변경만 저장한다({@link #saveBusinessDetails}).
  */
 public interface OrganizerRepository {
 
@@ -38,13 +43,31 @@ public interface OrganizerRepository {
     Optional<Organizer> findByIdForUpdate(long id);
 
     /**
-     * 승인한 주최자의 상태(활동)를 저장한다. 표에서 아직 심사 중일 때만 바꾼다 — 읽은 뒤 다른 처리가 먼저 상태를 바꿨으면 덮어쓰지 않는다.
+     * 승인한 주최자의 상태(활동)와, 승인한 신청서의 사업자 여부 · 사업자 정보 · 정산 계좌를 함께 저장한다. 표에서 아직 심사 중일 때만 바꾼다 —
+     * 읽은 뒤 다른 처리가 먼저 상태를 바꿨으면 덮어쓰지 않는다.
      *
      * @param approvedOrganizer {@link Organizer#approve}로 활동이 된 저장된 주최자
+     * @param businessDetails   승인한 신청서의 사업자 여부 · 사업자 정보 · 정산 계좌
+     *                          ({@link com.ticketon.domain.organizer.OrganizerApplicationForm#businessDetails})
      * @throws ConflictException        표의 주최자가 이미 심사 중이 아니면({@code ORGANIZER_NOT_UNDER_REVIEW})
      * @throws IllegalArgumentException 저장 전 주최자이거나 활동 상태가 아니면
      */
-    void saveApproval(Organizer approvedOrganizer);
+    void saveApproval(Organizer approvedOrganizer, OrganizerBusinessDetails businessDetails);
+
+    /**
+     * 그 주최자의 지금 사업자 여부 · 사업자 정보 · 정산 계좌. 없는 주최자이거나 아직 승인되지 않아(심사 중 · 반려) 값이 없으면 비어 있다.
+     */
+    Optional<OrganizerBusinessDetails> findBusinessDetails(long organizerId);
+
+    /**
+     * 관리자가 승인한 변경을 적용한 사업자 여부 · 사업자 정보 · 정산 계좌를 저장한다. 이름 · 상태 · 공개 정보는 건드리지 않는다.
+     * {@link #findByIdForUpdate}로 주최자 줄을 잠근 뒤 읽은 값에 적용해 부른다 — 정산 계좌 승인과 사업자 정보 승인이 거의 동시여도 뒤의 승인은
+     * 앞의 승인이 저장한 값을 읽고 적용하므로 서로의 값을 덮지 않는다.
+     *
+     * @param businessDetails {@link com.ticketon.domain.organizer.OrganizerChangeRequest#approve}가 돌려준 값
+     * @throws IllegalArgumentException 표에 없는 주최자이면
+     */
+    void saveBusinessDetails(long organizerId, OrganizerBusinessDetails businessDetails);
 
     /**
      * 공개 정보(소개 · SNS 링크 · 로고)를 저장한다. 이름 · 상태는 건드리지 않는다. SNS 링크는 적은 순서대로 통째로 바꾼다.

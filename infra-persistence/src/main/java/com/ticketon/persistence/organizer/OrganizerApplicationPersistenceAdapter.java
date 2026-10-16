@@ -9,8 +9,6 @@ import com.ticketon.domain.error.ConflictException;
 import com.ticketon.domain.organizer.ApplicantReviewState;
 import com.ticketon.domain.organizer.BusinessDeclaration;
 import com.ticketon.domain.organizer.BusinessInformation;
-import com.ticketon.domain.organizer.BusinessRegistrationNumber;
-import com.ticketon.domain.organizer.BusinessStatus;
 import com.ticketon.domain.organizer.ExternalLink;
 import com.ticketon.domain.organizer.OrganizerApplication;
 import com.ticketon.domain.organizer.OrganizerApplicationForm;
@@ -184,8 +182,8 @@ public class OrganizerApplicationPersistenceAdapter implements OrganizerApplicat
                 links,
                 application.getEventHistoryOrPlan(),
                 toBusinessDeclaration(application),
-                new SettlementAccount(application.getSettlementBankName(), application.getSettlementAccountNumber(),
-                        application.getSettlementAccountHolder()));
+                BusinessColumns.settlementAccountOf(application.getSettlementBankName(),
+                        application.getSettlementAccountNumber(), application.getSettlementAccountHolder()));
         Instant reviewedAt = application.getReviewedAt() == null ? null : application.getReviewedAt().toInstant();
         RejectionReason rejectionReason = application.getRejectionReason() == null ? null
                 : new RejectionReason(application.getRejectionReason());
@@ -195,15 +193,9 @@ public class OrganizerApplicationPersistenceAdapter implements OrganizerApplicat
     }
 
     private static BusinessDeclaration toBusinessDeclaration(OrganizerApplicationRecord application) {
-        return switch (BusinessStatus.valueOf(application.getBusinessStatus())) {
-            case BUSINESS -> BusinessDeclaration.business(new BusinessInformation(
-                    application.getBusinessTradeName(),
-                    application.getBusinessRepresentativeName(),
-                    application.getBusinessAddress(),
-                    new TelephoneNumber(application.getBusinessPhoneNumber()),
-                    new BusinessRegistrationNumber(application.getBusinessRegistrationNumber())));
-            case NON_BUSINESS -> BusinessDeclaration.nonBusiness();
-        };
+        return BusinessColumns.declarationOf(application.getBusinessStatus(), application.getBusinessTradeName(),
+                application.getBusinessRepresentativeName(), application.getBusinessAddress(),
+                application.getBusinessPhoneNumber(), application.getBusinessRegistrationNumber());
     }
 
     private OffsetDateTime toDatabaseTime(Instant instant) {

@@ -27,6 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 주최자 신청 승인 — 승인 규칙(신청서·주최자가 심사 중일 때만, 주최자 활동, 신청한 사람이 소유자)은 {@link OrganizerApplication#approve}가
  * 보고, 여기서는 관리자 권한을 확인하고 신청서·주최자를 읽어 넘긴 뒤 결과를 저장하고, 조작 기록을 남기고, 승인 메일을 보낸다.
  * <p>
+ * 승인한 신청서의 사업자 여부 · 사업자 정보 · 정산 계좌를 주최자에 옮겨 적는다 — 행사 페이지 "판매자 정보"와 정산이 이 값을 읽고, 그 뒤로는
+ * 관리자가 확인한 변경만 적용한다(docs/01 "신청 항목 — 정산 계좌: 승인 후 바꾸면 관리자 확인 뒤 적용").
+ * <p>
  * <b>한 트랜잭션이다.</b> 신청서는 표에서 아직 심사 중일 때만 바뀐다({@link OrganizerApplicationRepository#saveReview}) — 다른 관리자가 거의
  * 동시에 먼저 처리했으면 충돌로 멈추고, 그때는 주최자·소속·조작 기록이 되돌려지고 메일도 나가지 않는다. 신청서를 먼저 저장해 경합을 가장 먼저
  * 가른다. 메일이 실패해도 승인은 그대로다 — 발송 결과는 발송 이력에 남는다.
@@ -79,7 +82,7 @@ public class ApproveOrganizerApplicationService implements ApproveOrganizerAppli
         OrganizerStaff openedStaff = application.approve(organizer, applicant, now);
 
         applicationRepository.saveReview(application);
-        organizerRepository.saveApproval(organizer);
+        organizerRepository.saveApproval(organizer, application.form().businessDetails());
         staffRepository.addOpened(openedStaff);
         operationRecorder.record(AdminOperationRecord.organizerApplicationApproved(reviewer.accountRef(),
                 command.applicationId(), application.form().name(), now));

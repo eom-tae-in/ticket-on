@@ -7,13 +7,19 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import com.ticketon.domain.error.ConflictException;
+import com.ticketon.domain.organizer.BusinessDeclaration;
+import com.ticketon.domain.organizer.BusinessInformation;
+import com.ticketon.domain.organizer.BusinessRegistrationNumber;
 import com.ticketon.domain.organizer.ExternalLink;
 import com.ticketon.domain.organizer.Organizer;
+import com.ticketon.domain.organizer.OrganizerBusinessDetails;
 import com.ticketon.domain.organizer.OrganizerErrorCode;
 import com.ticketon.domain.organizer.OrganizerLogo;
 import com.ticketon.domain.organizer.OrganizerName;
 import com.ticketon.domain.organizer.OrganizerPublicProfile;
 import com.ticketon.domain.organizer.OrganizerStatus;
+import com.ticketon.domain.organizer.SettlementAccount;
+import com.ticketon.domain.organizer.TelephoneNumber;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -35,8 +41,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL에 마이그레이션(V8 주최자, V16 공개 정보)을 올리고 새 주최자 저장, 다시 읽기, 승인 저장(심사 중일 때만), 공개 정보 저장
- * (소개 · SNS 링크 · 로고 열쇠), 주최자명 저장을 본다.
+ * 진짜 PostgreSQL에 마이그레이션(V8 주최자, V16 공개 정보, V18 사업자 정보 · 정산 계좌)을 올리고 새 주최자 저장, 다시 읽기, 승인 저장(심사
+ * 중일 때만, 사업자 정보 · 정산 계좌 함께), 승인한 변경 저장, 공개 정보 저장(소개 · SNS 링크 · 로고 열쇠), 주최자명 저장을 본다.
  * Docker가 없는 환경에서는 건너뛴다.
  */
 @Testcontainers(disabledWithoutDocker = true)
@@ -47,6 +53,16 @@ class OrganizerPersistenceAdapterTest {
     private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18");
 
     private static final OrganizerLogo LOGO = new OrganizerLogo("twelveMonthsLogoAAAAAAAAAAAAAAAA.png");
+
+    /** 극단 열두달 — 비사업자, 국민은행 계좌. */
+    private static final OrganizerBusinessDetails TWELVE_MONTHS_DETAILS = new OrganizerBusinessDetails(
+            BusinessDeclaration.nonBusiness(), new SettlementAccount("국민은행", "123456-78-901234", "박정훈"));
+
+    /** 늦여름 — 사업자, 신한은행 계좌. */
+    private static final OrganizerBusinessDetails LATE_SUMMER_DETAILS = new OrganizerBusinessDetails(
+            BusinessDeclaration.business(new BusinessInformation("늦여름 레코드", "최여름", "서울특별시 마포구 와우산로 12",
+                    TelephoneNumber.of("02-123-4567"), BusinessRegistrationNumber.of("123-45-67890"))),
+            new SettlementAccount("신한은행", "110-123-456789", "늦여름 레코드"));
 
     private static CloseableDSLContext dsl;
 
@@ -114,15 +130,78 @@ class OrganizerPersistenceAdapterTest {
     }
 
     @Test
-    @DisplayName("승인한 주최자를 저장하면 표의 상태가 '활동'이 된다")
+    @DisplayName("승인한 주최자를 저장하면 표의 상태가 '활동'이 되고, 승인한 신청서의 사업자 정보 · 정산 계좌가 함께 적힌다")
     void savesApproval() {
         long id = adapter.add(Organizer.underReview(OrganizerName.of("극단 열두달"))).id().getAsLong();
         Organizer organizer = adapter.findById(id).orElseThrow();
         organizer.approve();
+        assertThat(adapter.findBusinessDetails(id)).isEmpty();
 
-        adapter.saveApproval(organizer);
+        adapter.saveApproval(organizer, TWELVE_MONTHS_DETAILS);
 
         assertThat(adapter.findById(id).orElseThrow().status()).isEqualTo(OrganizerStatus.ACTIVE);
+        assertThat(adapter.findBusinessDetails(id)).contains(TWELVE_MONTHS_DETAILS);
+    }
+
+    @Test
+    @DisplayName("사업자 주최자는 사업자 정보 다섯 칸까지 적고 그대로 다시 읽는다 — 사업자등록번호는 숫자만 10자리다")
+    void savesBusinessOrganizerDetails() {
+        long id = adapter.add(Organizer.underReview(OrganizerName.of("늦여름"))).id().getAsLong();
+        Organizer organizer = adapter.findById(id).orElseThrow();
+        organizer.approve();
+
+        adapter.saveApproval(organizer, LATE_SUMMER_DETAILS);
+
+        assertThat(adapter.findBusinessDetails(id)).contains(LATE_SUMMER_DETAILS);
+        var row = dsl.selectFrom(ORGANIZER).where(ORGANIZER.ID.eq(id)).fetchSingle();
+        assertThat(row.getBusinessStatus()).isEqualTo("BUSINESS");
+        assertThat(row.getBusinessRegistrationNumber()).isEqualTo("1234567890");
+        assertThat(row.getSettlementAccountNumber()).isEqualTo("110-123-456789");
+    }
+
+    @Test
+    @DisplayName("승인한 변경을 저장하면 사업자 정보 · 정산 계좌 칸만 바뀌고 이름 · 상태 · 공개 정보는 그대로다")
+    void savesBusinessDetailsOnly() {
+        long id = adapter.add(Organizer.underReview(OrganizerName.of("늦여름"))).id().getAsLong();
+        Organizer organizer = adapter.findById(id).orElseThrow();
+        organizer.approve();
+        adapter.saveApproval(organizer, LATE_SUMMER_DETAILS);
+        OrganizerBusinessDetails changed = LATE_SUMMER_DETAILS
+                .withSettlementAccount(new SettlementAccount("우리은행", "1002-345-678901", "최여름"));
+
+        adapter.saveBusinessDetails(id, changed);
+
+        assertThat(adapter.findBusinessDetails(id)).contains(changed);
+        Organizer found = adapter.findById(id).orElseThrow();
+        assertThat(found.name()).isEqualTo(OrganizerName.of("늦여름"));
+        assertThat(found.status()).isEqualTo(OrganizerStatus.ACTIVE);
+        assertThatIllegalArgumentException().isThrownBy(() -> adapter.saveBusinessDetails(id + 1000, changed));
+    }
+
+    @Test
+    @DisplayName("사업자 여부 · 사업자 정보 칸이 맞지 않거나 정산 계좌 칸이 일부만 있는 줄은 표가 받지 않는다")
+    void tableRejectsInconsistentBusinessColumns() {
+        long id = activeOrganizer("극단 열두달");
+
+        assertThatExceptionOfType(DataAccessException.class).isThrownBy(() -> dsl.update(ORGANIZER)
+                .set(ORGANIZER.BUSINESS_STATUS, "BUSINESS")
+                .set(ORGANIZER.SETTLEMENT_BANK_NAME, "국민은행")
+                .set(ORGANIZER.SETTLEMENT_ACCOUNT_NUMBER, "123456-78-901234")
+                .set(ORGANIZER.SETTLEMENT_ACCOUNT_HOLDER, "박정훈")
+                .where(ORGANIZER.ID.eq(id))
+                .execute());
+        assertThatExceptionOfType(DataAccessException.class).isThrownBy(() -> dsl.update(ORGANIZER)
+                .set(ORGANIZER.BUSINESS_STATUS, "NON_BUSINESS")
+                .set(ORGANIZER.SETTLEMENT_BANK_NAME, "국민은행")
+                .where(ORGANIZER.ID.eq(id))
+                .execute());
+        assertThatExceptionOfType(DataAccessException.class).isThrownBy(() -> dsl.update(ORGANIZER)
+                .set(ORGANIZER.SETTLEMENT_BANK_NAME, "국민은행")
+                .set(ORGANIZER.SETTLEMENT_ACCOUNT_NUMBER, "123456-78-901234")
+                .set(ORGANIZER.SETTLEMENT_ACCOUNT_HOLDER, "박정훈")
+                .where(ORGANIZER.ID.eq(id))
+                .execute());
+        assertThat(adapter.findBusinessDetails(id)).isEmpty();
     }
 
     @Test
@@ -134,7 +213,7 @@ class OrganizerPersistenceAdapterTest {
         dsl.update(ORGANIZER).set(ORGANIZER.STATUS, OrganizerStatus.CLOSED.name()).where(ORGANIZER.ID.eq(id)).execute();
 
         assertThatExceptionOfType(ConflictException.class)
-                .isThrownBy(() -> adapter.saveApproval(organizer))
+                .isThrownBy(() -> adapter.saveApproval(organizer, TWELVE_MONTHS_DETAILS))
                 .satisfies(conflict -> assertThat(conflict.errorCode())
                         .isEqualTo(OrganizerErrorCode.ORGANIZER_NOT_UNDER_REVIEW));
         assertThat(adapter.findById(id).orElseThrow().status()).isEqualTo(OrganizerStatus.CLOSED);
@@ -148,8 +227,8 @@ class OrganizerPersistenceAdapterTest {
         Organizer unsaved = Organizer.underReview(OrganizerName.of("늦여름"));
         unsaved.approve();
 
-        assertThatIllegalArgumentException().isThrownBy(() -> adapter.saveApproval(underReview));
-        assertThatIllegalArgumentException().isThrownBy(() -> adapter.saveApproval(unsaved));
+        assertThatIllegalArgumentException().isThrownBy(() -> adapter.saveApproval(underReview, TWELVE_MONTHS_DETAILS));
+        assertThatIllegalArgumentException().isThrownBy(() -> adapter.saveApproval(unsaved, TWELVE_MONTHS_DETAILS));
         assertThat(adapter.findById(id).orElseThrow().status()).isEqualTo(OrganizerStatus.UNDER_REVIEW);
     }
 

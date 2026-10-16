@@ -9,14 +9,17 @@ import com.ticketon.api.account.AdminLoginController;
 import com.ticketon.api.security.SecurityConfiguration;
 import com.ticketon.application.account.port.in.LogInAdminUseCase;
 import com.ticketon.application.admin.port.in.ApproveOrganizerApplicationUseCase;
+import com.ticketon.application.admin.port.in.ApproveOrganizerChangeRequestUseCase;
 import com.ticketon.application.admin.port.in.ApproveOwnershipClaimUseCase;
 import com.ticketon.application.admin.port.in.ConfirmOrganizerNameChangeUseCase;
 import com.ticketon.application.admin.port.in.ConfirmOwnershipChangeUseCase;
 import com.ticketon.application.admin.port.in.GetAdminWorkQueueUseCase;
 import com.ticketon.application.admin.port.in.GetOrganizerApplicationReviewUseCase;
+import com.ticketon.application.admin.port.in.GetOrganizerChangeRequestReviewUseCase;
 import com.ticketon.application.admin.port.in.GetOwnershipClaimReviewUseCase;
 import com.ticketon.application.admin.port.in.IssueAdminAccountUseCase;
 import com.ticketon.application.admin.port.in.RejectOrganizerApplicationUseCase;
+import com.ticketon.application.admin.port.in.RejectOrganizerChangeRequestUseCase;
 import com.ticketon.application.admin.port.in.RejectOwnershipClaimUseCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,10 +39,11 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @WebMvcTest(controllers = {AdminLoginController.class, AdminAccountController.class, AdminWorkQueueController.class,
         OrganizerApplicationReviewController.class, OwnershipChangeController.class,
-        OwnershipClaimReviewController.class, OrganizerNameChangeController.class})
+        OwnershipClaimReviewController.class, OrganizerNameChangeController.class,
+        OrganizerChangeRequestReviewController.class})
 @Import(SecurityConfiguration.class)
 @ImportAutoConfiguration({SpringDocConfiguration.class, SpringDocConfigProperties.class, SpringDocWebMvcConfiguration.class})
-@DisplayName("관리자 로그인·관리자 계정 발급·처리 목록·주최자 심사·소유자 변경 확인·소유자 이전 신청 심사·주최자명 변경 확인 API 명세")
+@DisplayName("관리자 로그인·관리자 계정 발급·처리 목록·주최자 심사·소유자 변경 확인·소유자 이전 신청 심사·주최자명 변경 확인·정산 계좌 · 사업자 정보 변경 확인 API 명세")
 class AdminApiDocsTest {
 
     @Autowired
@@ -77,6 +81,51 @@ class AdminApiDocsTest {
 
     @MockitoBean
     private ConfirmOrganizerNameChangeUseCase confirmOrganizerNameChangeUseCase;
+
+    @MockitoBean
+    private GetOrganizerChangeRequestReviewUseCase getOrganizerChangeRequestReviewUseCase;
+
+    @MockitoBean
+    private ApproveOrganizerChangeRequestUseCase approveOrganizerChangeRequestUseCase;
+
+    @MockitoBean
+    private RejectOrganizerChangeRequestUseCase rejectOrganizerChangeRequestUseCase;
+
+    @Test
+    @DisplayName("변경 확인 화면은 요청 id 경로에서 OrganizerChangeRequestReviewResponse를 돌려준다 — 종류에 맞는 값 칸 · 처리 결과 · 지금 소유자만 비어 있을 수 있다")
+    void organizerChangeRequestReviewOperation() throws Exception {
+        String requestPath = "$.paths['/api/admin/organizer-change-requests/{changeRequestId}']";
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(requestPath + ".get.responses['200'].content['application/json'].schema['$ref']")
+                        .value("#/components/schemas/OrganizerChangeRequestReviewResponse"))
+                .andExpect(jsonPath(requestPath + ".get.parameters[*].name", containsInAnyOrder("changeRequestId")))
+                .andExpect(jsonPath("$.components.schemas.OrganizerChangeRequestReviewResponse.required",
+                        containsInAnyOrder("changeRequestId", "organizerId", "organizerName", "kind", "status",
+                                "requestedAt", "requester", "requesterIsOwner")))
+                .andExpect(jsonPath("$.components.schemas.OrganizerChangeRequestReviewResponse.properties.status.enum",
+                        containsInAnyOrder("UNDER_REVIEW", "APPROVED", "REJECTED")))
+                .andExpect(jsonPath("$.components.schemas.ChangeReviewSettlementAccount.required",
+                        containsInAnyOrder("bankName", "accountNumber", "accountHolder")))
+                .andExpect(jsonPath("$.components.schemas.ChangeReviewBusinessInformation.required",
+                        containsInAnyOrder("tradeName", "representativeName", "businessAddress", "businessPhoneNumber",
+                                "businessRegistrationNumber")))
+                .andExpect(jsonPath("$.components.schemas.ChangeRequestStaffMember.required",
+                        containsInAnyOrder("staffAccountId", "nickname")));
+    }
+
+    @Test
+    @DisplayName("변경 승인은 본문 없이 204, 반려는 reason(필수)을 받아 204다")
+    void organizerChangeRequestApproveAndRejectOperations() throws Exception {
+        String requestPath = "$.paths['/api/admin/organizer-change-requests/{changeRequestId}";
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(requestPath + "/approval'].post.responses['204']").exists())
+                .andExpect(jsonPath(requestPath + "/approval'].post.requestBody").doesNotExist())
+                .andExpect(jsonPath(requestPath + "/rejection'].post.responses['204']").exists())
+                .andExpect(jsonPath("$.components.schemas.RejectOrganizerChangeRequestRequest.required",
+                        containsInAnyOrder("reason")));
+    }
 
     @Test
     @DisplayName("소유자 이전 신청 심사 화면은 신청 id 경로에서 OwnershipClaimReviewResponse를 돌려준다 — 처리 일시·반려 사유·지금 소유자·연락처만 비어 있을 수 있다")
@@ -186,7 +235,7 @@ class AdminApiDocsTest {
                         containsInAnyOrder("kind", "targetId", "title", "receivedAt", "highlighted")))
                 .andExpect(jsonPath("$.components.schemas.AdminWorkItem.properties.kind.enum",
                         containsInAnyOrder("ORGANIZER_APPLICATION", "OWNERSHIP_CHANGE", "OWNERSHIP_CLAIM",
-                                "ORGANIZER_NAME_CHANGE")));
+                                "ORGANIZER_NAME_CHANGE", "ORGANIZER_CHANGE_REQUEST")));
     }
 
     @Test

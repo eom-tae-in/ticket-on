@@ -98,7 +98,8 @@ class NotificationKindTest {
                 "EVENT_PAGE_TAKEN_DOWN_BY_ADMIN", "EVENT_PAGE_RESTORED_BY_ADMIN", "HANDLED_BY_ADMIN_ON_BEHALF",
                 "OPERATOR_INVITED", "REMOVED_FROM_STAFF", "OWNER_CHANGED", "SETTLEMENT_ACCOUNT_CHANGE_DECIDED",
                 "ORGANIZER_NAME_CHANGED", "EVENT_TITLE_CHANGED_BY_OPERATOR", "REOPEN_APPROVED", "REOPEN_REJECTED",
-                "STAFF_PROFILE_RESET", "ORGANIZER_LOGO_RESET", "OWNERSHIP_CLAIM_REJECTED"})
+                "STAFF_PROFILE_RESET", "ORGANIZER_LOGO_RESET", "OWNERSHIP_CLAIM_REJECTED",
+                "BUSINESS_INFORMATION_CHANGE_DECIDED"})
         @DisplayName("주최자 쪽은 전부 이메일이고 받는 쪽이 주최자다 — 제목에 [주최]가 붙는다")
         void organizerKindsAreEmailOnly(NotificationKind kind) {
             assertThat(kind.side()).isEqualTo(RecipientSide.ORGANIZER);
@@ -107,9 +108,9 @@ class NotificationKindTest {
         }
 
         @Test
-        @DisplayName("주최자 대상 종류는 표의 23개와 표 밖의 소유자 이전 신청 반려 하나가 전부다")
+        @DisplayName("주최자 대상 종류는 표의 23개와 표 밖의 소유자 이전 신청 반려 · 사업자 정보 변경 확인 결과 둘이 전부다")
         void organizerKindsAreExactlyTheTable() {
-            assertThat(kindsOf(RecipientSide.ORGANIZER)).hasSize(24);
+            assertThat(kindsOf(RecipientSide.ORGANIZER)).hasSize(25);
         }
 
         @Test
@@ -120,10 +121,11 @@ class NotificationKindTest {
         }
 
         @Test
-        @DisplayName("소유자에게만 — 정산 계좌 변경 확인 결과, 운영자가 행사 제목을 바꿈")
+        @DisplayName("소유자에게만 — 정산 계좌 변경 확인 결과, 사업자 정보 변경 확인 결과(표 밖, #31), 운영자가 행사 제목을 바꿈")
         void ownerOnlyKinds() {
             assertThat(kindsWithScope(OrganizerRecipientScope.OWNER_ONLY)).containsExactlyInAnyOrder(
-                    NotificationKind.SETTLEMENT_ACCOUNT_CHANGE_DECIDED, NotificationKind.EVENT_TITLE_CHANGED_BY_OPERATOR);
+                    NotificationKind.SETTLEMENT_ACCOUNT_CHANGE_DECIDED, NotificationKind.BUSINESS_INFORMATION_CHANGE_DECIDED,
+                    NotificationKind.EVENT_TITLE_CHANGED_BY_OPERATOR);
         }
 
         @Test
