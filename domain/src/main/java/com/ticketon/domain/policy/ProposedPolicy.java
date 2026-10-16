@@ -30,6 +30,10 @@ import java.util.Set;
  *       {@code domain.event.FloorPlan#addBlock}.</li>
  *   <li>확인 필요 (#38) — 판매 대기 행사에 관리자 조치(정지 2단계 · 페이지 내리기)를 걸면 판매 중단으로 둔다(오픈 시각이 와도 열지 않고, 조치가 풀린
  *       뒤 주최자가 재개하면 시각대로 판매 대기 또는 판매 중): {@code domain.event.Event#holdSales}.</li>
+ *   <li>확인 필요 (#38) — 예매가 열린 뒤 수정 범위 표(docs/04)에 없는 항목(유형 · 카테고리, 상세 안내 · 지도 링크 · 공개용 연락처, 예매 종료 시각
+ *       밖의 예매 설정)은 판매 중에 막아 둔다: {@code domain.event.EventEditTarget}.</li>
+ *   <li>확인 필요 (#38) — 비어 있던 회차 종료 시각은 판매가 끝난 뒤에도 행사가 끝날 때까지 입력받는다(막으면 행사 종료를 판정할 수 없음):
+ *       {@code domain.event.EventEditTarget#MISSING_SESSION_END_TIME}.</li>
  * </ul>
  */
 public final class ProposedPolicy {

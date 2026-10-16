@@ -78,6 +78,11 @@ public enum EventStatus {
         };
     }
 
+    /** 이 상태에서 무엇을 고칠 수 있는지의 큰 틀(docs/04 "상태별로 할 수 있는 것", {@link EventEditScope}). */
+    public EventEditScope editScope() {
+        return EventEditScope.of(this);
+    }
+
     /** 판매가 끝난 뒤인지 — 판매 종료와 지난 행사. 판매를 재개할 수 없다(docs/04 "판매 종료 이후에는 재개 버튼이 사라집니다"). */
     public boolean isSalesOver() {
         return this == SALES_CLOSED || isFinished();

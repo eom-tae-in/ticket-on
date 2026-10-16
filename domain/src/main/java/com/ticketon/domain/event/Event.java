@@ -39,8 +39,10 @@ import java.util.Set;
  * 없고, 조치가 풀려도 판매는 저절로 열리지 않는다({@link #releaseSalesHold}, {@link #resumeSales}). 누가 · 언제 · 왜 멈췄는지는 상태가 덮여도
  * 이력으로 남는다({@link #salesPauses}).
  * <p>
- * 언제 무엇을 고칠 수 있는지(상태별 수정 범위, 판매 중 취소 규정 잠금, 장소 변경의 관리자 승인)는 상태가 정하지만, 제목 · 소개 · 포스터의 변경
- * 이력은 아직 보지 않는다(docs/03 "변경 이력", #46).
+ * <b>언제 무엇을 고칠 수 있는지</b>는 상태가 정한다 — 상태별 수정 범위 표({@link EventEditScope}, {@link EventEditTarget})로 판정하고
+ * ({@link #requireEditable}), 회차 시간은 그 회차 시작 1주일 전 잠금까지 본다({@link #requireSessionTimeEditable}). 이 판정은 저장된 상태로
+ * 하므로, 시간이 움직이는 상태의 행사는 먼저 {@link #advanceByTime}으로 지금 시각을 반영한다. 각 수정 메서드(기본 정보 · 공개 수준 · 예매 설정 ·
+ * 취소 규정)에 이 판정을 거는 일과 제목 · 소개 · 포스터의 변경 이력은 수정 유스케이스가 한다(#65, #46).
  * <p>
  * 저장소에서 다시 읽을 때는 {@link #restore}를 쓴다. 저장 전 행사는 id가 없다.
  */
@@ -400,6 +402,61 @@ public final class Event {
     }
 
     /**
+     * 지금 저장된 상태에서 그 항목을 고칠 수 있는지 — 상태별 수정 범위 표로 판정한다({@link EventEditScope#availabilityOf}).
+     * <p>
+     * 저장된 상태로 판정한다. 시간이 움직이는 상태({@link EventStatus#movesWithTime})의 행사는 판정 전에 {@link #advanceByTime}으로 지금 시각을
+     * 반영한다 — 그런 행사는 판매를 시작할 때 회차가 있었으므로 늘 일정이 있다. 일정이 아직 없을 수 있는 작성 중 행사는 시간이 움직이지 않아 그대로
+     * 부른다.
+     */
+    public EventEditAvailability editAvailability(EventEditTarget target) {
+        return status.editScope().availabilityOf(target);
+    }
+
+    /**
+     * 그 항목을 주최자가 지금 고칠 수 있는지 확인한다({@link #editAvailability}와 같은 판정). 항목 규칙이 붙으면
+     * ({@link EventEditAvailability#ALLOWED_WITH_RULES}) 막지 않고 그대로 돌려준다 — 그 규칙은 그 항목을 고치는 곳이 본다.
+     *
+     * @return 고칠 수 있음 또는 항목 규칙을 지켜 고칠 수 있음
+     * @throws RuleViolationException 예매가 열린 뒤 바꿀 수 없는 항목이면({@link EventErrorCode#EDIT_LOCKED_AFTER_BOOKING_OPENED}), 예매가 열린
+     *                                뒤 장소면({@link EventErrorCode#VENUE_CHANGE_NEEDS_ADMIN_APPROVAL}), 판매가 끝난 뒤 입구 목록 · 검표 계정이
+     *                                아니면({@link EventErrorCode#EDIT_LOCKED_AFTER_SALES_CLOSED}), 지난 행사면
+     *                                ({@link EventErrorCode#EDIT_LOCKED_FOR_PAST_EVENT})
+     */
+    public EventEditAvailability requireEditable(EventEditTarget target) {
+        EventEditAvailability availability = editAvailability(target);
+        if (availability.isEditable()) {
+            return availability;
+        }
+        String detail = detail() + ", 항목: " + target;
+        if (availability == EventEditAvailability.NEEDS_ADMIN_APPROVAL) {
+            throw new RuleViolationException(EventErrorCode.VENUE_CHANGE_NEEDS_ADMIN_APPROVAL, detail);
+        }
+        throw new RuleViolationException(lockedErrorCode(status.editScope()), detail);
+    }
+
+    /**
+     * 그 회차의 시간(종일형은 그날의 운영 시간)을 주최자가 혼자 지금 바꿀 수 있는지 확인한다. 상태별 수정 범위({@link EventEditTarget#SESSION_DATE_TIME})를
+     * 보고, 예매가 열린 뒤(판매 중 · 판매 중단)면 그 회차 시작 1주일 전부터 잠근다({@link SessionTimes#isTimeEditLocked}). 잠금은 회차마다 따로다 —
+     * 8회차 공연이 이미 시작했어도 아직 열흘 남은 마지막 주 회차는 바꿀 수 있다(docs/04 "회차 시간 잠금은 회차마다 따로입니다"). 판매 대기는 예매가
+     * 없어 잠그지 않는다. 잠긴 뒤에는 연기 절차를 쓰고(#106), 비어 있던 종료 시각을 채우는 것만은 받는다({@link EventEditTarget#MISSING_SESSION_END_TIME}).
+     * <p>
+     * {@link #requireEditable}처럼 저장된 상태로 판정한다. 티켓이 있는 회차의 알림 · 공제 면제는 회차 시간 수정(#105)이 한다.
+     *
+     * @throws RuleViolationException 상태가 회차 일시를 막으면({@link #requireEditable}과 같은 오류), 예매가 열린 뒤 그 회차 시작 1주일 전이
+     *                                지났으면({@link EventErrorCode#SESSION_TIME_EDIT_LOCKED})
+     * @throws com.ticketon.domain.error.NotFoundException 일정에 없는 회차면({@link EventErrorCode#SESSION_NOT_FOUND})
+     */
+    public void requireSessionTimeEditable(EventSchedule schedule, long sessionId, Instant now) {
+        requireOwnSchedule(schedule);
+        Objects.requireNonNull(now, "now");
+        requireEditable(EventEditTarget.SESSION_DATE_TIME);
+        if (status.editScope() == EventEditScope.AFTER_BOOKING_OPENED
+                && schedule.timesOf(schedule.session(sessionId)).isTimeEditLocked(now)) {
+            throw new RuleViolationException(EventErrorCode.SESSION_TIME_EDIT_LOCKED, detail() + ", 회차 " + sessionId);
+        }
+    }
+
+    /**
      * 위저드 1단계의 필수 항목이 모두 찼는지. 기본 정보는 저장할 때 이미 필수 항목을 확인했으므로 따로 올리는 포스터만 빠질 수 있다.
      * 판매를 시작하기 전에 확인한다(docs/03 "판매 시작 직전에 검증").
      */
@@ -475,6 +532,15 @@ public final class Event {
         return salesPauses.stream()
                 .filter(pause -> pause.cause() == SalesPauseCause.ORGANIZER && pause.isActive())
                 .findFirst();
+    }
+
+    private static EventErrorCode lockedErrorCode(EventEditScope scope) {
+        return switch (scope) {
+            case AFTER_BOOKING_OPENED -> EventErrorCode.EDIT_LOCKED_AFTER_BOOKING_OPENED;
+            case ON_SITE_ONLY -> EventErrorCode.EDIT_LOCKED_AFTER_SALES_CLOSED;
+            case NOTHING -> EventErrorCode.EDIT_LOCKED_FOR_PAST_EVENT;
+            case EVERYTHING, EVERYTHING_EXCEPT_INVITED -> throw new IllegalStateException("전부 고치는 범위에는 잠긴 항목이 없습니다: " + scope);
+        };
     }
 
     private boolean endActivePause(SalesPauseCause cause, Instant now) {

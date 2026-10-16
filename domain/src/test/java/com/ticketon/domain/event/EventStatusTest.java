@@ -41,6 +41,19 @@ class EventStatusTest {
     }
 
     @Test
+    @DisplayName("수정 범위 — 작성 중 전부, 판매 대기 전부(초대권 예외), 판매 중 · 판매 중단 열린 뒤 범위, 판매 종료 현장만, 지난 행사 없음")
+    void editScopes() {
+        assertThat(EventStatus.DRAFT.editScope()).isEqualTo(EventEditScope.EVERYTHING);
+        assertThat(EventStatus.AWAITING_OPEN.editScope()).isEqualTo(EventEditScope.EVERYTHING_EXCEPT_INVITED);
+        assertThat(EventStatus.ON_SALE.editScope()).isEqualTo(EventEditScope.AFTER_BOOKING_OPENED);
+        assertThat(EventStatus.SALES_PAUSED.editScope()).isEqualTo(EventEditScope.AFTER_BOOKING_OPENED);
+        assertThat(EventStatus.SALES_CLOSED.editScope()).isEqualTo(EventEditScope.ON_SITE_ONLY);
+        assertThat(EventStatus.ENDED.editScope()).isEqualTo(EventEditScope.NOTHING);
+        assertThat(EventStatus.SETTLED.editScope()).isEqualTo(EventEditScope.NOTHING);
+        assertThat(EventStatus.CANCELLED.editScope()).isEqualTo(EventEditScope.NOTHING);
+    }
+
+    @Test
     @DisplayName("판매가 끝난 뒤는 판매 종료와 지난 행사 — 재개 버튼이 사라진다")
     void salesOverStatuses() {
         assertThat(EnumSet.allOf(EventStatus.class).stream().filter(EventStatus::isSalesOver))

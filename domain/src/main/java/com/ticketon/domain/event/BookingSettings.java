@@ -28,7 +28,8 @@ import java.util.Objects;
  * 예매 종료 · 검표 시작은 기준 시각에서 앞서는 시간만 갖는다({@link LeadTime}). 기준 시각(회차형은 회차 시작, 종일형은 마지막 입장 · 운영 시작)은
  * 회차의 시각이 고른다({@link SessionTimes}). 회차를 나중에 추가해도 이 설정이 그대로 적용된다(docs/04 "회차 추가는 허용").
  * <p>
- * 언제 무엇을 바꿀 수 있는지(판매 중에도 예매 종료 시각은 변경 가능 등)는 상태별 수정 범위가 정한다(docs/04 "예매가 열린 뒤 수정 범위").
+ * 언제 무엇을 바꿀 수 있는지(판매 중에도 예매 종료 시각은 변경 가능 등)는 상태별 수정 범위가 정한다(docs/04 "예매가 열린 뒤 수정 범위",
+ * {@link EventEditTarget#BOOKING_CLOSE_TIME}, {@link EventEditTarget#OTHER_BOOKING_SETTINGS}).
  *
  * @param bookingOpensAt       예매 오픈 시각. 비워 두면 null — 판매를 시작하는 순간 연다
  * @param bookingCloseLeadTime 예매 종료 — 회차 시작(종일형은 마지막 입장)보다 이만큼 앞에서 닫는다
