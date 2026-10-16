@@ -9,7 +9,9 @@ package com.ticketon.domain.event;
  *   <tr><th>전환</th><th>누가</th><th>메서드</th></tr>
  *   <tr><td>작성 중 → 판매 대기</td><td>운영진이 "판매 시작" + 검증 통과</td><td>{@link Event#startSales}</td></tr>
  *   <tr><td>판매 대기 → 판매 중</td><td>자동 (오픈 시각 도달)</td><td>{@link Event#advanceByTime}</td></tr>
- *   <tr><td>판매 중 → 판매 종료</td><td>자동 (마지막 회차의 예매 종료 시각)</td><td>{@link Event#advanceByTime}</td></tr>
+ *   <tr><td>판매 중 ↔ 판매 중단</td><td>주최자 중단 · 재개, 관리자 조치(정지 2단계 · 페이지 내리기)</td><td>{@link Event#pauseSales},
+ *       {@link Event#holdSales}, {@link Event#resumeSales}</td></tr>
+ *   <tr><td>판매 중 · 판매 중단 → 판매 종료</td><td>자동 (마지막 회차의 예매 종료 시각)</td><td>{@link Event#advanceByTime}</td></tr>
  *   <tr><td>판매 종료 → 행사 종료</td><td>자동 (마지막 회차 종료 시각)</td><td>{@link Event#advanceByTime}</td></tr>
  *   <tr><td>행사 종료 → 정산 완료</td><td>관리자 수동</td><td>{@link Event#completeSettlement}</td></tr>
  *   <tr><td>남은 회차 전부 취소 → 취소됨 또는 행사 종료</td><td>소유자, 또는 관리자 정지 3단계</td><td>{@link Event#reflectSessionCancellation}</td></tr>
@@ -34,8 +36,9 @@ public enum EventStatus {
     ON_SALE,
 
     /**
-     * 판매 중단 — 주최자가 멈췄거나 관리자 조치(정지 2단계 · 페이지 내리기). "판매 중"의 변형이다 — 기존 예매는 유지되고 신규 판매만 멈춘다. 중단
-     * 중에도 마지막 회차의 예매 종료 시각이 지나면 판매 종료로 넘어간다(시간 우선).
+     * 판매 중단 — 주최자가 멈췄거나({@link Event#pauseSales}) 관리자 조치(정지 2단계 · 페이지 내리기, {@link Event#holdSales}). "판매 중"의
+     * 변형이다 — 기존 예매는 유지되고 신규 판매만 멈춘다. 중단 중에도 마지막 회차의 예매 종료 시각이 지나면 판매 종료로 넘어간다(시간 우선).
+     * 누가 · 언제 · 왜 멈췄는지는 상태가 덮여도 이력({@link SalesPause})으로 남는다.
      */
     SALES_PAUSED,
 

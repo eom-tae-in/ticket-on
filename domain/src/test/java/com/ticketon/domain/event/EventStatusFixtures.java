@@ -39,6 +39,15 @@ final class EventStatusFixtures {
     /** 공연 하나짜리 행사의 행사 종료 — 3/14 21:00. */
     static final Instant SINGLE_EVENT_ENDS_AT = korean(MARCH_14, 21, 0);
 
+    /** 판매를 멈춘 운영진(박정훈)의 계정 id. */
+    static final long STAFF_ACCOUNT_ID = 31L;
+
+    /** 조치한 관리자의 계정 id. */
+    static final long ADMIN_ACCOUNT_ID = 91L;
+
+    /** 저장돼 있던 판매 중단의 멈춘 시각 — 3/5 10:00. */
+    static final Instant PAUSED_AT = korean(LocalDate.of(2026, 3, 5), 10, 0);
+
     /** 회차를 취소한 시각 — 3/10 12:00. */
     static final Instant CANCELLED_AT = korean(LocalDate.of(2026, 3, 10), 12, 0);
 
@@ -83,10 +92,20 @@ final class EventStatusFixtures {
         return springPlayIn(status, opensAtMarchFirst());
     }
 
-    /** 그 상태 · 예매 설정으로 저장돼 있던 봄 정기공연. */
+    /**
+     * 그 상태 · 예매 설정으로 저장돼 있던 봄 정기공연. 판매 중단이면 운영진 {@value #STAFF_ACCOUNT_ID}이 3/5 10:00에 사유 없이 멈춰 둔 것이다.
+     */
     static Event springPlayIn(EventStatus status, BookingSettings bookingSettings) {
+        List<SalesPause> salesPauses = status == EventStatus.SALES_PAUSED
+                ? List.of(new SalesPause(SalesPauseCause.ORGANIZER, STAFF_ACCOUNT_ID, null, PAUSED_AT, null))
+                : List.of();
+        return springPlayIn(status, bookingSettings, salesPauses);
+    }
+
+    /** 그 상태 · 예매 설정 · 판매 중단 이력으로 저장돼 있던 봄 정기공연. */
+    static Event springPlayIn(EventStatus status, BookingSettings bookingSettings, List<SalesPause> salesPauses) {
         return Event.restore(EVENT_ID, TWELVE_MONTHS_ORGANIZER, ADDRESS, twelveMonthsSpringPlay(), new EventPoster("poster-key.jpg"),
-                EventVisibilitySetting.publicByDefault(), bookingSettings, CancellationPolicy.standard(), status);
+                EventVisibilitySetting.publicByDefault(), bookingSettings, CancellationPolicy.standard(), status, salesPauses);
     }
 
     /** 공연 하나 — 3/14 19:00~21:00, 회차 id 101. */

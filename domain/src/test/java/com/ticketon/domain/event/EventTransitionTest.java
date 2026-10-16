@@ -4,6 +4,7 @@ import static com.ticketon.domain.event.EventFixtures.TWELVE_MONTHS_ORGANIZER;
 import static com.ticketon.domain.event.EventFixtures.assertRejected;
 import static com.ticketon.domain.event.EventFixtures.twelveMonthsSpringPlay;
 import static com.ticketon.domain.event.EventStatusFixtures.ADDRESS;
+import static com.ticketon.domain.event.EventStatusFixtures.ADMIN_ACCOUNT_ID;
 import static com.ticketon.domain.event.EventStatusFixtures.AFTER_EVENT_ENDED;
 import static com.ticketon.domain.event.EventStatusFixtures.BEFORE_OPEN;
 import static com.ticketon.domain.event.EventStatusFixtures.DURING_SALES;
@@ -11,6 +12,7 @@ import static com.ticketon.domain.event.EventStatusFixtures.EVENT_ID;
 import static com.ticketon.domain.event.EventStatusFixtures.MARCH_14;
 import static com.ticketon.domain.event.EventStatusFixtures.MARCH_21;
 import static com.ticketon.domain.event.EventStatusFixtures.MARCH_22;
+import static com.ticketon.domain.event.EventStatusFixtures.STAFF_ACCOUNT_ID;
 import static com.ticketon.domain.event.EventStatusFixtures.cancelledSinglePerformance;
 import static com.ticketon.domain.event.EventStatusFixtures.consistentMomentFor;
 import static com.ticketon.domain.event.EventStatusFixtures.eightPerformances;
@@ -37,7 +39,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
-@DisplayName("행사 상태 전환 — 판매 시작 · 시간 기준 전환 · 정산 완료 · 회차 취소 (docs/04 \"전환 트리거\", \"시간이 운영 판단을 이깁니다\")")
+@DisplayName("행사 상태 전환 — 판매 시작 · 시간 기준 전환 · 판매 중단 · 정산 완료 · 회차 취소 (docs/04 \"전환 트리거\", \"시간이 운영 판단을 이깁니다\")")
 class EventTransitionTest {
 
     private static Instant koreanAt(String localDateTime) {
@@ -71,6 +73,92 @@ class EventTransitionTest {
 
             assertRejected(() -> event.startSales(consistentScheduleFor(status), false, consistentMomentFor(status)),
                     EventErrorCode.SALES_ALREADY_STARTED);
+            assertThat(event.status()).isEqualTo(status);
+        }
+
+        @Test
+        @DisplayName("주최자 판매 중단: 판매 중 → 판매 중단")
+        void pauseFromOnSale() {
+            Event event = springPlayIn(EventStatus.ON_SALE);
+
+            event.pauseSales(STAFF_ACCOUNT_ID, null, singlePerformance(), DURING_SALES);
+
+            assertThat(event.status()).isEqualTo(EventStatus.SALES_PAUSED);
+        }
+
+        @Test
+        @DisplayName("주최자 판매 중단: 이미 판매 중단이면 막는다")
+        void pauseRejectedWhenPaused() {
+            Event event = springPlayIn(EventStatus.SALES_PAUSED);
+
+            assertRejected(() -> event.pauseSales(STAFF_ACCOUNT_ID, null, singlePerformance(), DURING_SALES),
+                    EventErrorCode.SALES_ALREADY_PAUSED);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @EnumSource(value = EventStatus.class, mode = EnumSource.Mode.EXCLUDE, names = {"ON_SALE", "SALES_PAUSED"})
+        @DisplayName("주최자 판매 중단: 판매 중이 아니면 막는다")
+        void pauseRejectedOutsideOnSale(EventStatus status) {
+            Event event = springPlayIn(status);
+
+            assertRejected(() -> event.pauseSales(STAFF_ACCOUNT_ID, null, consistentScheduleFor(status), consistentMomentFor(status)),
+                    EventErrorCode.SALES_NOT_PAUSABLE);
+            assertThat(event.status()).isEqualTo(status);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @EnumSource(value = EventStatus.class, names = {"AWAITING_OPEN", "ON_SALE", "SALES_PAUSED"})
+        @DisplayName("관리자 조치 판매 중단: 판매 대기 · 판매 중 · 판매 중단 → 판매 중단")
+        void holdFromOpenOrScheduledSales(EventStatus status) {
+            Event event = springPlayIn(status);
+
+            assertThat(event.holdSales(SalesPauseCause.ADMIN_SUSPENSION, ADMIN_ACCOUNT_ID, singlePerformance(),
+                    consistentMomentFor(status))).isTrue();
+
+            assertThat(event.status()).isEqualTo(EventStatus.SALES_PAUSED);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @EnumSource(value = EventStatus.class, names = {"DRAFT", "SALES_CLOSED", "ENDED", "SETTLED", "CANCELLED"})
+        @DisplayName("관리자 조치 판매 중단: 작성 중이거나 판매가 끝난 뒤에는 멈출 판매가 없어 그대로다")
+        void holdIgnoredWithoutSales(EventStatus status) {
+            Event event = springPlayIn(status);
+
+            assertThat(event.holdSales(SalesPauseCause.ADMIN_SUSPENSION, ADMIN_ACCOUNT_ID, consistentScheduleFor(status),
+                    consistentMomentFor(status))).isFalse();
+
+            assertThat(event.status()).isEqualTo(status);
+            assertThat(event.activeSalesHolds()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("재개: 판매 중단 → 판매 중")
+        void resumeFromPaused() {
+            Event event = springPlayIn(EventStatus.SALES_PAUSED);
+
+            event.resumeSales(singlePerformance(), DURING_SALES);
+
+            assertThat(event.status()).isEqualTo(EventStatus.ON_SALE);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @EnumSource(value = EventStatus.class, names = {"DRAFT", "AWAITING_OPEN", "ON_SALE"})
+        @DisplayName("재개: 판매 중단이 아니면 막는다")
+        void resumeRejectedWhenNotPaused(EventStatus status) {
+            Event event = springPlayIn(status);
+
+            assertRejected(() -> event.resumeSales(singlePerformance(), consistentMomentFor(status)), EventErrorCode.SALES_NOT_PAUSED);
+            assertThat(event.status()).isEqualTo(status);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @EnumSource(value = EventStatus.class, names = {"SALES_CLOSED", "ENDED", "SETTLED", "CANCELLED"})
+        @DisplayName("재개: 판매가 끝난 뒤에는 막는다")
+        void resumeRejectedAfterSalesOver(EventStatus status) {
+            Event event = springPlayIn(status);
+
+            assertRejected(() -> event.resumeSales(consistentScheduleFor(status), consistentMomentFor(status)),
+                    EventErrorCode.SALES_ALREADY_CLOSED);
             assertThat(event.status()).isEqualTo(status);
         }
 

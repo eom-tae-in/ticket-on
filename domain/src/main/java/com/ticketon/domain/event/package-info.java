@@ -22,6 +22,7 @@
  * <p>
  * 행사 상태({@link com.ticketon.domain.event.EventStatus} — 작성 중 · 판매 대기 · 판매 중 · 판매 중단 · 판매 종료 · 행사 종료 · 정산 완료 · 취소됨)는
  * 행사가 저장해 갖는다. 사람이 누르는 전환과 시간이 정하는 전환({@link com.ticketon.domain.event.Event#advanceByTime})이 섞여 있고, 겹치면 시간이
- * 이긴다. "매진"은 상태가 아니라 잔여가 0인 순간의 표시다.
+ * 이긴다. "매진"은 상태가 아니라 잔여가 0인 순간의 표시다. 판매 중단은 주최자 중단과 관리자 조치를 나눠 이력
+ * ({@link com.ticketon.domain.event.SalesPause})으로 남기고, 관리자 조치가 걸린 동안 주최자는 재개할 수 없다.
  */
 package com.ticketon.domain.event;

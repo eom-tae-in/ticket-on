@@ -70,7 +70,7 @@ class EventTest {
 
             Event event = Event.restore(7L, TWELVE_MONTHS_ORGANIZER, ADDRESS, twelveMonthsSpringPlay(),
                     new EventPoster("poster-key.jpg"), protectedSetting, adjustedBookingSettings(),
-                    FULL_REFUND_UNTIL_THREE_DAYS_BEFORE, EventStatus.ON_SALE);
+                    FULL_REFUND_UNTIL_THREE_DAYS_BEFORE, EventStatus.ON_SALE, List.of());
 
             assertThat(event.id()).hasValue(7L);
             assertThat(event.status()).isEqualTo(EventStatus.ON_SALE);
@@ -86,7 +86,7 @@ class EventTest {
             assertThatIllegalArgumentException().isThrownBy(() -> Event.create(0L, ADDRESS, twelveMonthsSpringPlay()));
             assertThatIllegalArgumentException().isThrownBy(() -> Event.restore(0L, TWELVE_MONTHS_ORGANIZER, ADDRESS,
                     twelveMonthsSpringPlay(), null, EventVisibilitySetting.publicByDefault(), BookingSettings.defaults(),
-                    CancellationPolicy.standard(), EventStatus.DRAFT));
+                    CancellationPolicy.standard(), EventStatus.DRAFT, List.of()));
         }
     }
 

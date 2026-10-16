@@ -2,10 +2,14 @@ package com.ticketon.domain.event;
 
 import com.ticketon.domain.error.RuleViolationException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Set;
 
 /**
  * 행사 — 주최자가 여는 하나의 공연 · 전시 · 페스티벌. 주최자에 속한다(docs/00 "용어", docs/14 "무엇이 무엇을 가리키나").
@@ -31,6 +35,10 @@ import java.util.OptionalLong;
  * 예매 종료 · 종료 시각({@link EventSchedule#salesEndsAt}, {@link EventSchedule#eventEndsAt})과 이 행사의 오픈 시각을 본다. <b>겹치면 시간이
  * 이긴다</b> — 상태를 바꾸는 메서드는 먼저 지금 시각을 반영한 뒤 판단한다(docs/04 "시간이 운영 판단을 이깁니다").
  * <p>
+ * <b>판매 중단</b> — 주최자가 멈추거나({@link #pauseSales}) 관리자 조치가 멈춘다({@link #holdSales}). 관리자 조치가 걸려 있는 동안 주최자는 재개할 수
+ * 없고, 조치가 풀려도 판매는 저절로 열리지 않는다({@link #releaseSalesHold}, {@link #resumeSales}). 누가 · 언제 · 왜 멈췄는지는 상태가 덮여도
+ * 이력으로 남는다({@link #salesPauses}).
+ * <p>
  * 언제 무엇을 고칠 수 있는지(상태별 수정 범위, 판매 중 취소 규정 잠금, 장소 변경의 관리자 승인)는 상태가 정하지만, 제목 · 소개 · 포스터의 변경
  * 이력은 아직 보지 않는다(docs/03 "변경 이력", #46).
  * <p>
@@ -47,10 +55,11 @@ public final class Event {
     private BookingSettings bookingSettings;
     private CancellationPolicy cancellationPolicy;
     private EventStatus status;
+    private final List<SalesPause> salesPauses;
 
     private Event(Long id, long organizerId, EventPublicAddress publicAddress, EventBasicInformation basicInformation,
             EventPoster poster, EventVisibilitySetting visibility, BookingSettings bookingSettings,
-            CancellationPolicy cancellationPolicy, EventStatus status) {
+            CancellationPolicy cancellationPolicy, EventStatus status, List<SalesPause> salesPauses) {
         if (organizerId < 1) {
             throw new IllegalArgumentException("주최자 id는 1 이상이어야 합니다: " + organizerId);
         }
@@ -63,6 +72,8 @@ public final class Event {
         this.bookingSettings = Objects.requireNonNull(bookingSettings, "bookingSettings");
         this.cancellationPolicy = Objects.requireNonNull(cancellationPolicy, "cancellationPolicy");
         this.status = Objects.requireNonNull(status, "status");
+        this.salesPauses = new ArrayList<>(salesPauses);
+        requireConsistentSalesPauses();
     }
 
     /**
@@ -75,23 +86,27 @@ public final class Event {
      */
     public static Event create(long organizerId, EventPublicAddress publicAddress, EventBasicInformation basicInformation) {
         return new Event(null, organizerId, publicAddress, basicInformation, null, EventVisibilitySetting.publicByDefault(),
-                BookingSettings.defaults(), CancellationPolicy.standard(), EventStatus.DRAFT);
+                BookingSettings.defaults(), CancellationPolicy.standard(), EventStatus.DRAFT, List.of());
     }
 
     /**
      * 저장소에서 읽은 값으로 행사를 되살린다.
      *
-     * @param poster 포스터. 아직 올리지 않았으면 null
-     * @param status 저장된 행사 상태 — 시간이 지나 바뀌었어야 할 상태라도 그대로 되살린다. 지금 시각은 {@link #advanceByTime}이 반영한다
+     * @param poster      포스터. 아직 올리지 않았으면 null
+     * @param status      저장된 행사 상태 — 시간이 지나 바뀌었어야 할 상태라도 그대로 되살린다. 지금 시각은 {@link #advanceByTime}이 반영한다
+     * @param salesPauses 판매 중단 이력 — 멈춘 순서대로
+     * @throws IllegalArgumentException 작성 중인데 판매 중단 이력이 있거나, 같은 까닭의 끝나지 않은 중단이 둘이면
      */
     public static Event restore(long id, long organizerId, EventPublicAddress publicAddress,
             EventBasicInformation basicInformation, EventPoster poster, EventVisibilitySetting visibility,
-            BookingSettings bookingSettings, CancellationPolicy cancellationPolicy, EventStatus status) {
+            BookingSettings bookingSettings, CancellationPolicy cancellationPolicy, EventStatus status,
+            List<SalesPause> salesPauses) {
         if (id < 1) {
             throw new IllegalArgumentException("행사 id는 1 이상이어야 합니다: " + id);
         }
+        Objects.requireNonNull(salesPauses, "salesPauses");
         return new Event(id, organizerId, publicAddress, basicInformation, poster, visibility, bookingSettings,
-                cancellationPolicy, status);
+                cancellationPolicy, status, salesPauses);
     }
 
     /**
@@ -283,6 +298,108 @@ public final class Event {
     }
 
     /**
+     * 주최자가 판매를 잠시 멈춘다 — 기존 예매는 유지되고 신규 판매만 멈춘다. 목록에서 숨기지 않는다(docs/04 "판매 중단"). 먼저 지금 시각을 반영한다.
+     *
+     * @param staffAccountId 멈춘 운영진의 계정 id
+     * @param reason         한 줄 사유. 적지 않았으면 null
+     * @throws RuleViolationException 이미 판매 중단이면({@link EventErrorCode#SALES_ALREADY_PAUSED}), 판매 중이 아니면
+     *                                ({@link EventErrorCode#SALES_NOT_PAUSABLE})
+     */
+    public void pauseSales(long staffAccountId, SalesPauseReason reason, EventSchedule schedule, Instant now) {
+        advanceByTime(schedule, now);
+        if (status == EventStatus.SALES_PAUSED) {
+            throw new RuleViolationException(EventErrorCode.SALES_ALREADY_PAUSED, detail());
+        }
+        if (status != EventStatus.ON_SALE) {
+            throw new RuleViolationException(EventErrorCode.SALES_NOT_PAUSABLE, detail());
+        }
+        salesPauses.add(SalesPause.byOrganizer(staffAccountId, reason, now));
+        status = EventStatus.SALES_PAUSED;
+    }
+
+    /**
+     * 관리자 조치(정지 2단계 · 페이지 내리기)로 판매를 멈춘다 — 정지 기능(#122) · 페이지 내리기(#120)가 부른다. 먼저 지금 시각을 반영한다.
+     * <ul>
+     *   <li>판매 중이면 판매 중단이 된다.</li>
+     *   <li>이미 판매 중단이면(주최자가 먼저 멈춰 뒀거나 다른 관리자 조치가 걸려 있으면) 상태는 그대로이고 이 조치가 더 걸린다 — 조치가 모두 풀려야
+     *       주최자가 재개한다.</li>
+     *   <li>확인 필요 (#38) — 판매 대기도 판매 중단이 된다. 정지 2단계의 대상은 "진행 중인 행사"(판매 대기 · 판매 중 · 판매 종료, docs/13)이고
+     *       조치 중에 오픈 시각이 와서 판매가 열리면 안 되므로 오픈 전부터 멈춘다. 조치가 풀린 뒤 주최자가 재개하면 시각대로 판매 대기 또는 판매
+     *       중이 된다. 페이지 내리기는 문서가 "판매 중이었다면 판매 중단"이라 하지만, 다시 올린 뒤 판매 재개는 주최자가 한다는 원칙과 맞춰 같게
+     *       둔다.</li>
+     *   <li>작성 중이거나 판매가 끝난 뒤(판매 종료 · 지난 행사)에는 멈출 판매가 없어 아무것도 하지 않는다.</li>
+     * </ul>
+     *
+     * @param cause          관리자 조치 — 정지 2단계 또는 페이지 내리기
+     * @param adminAccountId 조치한 관리자의 계정 id
+     * @return 조치가 걸렸는지 — 멈출 판매가 없거나 같은 조치가 이미 걸려 있으면 false
+     * @throws IllegalArgumentException 관리자 조치가 아니면
+     */
+    public boolean holdSales(SalesPauseCause cause, long adminAccountId, EventSchedule schedule, Instant now) {
+        Objects.requireNonNull(cause, "cause");
+        requireAdminAction(cause);
+        advanceByTime(schedule, now);
+        switch (status) {
+            case AWAITING_OPEN, ON_SALE -> status = EventStatus.SALES_PAUSED;
+            case SALES_PAUSED -> {
+                if (activeSalesHolds().contains(cause)) {
+                    return false;
+                }
+            }
+            case DRAFT, SALES_CLOSED, ENDED, SETTLED, CANCELLED -> {
+                return false;
+            }
+        }
+        salesPauses.add(SalesPause.byAdmin(cause, adminAccountId, now));
+        return true;
+    }
+
+    /**
+     * 관리자 조치를 푼다(정지 해제 · 페이지 다시 올리기). <b>판매는 저절로 열리지 않는다</b> — 상태는 판매 중단 그대로이고, 조치가 모두 풀리면
+     * 주최자가 재개할 수 있다(docs/01 "해제해도 판매는 저절로 열리지 않습니다"). 판매 종료로 넘어간 뒤에 풀어도 이력의 끝난 시각은 남긴다.
+     *
+     * @return 걸려 있던 조치가 풀렸는지 — 걸려 있지 않았으면 false
+     * @throws IllegalArgumentException 관리자 조치가 아니면
+     */
+    public boolean releaseSalesHold(SalesPauseCause cause, Instant now) {
+        Objects.requireNonNull(cause, "cause");
+        Objects.requireNonNull(now, "now");
+        requireAdminAction(cause);
+        return endActivePause(cause, now);
+    }
+
+    /**
+     * 주최자가 멈춘 판매를 다시 연다. 먼저 지금 시각을 반영한다. 오픈 시각 전이면(판매 대기에서 관리자 조치로 멈췄던 행사) 판매 대기로, 지났으면
+     * 판매 중으로 돌아간다. 주최자가 멈춘 중단이 있으면 그 이력이 이 시각에 끝난다.
+     *
+     * @throws RuleViolationException 판매가 끝난 뒤면({@link EventErrorCode#SALES_ALREADY_CLOSED}), 판매 중단이 아니면
+     *                                ({@link EventErrorCode#SALES_NOT_PAUSED}), 관리자 조치가 걸려 있으면
+     *                                ({@link EventErrorCode#SALES_HELD_BY_ADMIN})
+     */
+    public void resumeSales(EventSchedule schedule, Instant now) {
+        advanceByTime(schedule, now);
+        if (status.isSalesOver()) {
+            throw new RuleViolationException(EventErrorCode.SALES_ALREADY_CLOSED, detail());
+        }
+        if (status != EventStatus.SALES_PAUSED) {
+            throw new RuleViolationException(EventErrorCode.SALES_NOT_PAUSED, detail());
+        }
+        if (!activeSalesHolds().isEmpty()) {
+            throw new RuleViolationException(EventErrorCode.SALES_HELD_BY_ADMIN, detail() + ", 조치: " + activeSalesHolds());
+        }
+        endActivePause(SalesPauseCause.ORGANIZER, now);
+        status = isBookingOpenAt(now) ? EventStatus.ON_SALE : EventStatus.AWAITING_OPEN;
+    }
+
+    /** 지금 주최자의 [재개] 버튼 — 지금 시각이 정하는 상태({@link #statusAt})로 본다. 판매가 끝났으면 버튼이 사라진다. */
+    public SalesResumeOption salesResumeOption(EventSchedule schedule, Instant now) {
+        if (statusAt(schedule, now) != EventStatus.SALES_PAUSED) {
+            return SalesResumeOption.NOT_PAUSED;
+        }
+        return activeSalesHolds().isEmpty() ? SalesResumeOption.AVAILABLE : SalesResumeOption.HELD_BY_ADMIN;
+    }
+
+    /**
      * 위저드 1단계의 필수 항목이 모두 찼는지. 기본 정보는 저장할 때 이미 필수 항목을 확인했으므로 따로 올리는 포스터만 빠질 수 있다.
      * 판매를 시작하기 전에 확인한다(docs/03 "판매 시작 직전에 검증").
      */
@@ -332,6 +449,62 @@ public final class Event {
     /** 저장된 행사 상태. 시간이 지나 바뀌었어야 할 상태일 수 있다 — 지금 시각이 정하는 상태는 {@link #statusAt}. */
     public EventStatus status() {
         return status;
+    }
+
+    /** 판매 중단 이력 — 멈춘 순서대로. 상태가 덮여도 남는다. */
+    public List<SalesPause> salesPauses() {
+        return Collections.unmodifiableList(salesPauses);
+    }
+
+    /** 걸려 있는(아직 풀리지 않은) 관리자 조치. 판매가 끝난 뒤에도 풀기 전까지 남는다. */
+    public Set<SalesPauseCause> activeSalesHolds() {
+        Set<SalesPauseCause> holds = EnumSet.noneOf(SalesPauseCause.class);
+        salesPauses.stream()
+                .filter(SalesPause::isActive)
+                .map(SalesPause::cause)
+                .filter(SalesPauseCause::isAdminAction)
+                .forEach(holds::add);
+        return holds;
+    }
+
+    /** 지금 판매 중단에 걸린 주최자의 중단 — 관객에게 보일 한 줄 사유가 여기 있다. 판매 중단 상태가 아니면 비어 있다. */
+    public Optional<SalesPause> activeOrganizerPause() {
+        if (status != EventStatus.SALES_PAUSED) {
+            return Optional.empty();
+        }
+        return salesPauses.stream()
+                .filter(pause -> pause.cause() == SalesPauseCause.ORGANIZER && pause.isActive())
+                .findFirst();
+    }
+
+    private boolean endActivePause(SalesPauseCause cause, Instant now) {
+        for (int index = 0; index < salesPauses.size(); index++) {
+            SalesPause pause = salesPauses.get(index);
+            if (pause.cause() == cause && pause.isActive()) {
+                salesPauses.set(index, pause.end(now));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void requireAdminAction(SalesPauseCause cause) {
+        if (!cause.isAdminAction()) {
+            throw new IllegalArgumentException("관리자 조치가 아닙니다: " + cause);
+        }
+    }
+
+    private void requireConsistentSalesPauses() {
+        salesPauses.forEach(pause -> Objects.requireNonNull(pause, "salesPause"));
+        if (status == EventStatus.DRAFT && !salesPauses.isEmpty()) {
+            throw new IllegalArgumentException("판매를 시작하기 전 행사에 판매 중단 이력이 있습니다: 행사 " + id);
+        }
+        Set<SalesPauseCause> activeCauses = EnumSet.noneOf(SalesPauseCause.class);
+        for (SalesPause pause : salesPauses) {
+            if (pause.isActive() && !activeCauses.add(pause.cause())) {
+                throw new IllegalArgumentException("같은 까닭의 끝나지 않은 판매 중단이 둘입니다: 행사 " + id + ", " + pause.cause());
+            }
+        }
     }
 
     private boolean isBookingOpenAt(Instant now) {
