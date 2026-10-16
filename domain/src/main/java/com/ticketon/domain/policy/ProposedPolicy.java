@@ -15,11 +15,15 @@ import java.util.Set;
  * #135에서 사용자가 확정하면 docs/99 C에 기록하고, 값을 {@link TimePolicy}·{@link QuantityPolicy}·
  * {@link RecordRetentionPolicy} 중 맞는 곳으로 옮긴 뒤 여기서 지운다. 제안값과 달라지면 관련 테스트도 고친다.
  * <p>
- * 숫자가 아니라 다른 도메인의 종류끼리 잇는 대응표인 제안은 여기 둘 수 없다(이 패키지는 다른 도메인 패키지를 부르지 않는다).
- * 그런 제안은 그 도메인 패키지에 두고 설명 첫머리에 같은 "확인 필요 (#이슈 번호)"를 적은 뒤, 아래 목록에 위치를 남긴다.
+ * 숫자가 아니라 다른 도메인의 종류를 쓰는 제안(종류끼리 잇는 대응표, 도메인 값의 처음 값, 계산 방식)은 여기 둘 수 없다(이 패키지는 다른 도메인
+ * 패키지를 부르지 않는다). 그런 제안은 그 도메인 패키지에 두고 설명 첫머리에 같은 "확인 필요 (#이슈 번호)"를 적은 뒤, 아래 목록에 위치를 남긴다.
  * <ul>
  *   <li>확인 필요 (#13) — 알림 수신 설정의 세 묶음이 각각 어느 알림 종류를 덮는지: {@code domain.notification.NotificationPreference}.
  *       세 묶음의 기본값은 값이라 아래 상수({@code ..._RECEIVED_BY_DEFAULT})로 둔다.</li>
+ *   <li>확인 필요 (#35) — 1인 총 매수의 처음 값(제한 없음): {@code domain.event.TicketsPerPersonLimit#defaultLimit}.</li>
+ *   <li>확인 필요 (#35) — 1회 선택 매수가 전체 좌석에서 차지하는 비율을 보여 줄 때의 반올림(올림한 정수 퍼센트):
+ *       {@code domain.event.SeatsPerSelectionFeedback#percentOfTotal}.</li>
+ *   <li>확인 필요 (#35) — 예매 오픈 시각의 처음 값(비워 두면 판매를 시작하는 순간 연다): {@code domain.event.BookingSettings}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
