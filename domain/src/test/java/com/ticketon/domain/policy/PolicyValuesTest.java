@@ -55,6 +55,24 @@ class PolicyValuesTest {
     }
 
     @Nested
+    @DisplayName("취소 공제율 구간")
+    class CancellationFeeTierTest {
+
+        @Test
+        @DisplayName("관람일 당일(0일 전)부터 시작할 수 있고, 음수 날은 거부한다")
+        void fromDaysBeforeNonNegative() {
+            assertThat(CancellationFeeTier.of(0, 90)).isEqualTo(new CancellationFeeTier(0, Percent.of(90)));
+            assertThatThrownBy(() -> CancellationFeeTier.of(-1, 0)).isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("공제율이 없으면 거부한다")
+        void missingRateRejected() {
+            assertThatThrownBy(() -> new CancellationFeeTier(3, null)).isInstanceOf(NullPointerException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("가로세로 비율")
     class AspectRatioTest {
 

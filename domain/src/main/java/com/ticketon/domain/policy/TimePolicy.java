@@ -3,6 +3,7 @@ package com.ticketon.domain.policy;
 import java.time.Duration;
 import java.time.LocalTime;
 import java.time.Period;
+import java.util.List;
 
 /**
  * docs/99 C "시간" 표의 확정 숫자.
@@ -22,6 +23,32 @@ public final class TimePolicy {
 
     /** 검표 시작 기본값 — 회차형은 회차 시작, 종일형은 운영 시작의 1시간 전부터. 주최자가 조정한다. docs/03·docs/10 "검표 시작 시각" */
     public static final Duration DEFAULT_CHECKIN_OPEN_BEFORE_START = Duration.ofHours(1);
+
+    /**
+     * 관객 취소 공제율 기준표 — 소비자분쟁해결기준(공연업). 관람일 10일 전까지 0%(전액 환급) · 9~7일 전 10% · 6~3일 전 20% · 2~1일 전 30% ·
+     * 당일(시작 전) 90%. 문서 표와 같이 먼 날부터 적었다.
+     * 행사마다 이 표가 처음 값이고, 주최자는 모든 구간에서 공제율이 이 표 이하가 되게만 조정한다.
+     * 99 C 표에는 없지만 고시가 정한 값이라 확정이다(docs/99 A-1). docs/08 "법적 기준", "규정은 기준 고정, 관대한 방향만 조정 가능"
+     */
+    public static final List<CancellationFeeTier> STANDARD_CANCELLATION_FEE_TIERS = List.of(
+            CancellationFeeTier.of(10, 0),
+            CancellationFeeTier.of(7, 10),
+            CancellationFeeTier.of(3, 20),
+            CancellationFeeTier.of(1, 30),
+            CancellationFeeTier.of(0, 90));
+
+    /**
+     * 예매 직후 전액 환급 기간 — 예매 후 24시간 이내에 취소하면, 관람일 3일 전까지라는 조건 아래({@link #FULL_REFUND_AFTER_BOOKING_MINIMUM_DAYS_BEFORE})
+     * 공제 없이 전액 환급. 기준표에 늘 붙는 예외라 주최자가 조정한 규정에도 그대로 붙는다.
+     * 99 C 표에는 없지만 고시가 정한 값이라 확정이다(docs/99 A-1). docs/08 "법적 기준"
+     */
+    public static final Duration FULL_REFUND_PERIOD_AFTER_BOOKING = Duration.ofHours(24);
+
+    /**
+     * 예매 직후 전액 환급의 조건 — 관람일 3일 전까지(관람일까지 남은 달력 일수가 3 이상). 2일 전부터는 예매 직후라도 기준표대로 공제한다.
+     * 99 C 표에는 없지만 고시가 정한 값이라 확정이다(docs/99 A-1). docs/08 "법적 기준"
+     */
+    public static final int FULL_REFUND_AFTER_BOOKING_MINIMUM_DAYS_BEFORE = 3;
 
     /** 회차 시간 수정 잠금 — 주최자 단독 수정은 그 회차 시작 1주일 전까지. 연기는 예외. docs/04 "예매가 열린 뒤(판매 중) 수정 범위", "회차 연기" */
     public static final Period SESSION_TIME_EDIT_LOCK_BEFORE_START = Period.ofWeeks(1);

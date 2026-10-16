@@ -14,7 +14,8 @@
  * 값은 값 객체로 둔다: 시각 단위(분·시간)는 {@link java.time.Duration}, 날짜 단위(일·주·월·년)는 {@link java.time.Period},
  * 영업일은 {@link com.ticketon.domain.policy.BusinessDays}, 비율은 {@link com.ticketon.domain.policy.Percent},
  * "N개 또는 전체의 P%" 기준선은 {@link com.ticketon.domain.policy.QuantityThreshold},
- * 가로세로 비율은 {@link com.ticketon.domain.policy.AspectRatio}, 파일 용량은 {@link com.ticketon.domain.policy.FileSize}. 날짜·시각은 한국 시각 기준이다(common의 KoreanTime).
+ * 가로세로 비율은 {@link com.ticketon.domain.policy.AspectRatio}, 파일 용량은 {@link com.ticketon.domain.policy.FileSize},
+ * 취소 공제율 표의 구간("관람일 N일 전부터 P%")은 {@link com.ticketon.domain.policy.CancellationFeeTier}. 날짜·시각은 한국 시각 기준이다(common의 KoreanTime).
  * <p>
  * 이름이 "기본값"인 상수(예매 종료·검표 시작·1회 선택 매수·묶음권 할인율·수정 요청 기한)는 주최자나 관리자가 바꿀 수 있는 값의
  * 처음 채워 두는 값이다. 바뀐 값은 행사·요청마다 저장하고, 규칙은 저장된 값을 쓴다.
@@ -27,6 +28,7 @@
  *       상수마다 "확인 필요", 제안한 이슈 번호, 그 값을 제안한 이유를 적는다.</li>
  *   <li>#135에서 사용자가 확정하면 docs/99 C에 기록하고, 값을 위 세 클래스 중 맞는 곳으로 옮긴 뒤 '확인 필요' 구역에서 지운다.</li>
  * </ol>
- * 확정된 세 클래스에는 99 C에 있는 값만 둔다.
+ * 확정된 세 클래스에는 99 C에 있는 값만 둔다. 99 C 표에는 없어도 법령 · 고시가 정해 99 A에서 확인한 값(만 14세 가입 기준, 취소 공제율 기준표 등)은
+ * 확정이라 함께 두고, 상수 설명에 그 근거를 적는다.
  */
 package com.ticketon.domain.policy;

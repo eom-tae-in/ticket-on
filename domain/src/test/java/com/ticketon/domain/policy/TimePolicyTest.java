@@ -44,6 +44,24 @@ class TimePolicyTest {
     }
 
     @Test
+    @DisplayName("취소 공제율 기준표는 10일 전까지 0% · 9~7일 10% · 6~3일 20% · 2~1일 30% · 당일 90%다 (docs/08, docs/99 A-1)")
+    void standardCancellationFeeTiers() {
+        assertThat(TimePolicy.STANDARD_CANCELLATION_FEE_TIERS).containsExactly(
+                new CancellationFeeTier(10, Percent.of(0)),
+                new CancellationFeeTier(7, Percent.of(10)),
+                new CancellationFeeTier(3, Percent.of(20)),
+                new CancellationFeeTier(1, Percent.of(30)),
+                new CancellationFeeTier(0, Percent.of(90)));
+    }
+
+    @Test
+    @DisplayName("예매 후 24시간 이내 취소는 관람일 3일 전까지 전액 환급이다 (docs/08, docs/99 A-1)")
+    void fullRefundAfterBooking() {
+        assertThat(TimePolicy.FULL_REFUND_PERIOD_AFTER_BOOKING).isEqualTo(Duration.ofHours(24));
+        assertThat(TimePolicy.FULL_REFUND_AFTER_BOOKING_MINIMUM_DAYS_BEFORE).isEqualTo(3);
+    }
+
+    @Test
     @DisplayName("회차 시간 수정은 그 회차 시작 1주일 전에 잠긴다 (docs/04)")
     void sessionTimeEditLock() {
         Instant sessionStart = koreanInstant(2026, 3, 14, 19, 0);
