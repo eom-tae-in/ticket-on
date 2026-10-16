@@ -162,6 +162,16 @@ public final class ProposedPolicy {
      */
     public static final int EVENT_CATEGORY_NAME_MAXIMUM_LENGTH = 20;
 
+    /**
+     * 확인 필요 (#34, 문서에 없음) — 행사 제목 최대 길이(글자 수). 이보다 긴 제목은 받지 않는다({@code domain.event.EventTitle}).
+     * 글자 수는 앞뒤 공백을 걷고 NFC로 맞춘 뒤 사람이 세는 대로 센다(유니코드 code point).
+     * 100자를 제안한다: 제목은 목록 카드 · 티켓 · 알림 메일 제목과 문자에 행사 이름으로 실리므로(docs/12) 상한이 없으면 아주 긴 글이 화면과
+     * 문자를 넘친다. 한글 제목에 영문 원제나 지역을 덧붙인 긴 제목("뮤지컬 〈…〉 월드투어 - 서울 (… World Tour)", 60자 안팎)도 막지 않게 넉넉히
+     * 둔다 — 카드에서 넘치는 부분은 화면이 줄임표로 자른다. 복제한 행사는 제목 뒤에 " (복사본)"이 붙으므로(docs/04 "행사 복제") 그때 상한을 넘으면
+     * 어떻게 할지는 복제에서 정한다. 문서에는 "제목 — 필수"만 있고 길이가 없다(docs/03 "기본 정보").
+     */
+    public static final int EVENT_TITLE_MAXIMUM_LENGTH = 100;
+
     private ProposedPolicy() {
     }
 }
