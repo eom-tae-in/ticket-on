@@ -66,6 +66,13 @@ final class FakeOrganizerRepository implements OrganizerRepository {
         return findById(id);
     }
 
+    /** 외래 키 확인 잠금도 잠금 기록에 차례만 남기고 지금 저장된 값을 돌려준다. */
+    @Override
+    public Optional<Organizer> findByIdForKeyShare(long id) {
+        rowLockLog.record("주최자 " + id + " FOR KEY SHARE");
+        return findById(id);
+    }
+
     @Override
     public void savePublicProfile(Organizer organizer) {
         throw new UnsupportedOperationException("심사 화면·승인·반려에서는 공개 정보를 저장하지 않습니다");
