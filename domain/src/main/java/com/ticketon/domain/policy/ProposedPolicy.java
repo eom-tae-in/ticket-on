@@ -26,6 +26,8 @@ import java.util.Set;
  *   <li>확인 필요 (#35) — 예매 오픈 시각의 처음 값(비워 두면 판매를 시작하는 순간 연다): {@code domain.event.BookingSettings}.</li>
  *   <li>확인 필요 (#37) — 좌석 번호를 매기는 방식(블록 격자의 행 순번이 "N열", 그 행 안의 순번이 "N번". 얹을 때 정하고 비활성 좌석이 있어도 다시
  *       매기지 않음): {@code domain.event.SeatNumber}.</li>
+ *   <li>확인 필요 (#37) — 비운 블록 이름에 붙이는 "블록 N"의 번호(다른 블록 · 구역이 쓰지 않는 가장 작은 수):
+ *       {@code domain.event.FloorPlan#addBlock}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
