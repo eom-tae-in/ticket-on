@@ -8,6 +8,7 @@ import com.ticketon.common.TokenGenerator;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,7 +27,7 @@ class ClockAndTokenGeneratorBeansTest {
     @Test
     @DisplayName("Clock 빈은 Asia/Seoul 시간대의 실제 시계다")
     void clockIsSeoulSystemClock() {
-        Instant before = Instant.now();
+        Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
         Instant clockNow = clock.instant();
 

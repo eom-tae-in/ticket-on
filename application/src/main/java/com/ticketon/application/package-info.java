@@ -3,7 +3,8 @@
  *
  * <h2>현재 시각은 서비스가 만들어 도메인에 넘긴다</h2>
  * <ul>
- *   <li>서비스는 {@link java.time.Clock}을 생성자로 주입받는다. 빈은 app-api·app-batch가 한국 시각(Asia/Seoul)으로 등록한다.</li>
+ *   <li>서비스는 {@link java.time.Clock}을 생성자로 주입받는다. 빈은 app-api·app-batch가 한국 시각(Asia/Seoul)으로 등록하고,
+ *       DB({@code timestamptz})와 같은 1마이크로초 단위로 끊는다(#207).</li>
  *   <li>유스케이스 하나에서 {@code Instant now = clock.instant()}를 한 번 만들고, 도메인 메서드에 인자로 넘긴다
  *       (예: {@code ticket.cancel(reason, now)}). 한국 날짜가 필요하면 {@code KoreanTime.toDate(now)}로 바꾼다.</li>
  *   <li>{@code Instant.now()}, {@code LocalDate.now()}처럼 시스템 시계를 직접 읽지 않는다. 도메인은 시계를 아예 모른다
