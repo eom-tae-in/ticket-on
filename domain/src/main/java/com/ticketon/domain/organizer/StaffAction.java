@@ -73,7 +73,10 @@ public enum StaffAction {
 
     // ── 표 5줄 (소유자만): 판매를 시작한 행사의 삭제 (팔린 표·초대권이 없었을 때만)
 
-    /** 판매를 시작한 행사의 삭제. 팔린 표·초대권이 없었을 때만 지울 수 있다는 조건은 행사 쪽이 본다. */
+    /**
+     * 판매를 시작한 행사의 삭제. 팔린 표·초대권이 없었을 때만 지울 수 있다는 조건은 행사 쪽이 본다({@code domain.event.Event#requireDeletable}).
+     * 어느 삭제 일로 확인할지도 행사가 정한다({@code domain.event.Event#deleteAction}).
+     */
     DELETE_EVENT_AFTER_SALES_STARTED(true),
 
     // ── 표 6줄 (소유자만): 정산 계좌

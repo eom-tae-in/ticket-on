@@ -28,6 +28,12 @@ import java.util.Set;
  *       매기지 않음): {@code domain.event.SeatNumber}.</li>
  *   <li>확인 필요 (#37) — 비운 블록 이름에 붙이는 "블록 N"의 번호(다른 블록 · 구역이 쓰지 않는 가장 작은 수):
  *       {@code domain.event.FloorPlan#addBlock}.</li>
+ *   <li>확인 필요 (#38) — 판매 대기 행사에 관리자 조치(정지 2단계 · 페이지 내리기)를 걸면 판매 중단으로 둔다(오픈 시각이 와도 열지 않고, 조치가 풀린
+ *       뒤 주최자가 재개하면 시각대로 판매 대기 또는 판매 중): {@code domain.event.Event#holdSales}.</li>
+ *   <li>확인 필요 (#38) — 예매가 열린 뒤 수정 범위 표(docs/04)에 없는 항목(유형 · 카테고리, 상세 안내 · 지도 링크 · 공개용 연락처, 예매 종료 시각
+ *       밖의 예매 설정)은 판매 중에 막아 둔다: {@code domain.event.EventEditTarget}.</li>
+ *   <li>확인 필요 (#38) — 비어 있던 회차 종료 시각은 판매가 끝난 뒤에도 행사가 끝날 때까지 입력받는다(막으면 행사 종료를 판정할 수 없음):
+ *       {@code domain.event.EventEditTarget#MISSING_SESSION_END_TIME}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
@@ -235,6 +241,15 @@ public final class ProposedPolicy {
      * ({@link #BLOCK_NAME_MAXIMUM_LENGTH}, {@link #ZONE_NAME_MAXIMUM_LENGTH})과 같은 한 줄 이름의 상한으로 둔다. 문서에는 입구 이름의 길이가 없다.
      */
     public static final int ENTRANCE_NAME_MAXIMUM_LENGTH = 20;
+
+    /**
+     * 확인 필요 (#38, 문서에 없음) — 판매 중단 사유의 최대 길이(글자 수). 이보다 긴 사유는 받지 않는다({@code domain.event.SalesPauseReason}).
+     * 글자 수는 앞뒤 공백을 걷고 NFC로 맞춘 뒤 사람이 세는 대로 센다(유니코드 code point).
+     * 50자를 제안한다: 문서가 "한 줄 사유"라 하고(docs/04 "판매 중단 — 주최자가 한 줄 사유를 적을 수 있게 하면 문의가 줄어듭니다") 관객이 "판매
+     * 일시 중단" 표시와 함께 한 줄로 읽는 칸이라, 같은 "한 줄"인 운영진 한 줄 소개({@link #STAFF_INTRODUCTION_MAXIMUM_LENGTH})와 같게 둔다.
+     * "출연진 사정으로 잠시 판매를 멈춥니다"(18자) 같은 사유가 넉넉히 들어간다. 상한이 없으면 공개 화면에 아주 긴 글이 실린다.
+     */
+    public static final int SALES_PAUSE_REASON_MAXIMUM_LENGTH = 50;
 
     private ProposedPolicy() {
     }

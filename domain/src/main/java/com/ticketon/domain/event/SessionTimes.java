@@ -133,7 +133,8 @@ public final class SessionTimes {
      * 그 회차의 시간 수정이 잠기는 순간 — 시작({@link #startsAt}) 1주일 전({@link TimePolicy#SESSION_TIME_EDIT_LOCK_BEFORE_START}). 잠금은
      * 회차마다 따로다 — 첫 공연이 시작했어도 아직 열흘 남은 마지막 주 회차는 고칠 수 있다(docs/04 "회차 시간 잠금은 회차마다 따로입니다").
      * <p>
-     * 잠금이 언제 걸리는지(예매가 열린 뒤에만, 연기는 예외)와 잠긴 뒤 막는 일은 회차 시간 수정(#105) · 상태별 수정 범위(#38)가 한다.
+     * 잠금이 언제 걸리는지(예매가 열린 뒤에만, 연기는 예외)는 행사가 판정하고({@link Event#requireSessionTimeEditable}), 잠기기 전 수정의 알림 ·
+     * 공제 면제는 회차 시간 수정(#105)이 한다.
      */
     public Instant timeEditLockedFrom() {
         return KoreanTime.toInstant(KoreanTime.toDateTime(startsAt).minus(TimePolicy.SESSION_TIME_EDIT_LOCK_BEFORE_START));

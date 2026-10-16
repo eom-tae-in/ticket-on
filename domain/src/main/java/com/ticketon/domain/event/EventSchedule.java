@@ -33,9 +33,10 @@ import java.util.Set;
  * <p>
  * 같은 날짜에 시작 시각이 같은 회차 둘, 같은 날짜 둘(종일형)은 받지 않는다. 취소된 회차도 일정에 남아 같은 자리를 차지한다.
  * <p>
- * 언제 무엇을 고칠 수 있는지는 아직 보지 않는다 — 판매 시작 뒤 회차 시간 수정은 그 회차 시작 1주일 전까지이고({@link SessionTimes#isTimeEditLocked})
- * 티켓이 있으면 알림 · 공제 면제가 붙으며(#105), 티켓이 있는 회차는 지울 수 없다(#64). 상태별 수정 범위는 #38이 정한다. 다만 시간 수정이 잠긴
- * 뒤에도 비어 있던 종료 시각을 채우는 것만은 받는다({@link #enterSessionEndTime}).
+ * 언제 무엇을 고칠 수 있는지는 일정이 보지 않고 행사가 판정한다 — 상태별 수정 범위는 {@link Event#requireEditable}, 예매가 열린 뒤 회차 시간
+ * 수정은 그 회차 시작 1주일 전까지({@link Event#requireSessionTimeEditable}). 티켓이 있으면 알림 · 공제 면제가 붙으며(#105), 티켓이 있는 회차는
+ * 지울 수 없다(#64). 다만 시간 수정이 잠긴 뒤에도 비어 있던 종료 시각을 채우는 것만은 받는다({@link #enterSessionEndTime},
+ * {@link EventEditTarget#MISSING_SESSION_END_TIME}).
  * <p>
  * 저장소에서 다시 읽을 때는 {@link #restore}를 쓴다.
  */
@@ -197,7 +198,8 @@ public final class EventSchedule {
     }
 
     /**
-     * 회차형 회차의 시간을 바꾼다(같은 날짜 안에서). 언제까지 바꿀 수 있는지(판매 시작 뒤 1주일 잠금)는 부르는 쪽이 본다.
+     * 회차형 회차의 시간을 바꾼다(같은 날짜 안에서). 언제까지 바꿀 수 있는지(예매가 열린 뒤 1주일 잠금)는 부르는 쪽이 본다
+     * ({@link Event#requireSessionTimeEditable}).
      *
      * @return 바뀌었는지 — 지금과 같으면 false
      * @throws NotFoundException      일정에 없는 회차면({@link EventErrorCode#SESSION_NOT_FOUND})
