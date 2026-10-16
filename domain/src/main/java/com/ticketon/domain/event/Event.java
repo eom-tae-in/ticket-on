@@ -41,8 +41,10 @@ import java.util.Set;
  * 이력으로 남는다({@link #salesPauses}).
  * <p>
  * <b>언제 무엇을 고칠 수 있는지</b>는 상태가 정한다 — 상태별 수정 범위 표({@link EventEditScope}, {@link EventEditTarget})로 판정하고
- * ({@link #requireEditable}), 회차 시간은 그 회차 시작 1주일 전 잠금까지 본다({@link #requireSessionTimeEditable}). 이 판정은 저장된 상태로
- * 하므로, 시간이 움직이는 상태의 행사는 먼저 {@link #advanceByTime}으로 지금 시각을 반영한다. 각 수정 메서드(기본 정보 · 공개 수준 · 예매 설정 ·
+ * ({@link #requireEditable}), 회차 시간은 그 회차 시작 1주일 전 잠금까지 본다({@link #requireSessionTimeEditable}). '예매가 열린 뒤'의 범위는
+ * 상태 이름이 아니라 <b>예매가 한 번이라도 열렸는지</b>로 정한다({@link #hasBookingOpened}) — 판매 대기에서 관리자 조치로 멈춘 판매 중단은 예매가
+ * 열린 적이 없어 판매 대기와 같다. 이 판정은 저장된 상태로 하므로, 시간이 움직이는 상태의 행사는 먼저 {@link #advanceByTime}으로 지금 시각을
+ * 반영한다. 각 수정 메서드(기본 정보 · 공개 수준 · 예매 설정 ·
  * 취소 규정)에 이 판정을 거는 일과 제목 · 소개 · 포스터의 변경 이력은 수정 유스케이스가 한다(#65, #46).
  * <p>
  * <b>삭제</b>는 상태가 아니라 팔린 표나 초대권이 있었는지로 정한다({@link #requireDeletable}). 누가 지울 수 있는지는 판매를 시작했는지로 갈린다
@@ -61,11 +63,12 @@ public final class Event {
     private BookingSettings bookingSettings;
     private CancellationPolicy cancellationPolicy;
     private EventStatus status;
+    private Instant bookingOpenedAt;
     private final List<SalesPause> salesPauses;
 
     private Event(Long id, long organizerId, EventPublicAddress publicAddress, EventBasicInformation basicInformation,
             EventPoster poster, EventVisibilitySetting visibility, BookingSettings bookingSettings,
-            CancellationPolicy cancellationPolicy, EventStatus status, List<SalesPause> salesPauses) {
+            CancellationPolicy cancellationPolicy, EventStatus status, Instant bookingOpenedAt, List<SalesPause> salesPauses) {
         if (organizerId < 1) {
             throw new IllegalArgumentException("주최자 id는 1 이상이어야 합니다: " + organizerId);
         }
@@ -78,7 +81,9 @@ public final class Event {
         this.bookingSettings = Objects.requireNonNull(bookingSettings, "bookingSettings");
         this.cancellationPolicy = Objects.requireNonNull(cancellationPolicy, "cancellationPolicy");
         this.status = Objects.requireNonNull(status, "status");
+        this.bookingOpenedAt = bookingOpenedAt;
         this.salesPauses = new ArrayList<>(salesPauses);
+        requireConsistentBookingOpening();
         requireConsistentSalesPauses();
     }
 
@@ -92,27 +97,29 @@ public final class Event {
      */
     public static Event create(long organizerId, EventPublicAddress publicAddress, EventBasicInformation basicInformation) {
         return new Event(null, organizerId, publicAddress, basicInformation, null, EventVisibilitySetting.publicByDefault(),
-                BookingSettings.defaults(), CancellationPolicy.standard(), EventStatus.DRAFT, List.of());
+                BookingSettings.defaults(), CancellationPolicy.standard(), EventStatus.DRAFT, null, List.of());
     }
 
     /**
      * 저장소에서 읽은 값으로 행사를 되살린다.
      *
      * @param poster      포스터. 아직 올리지 않았으면 null
-     * @param status      저장된 행사 상태 — 시간이 지나 바뀌었어야 할 상태라도 그대로 되살린다. 지금 시각은 {@link #advanceByTime}이 반영한다
-     * @param salesPauses 판매 중단 이력 — 멈춘 순서대로
-     * @throws IllegalArgumentException 작성 중인데 판매 중단 이력이 있거나, 같은 까닭의 끝나지 않은 중단이 둘이면
+     * @param status          저장된 행사 상태 — 시간이 지나 바뀌었어야 할 상태라도 그대로 되살린다. 지금 시각은 {@link #advanceByTime}이 반영한다
+     * @param bookingOpenedAt 처음 판매 중이 된 시각({@link #bookingOpenedAt}). 예매가 열린 적이 없으면 null
+     * @param salesPauses     판매 중단 이력 — 멈춘 순서대로
+     * @throws IllegalArgumentException 작성 중 · 판매 대기인데 예매가 열린 시각이 있거나 판매 중인데 없으면, 작성 중인데 판매 중단 이력이 있거나,
+     *                                  같은 까닭의 끝나지 않은 중단이 둘이면
      */
     public static Event restore(long id, long organizerId, EventPublicAddress publicAddress,
             EventBasicInformation basicInformation, EventPoster poster, EventVisibilitySetting visibility,
-            BookingSettings bookingSettings, CancellationPolicy cancellationPolicy, EventStatus status,
+            BookingSettings bookingSettings, CancellationPolicy cancellationPolicy, EventStatus status, Instant bookingOpenedAt,
             List<SalesPause> salesPauses) {
         if (id < 1) {
             throw new IllegalArgumentException("행사 id는 1 이상이어야 합니다: " + id);
         }
         Objects.requireNonNull(salesPauses, "salesPauses");
         return new Event(id, organizerId, publicAddress, basicInformation, poster, visibility, bookingSettings,
-                cancellationPolicy, status, salesPauses);
+                cancellationPolicy, status, bookingOpenedAt, salesPauses);
     }
 
     /**
@@ -258,7 +265,7 @@ public final class Event {
         if (advanced == status) {
             return false;
         }
-        status = advanced;
+        moveTo(advanced, now);
         return true;
     }
 
@@ -332,7 +339,7 @@ public final class Event {
      *   <li>확인 필요 (#38) — 판매 대기도 판매 중단이 된다. 정지 2단계의 대상은 "진행 중인 행사"(판매 대기 · 판매 중 · 판매 종료, docs/13)이고
      *       조치 중에 오픈 시각이 와서 판매가 열리면 안 되므로 오픈 전부터 멈춘다. 조치가 풀린 뒤 주최자가 재개하면 시각대로 판매 대기 또는 판매
      *       중이 된다. 페이지 내리기는 문서가 "판매 중이었다면 판매 중단"이라 하지만, 다시 올린 뒤 판매 재개는 주최자가 한다는 원칙과 맞춰 같게
-     *       둔다.</li>
+     *       둔다. 이렇게 멈춘 동안은 예매가 열린 적이 없어 수정 범위가 판매 대기와 같다({@link #editScope}).</li>
      *   <li>작성 중이거나 판매가 끝난 뒤(판매 종료 · 지난 행사)에는 멈출 판매가 없어 아무것도 하지 않는다.</li>
      * </ul>
      *
@@ -375,8 +382,8 @@ public final class Event {
     }
 
     /**
-     * 주최자가 멈춘 판매를 다시 연다. 먼저 지금 시각을 반영한다. 오픈 시각 전이면(판매 대기에서 관리자 조치로 멈췄던 행사) 판매 대기로, 지났으면
-     * 판매 중으로 돌아간다. 주최자가 멈춘 중단이 있으면 그 이력이 이 시각에 끝난다.
+     * 주최자가 멈춘 판매를 다시 연다. 먼저 지금 시각을 반영한다. 예매가 열린 적이 없고 오픈 시각 전이면(판매 대기에서 관리자 조치로 멈췄던 행사)
+     * 판매 대기로, 아니면 판매 중으로 돌아간다. 주최자가 멈춘 중단이 있으면 그 이력이 이 시각에 끝난다.
      *
      * @throws RuleViolationException 판매가 끝난 뒤면({@link EventErrorCode#SALES_ALREADY_CLOSED}), 판매 중단이 아니면
      *                                ({@link EventErrorCode#SALES_NOT_PAUSED}), 관리자 조치가 걸려 있으면
@@ -394,7 +401,7 @@ public final class Event {
             throw new RuleViolationException(EventErrorCode.SALES_HELD_BY_ADMIN, detail() + ", 조치: " + activeSalesHolds());
         }
         endActivePause(SalesPauseCause.ORGANIZER, now);
-        status = isBookingOpenAt(now) ? EventStatus.ON_SALE : EventStatus.AWAITING_OPEN;
+        moveTo(hasBookingOpened() || isBookingOpenAt(now) ? EventStatus.ON_SALE : EventStatus.AWAITING_OPEN, now);
     }
 
     /** 지금 주최자의 [재개] 버튼 — 지금 시각이 정하는 상태({@link #statusAt})로 본다. 판매가 끝났으면 버튼이 사라진다. */
@@ -406,14 +413,14 @@ public final class Event {
     }
 
     /**
-     * 지금 저장된 상태에서 그 항목을 고칠 수 있는지 — 상태별 수정 범위 표로 판정한다({@link EventEditScope#availabilityOf}).
+     * 지금 저장된 상태에서 그 항목을 고칠 수 있는지 — 상태별 수정 범위 표로 판정한다({@link #editScope}, {@link EventEditScope#availabilityOf}).
      * <p>
      * 저장된 상태로 판정한다. 시간이 움직이는 상태({@link EventStatus#movesWithTime})의 행사는 판정 전에 {@link #advanceByTime}으로 지금 시각을
      * 반영한다 — 그런 행사는 판매를 시작할 때 회차가 있었으므로 늘 일정이 있다. 일정이 아직 없을 수 있는 작성 중 행사는 시간이 움직이지 않아 그대로
      * 부른다.
      */
     public EventEditAvailability editAvailability(EventEditTarget target) {
-        return status.editScope().availabilityOf(target);
+        return editScope().availabilityOf(target);
     }
 
     /**
@@ -435,14 +442,14 @@ public final class Event {
         if (availability == EventEditAvailability.NEEDS_ADMIN_APPROVAL) {
             throw new RuleViolationException(EventErrorCode.VENUE_CHANGE_NEEDS_ADMIN_APPROVAL, detail);
         }
-        throw new RuleViolationException(lockedErrorCode(status.editScope()), detail);
+        throw new RuleViolationException(lockedErrorCode(editScope()), detail);
     }
 
     /**
      * 그 회차의 시간(종일형은 그날의 운영 시간)을 주최자가 혼자 지금 바꿀 수 있는지 확인한다. 상태별 수정 범위({@link EventEditTarget#SESSION_DATE_TIME})를
-     * 보고, 예매가 열린 뒤(판매 중 · 판매 중단)면 그 회차 시작 1주일 전부터 잠근다({@link SessionTimes#isTimeEditLocked}). 잠금은 회차마다 따로다 —
+     * 보고, 예매가 열린 뒤({@link #hasBookingOpened})면 그 회차 시작 1주일 전부터 잠근다({@link SessionTimes#isTimeEditLocked}). 잠금은 회차마다 따로다 —
      * 8회차 공연이 이미 시작했어도 아직 열흘 남은 마지막 주 회차는 바꿀 수 있다(docs/04 "회차 시간 잠금은 회차마다 따로입니다"). 판매 대기는 예매가
-     * 없어 잠그지 않는다. 잠긴 뒤에는 연기 절차를 쓰고(#106), 비어 있던 종료 시각을 채우는 것만은 받는다({@link EventEditTarget#MISSING_SESSION_END_TIME}).
+     * 없어 잠그지 않는다 — 판매 대기에서 관리자 조치로 멈춰 예매가 열린 적이 없는 판매 중단도 같다. 잠긴 뒤에는 연기 절차를 쓰고(#106), 비어 있던 종료 시각을 채우는 것만은 받는다({@link EventEditTarget#MISSING_SESSION_END_TIME}).
      * <p>
      * {@link #requireEditable}처럼 저장된 상태로 판정한다. 티켓이 있는 회차의 알림 · 공제 면제는 회차 시간 수정(#105)이 한다.
      *
@@ -454,7 +461,7 @@ public final class Event {
         requireOwnSchedule(schedule);
         Objects.requireNonNull(now, "now");
         requireEditable(EventEditTarget.SESSION_DATE_TIME);
-        if (status.editScope() == EventEditScope.AFTER_BOOKING_OPENED
+        if (editScope() == EventEditScope.AFTER_BOOKING_OPENED
                 && schedule.timesOf(schedule.session(sessionId)).isTimeEditLocked(now)) {
             throw new RuleViolationException(EventErrorCode.SESSION_TIME_EDIT_LOCKED, detail() + ", 회차 " + sessionId);
         }
@@ -482,6 +489,28 @@ public final class Event {
         if (everHadTicket) {
             throw new RuleViolationException(EventErrorCode.EVENT_HAD_TICKETS, detail());
         }
+    }
+
+    /**
+     * 지금 저장된 상태의 수정 범위 — 상태와 예매가 한 번이라도 열렸는지로 정한다({@link EventEditScope#of}). 판매 중단은 예매가 열린 뒤면
+     * '예매가 열린 뒤' 범위, 판매 대기에서 관리자 조치로 멈춰 예매가 열린 적이 없으면 판매 대기와 같은 범위다.
+     */
+    public EventEditScope editScope() {
+        return EventEditScope.of(status, hasBookingOpened());
+    }
+
+    /**
+     * 예매가 한 번이라도 열렸는지 — 판매 중이 된 적이 있는지. 예매는 판매 중일 때만 들어오므로, 판매 대기에서 관리자 조치로 멈춘 행사는 멈춘 동안
+     * 오픈 시각이 지나도 예매가 열린 적이 없다. docs/04 "판매 대기(판매 시작을 눌렀지만 오픈 전)는 예매가 없어 전부 고칠 수 있습니다"가 그 행사에도
+     * 그대로 맞으므로, '예매가 열린 뒤' 수정 범위와 회차 시간 1주일 잠금은 상태 이름이 아니라 이것으로 정한다.
+     */
+    public boolean hasBookingOpened() {
+        return bookingOpenedAt != null;
+    }
+
+    /** 처음 판매 중이 된 시각 — 그 전환을 상태에 반영한 시각이다. 예매가 열린 적이 없으면 비어 있다. */
+    public Optional<Instant> bookingOpenedAt() {
+        return Optional.ofNullable(bookingOpenedAt);
     }
 
     /**
@@ -585,6 +614,23 @@ public final class Event {
     private static void requireAdminAction(SalesPauseCause cause) {
         if (!cause.isAdminAction()) {
             throw new IllegalArgumentException("관리자 조치가 아닙니다: " + cause);
+        }
+    }
+
+    private void moveTo(EventStatus next, Instant now) {
+        status = next;
+        if (next == EventStatus.ON_SALE && bookingOpenedAt == null) {
+            bookingOpenedAt = now;
+        }
+    }
+
+    private void requireConsistentBookingOpening() {
+        boolean beforeSalesStartedOrOpened = status == EventStatus.DRAFT || status == EventStatus.AWAITING_OPEN;
+        if (beforeSalesStartedOrOpened && bookingOpenedAt != null) {
+            throw new IllegalArgumentException("예매가 열리기 전 상태인데 예매가 열린 시각이 있습니다: 행사 " + id + ", " + status);
+        }
+        if (status == EventStatus.ON_SALE && bookingOpenedAt == null) {
+            throw new IllegalArgumentException("판매 중인데 예매가 열린 시각이 없습니다: 행사 " + id);
         }
     }
 

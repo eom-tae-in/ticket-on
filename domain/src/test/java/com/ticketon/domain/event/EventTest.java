@@ -46,6 +46,7 @@ class EventTest {
 
             assertThat(event.id()).isEmpty();
             assertThat(event.status()).isEqualTo(EventStatus.DRAFT);
+            assertThat(event.hasBookingOpened()).isFalse();
             assertThat(event.organizerId()).isEqualTo(TWELVE_MONTHS_ORGANIZER);
             assertThat(event.publicAddress()).isEqualTo(ADDRESS);
             assertThat(event.basicInformation()).isEqualTo(twelveMonthsSpringPlay());
@@ -70,10 +71,11 @@ class EventTest {
 
             Event event = Event.restore(7L, TWELVE_MONTHS_ORGANIZER, ADDRESS, twelveMonthsSpringPlay(),
                     new EventPoster("poster-key.jpg"), protectedSetting, adjustedBookingSettings(),
-                    FULL_REFUND_UNTIL_THREE_DAYS_BEFORE, EventStatus.ON_SALE, List.of());
+                    FULL_REFUND_UNTIL_THREE_DAYS_BEFORE, EventStatus.ON_SALE, Instant.parse("2026-03-01T05:00:00Z"), List.of());
 
             assertThat(event.id()).hasValue(7L);
             assertThat(event.status()).isEqualTo(EventStatus.ON_SALE);
+            assertThat(event.bookingOpenedAt()).contains(Instant.parse("2026-03-01T05:00:00Z"));
             assertThat(event.poster()).contains(new EventPoster("poster-key.jpg"));
             assertThat(event.visibility()).isEqualTo(protectedSetting);
             assertThat(event.bookingSettings()).isEqualTo(adjustedBookingSettings());
@@ -86,7 +88,7 @@ class EventTest {
             assertThatIllegalArgumentException().isThrownBy(() -> Event.create(0L, ADDRESS, twelveMonthsSpringPlay()));
             assertThatIllegalArgumentException().isThrownBy(() -> Event.restore(0L, TWELVE_MONTHS_ORGANIZER, ADDRESS,
                     twelveMonthsSpringPlay(), null, EventVisibilitySetting.publicByDefault(), BookingSettings.defaults(),
-                    CancellationPolicy.standard(), EventStatus.DRAFT, List.of()));
+                    CancellationPolicy.standard(), EventStatus.DRAFT, null, List.of()));
         }
     }
 

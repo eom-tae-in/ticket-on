@@ -11,7 +11,7 @@ import static com.ticketon.domain.event.EventEditAvailability.NEEDS_ADMIN_APPROV
  * docs/04 "예매가 열린 뒤(판매 중) 수정 범위" 표의 줄을 <b>한 항목씩 그대로</b> 옮겼다(입구 목록 · 검표 계정은 고치는 곳이 달라 둘로 나눴다). 항목마다
  * 세 가지가 정해져 있다.
  * <ol>
- *   <li><b>예매가 열린 뒤</b>(판매 중 · 판매 중단) 고칠 수 있는지 — 표의 오른쪽 칸.</li>
+ *   <li><b>예매가 열린 뒤</b>(판매 중, 예매가 열린 뒤의 판매 중단) 고칠 수 있는지 — 표의 오른쪽 칸.</li>
  *   <li><b>판매 대기에 초대권이 걸리면</b> 오픈 전부터 규칙이 붙는지 — 그 좌석의 이동 · 삭제와 판매 제외 해제, 그 회차 · 구역 삭제, 회차 시간 변경
  *       시 알림, 관계자 확보 수 하한, 장소 변경 승인(docs/04 "판매 대기에 초대권을 발권했으면", docs/09). 정원 · 가격 · 취소 규정을 포함한 나머지는
  *       계속 자유다.</li>
@@ -115,7 +115,7 @@ public enum EventEditTarget {
         this.editableAfterSalesClosed = editableAfterSalesClosed;
     }
 
-    /** 예매가 열린 뒤(판매 중 · 판매 중단) 고칠 수 있는지 — docs/04 표의 오른쪽 칸. */
+    /** 예매가 열린 뒤(판매 중, 예매가 열린 뒤의 판매 중단) 고칠 수 있는지 — docs/04 표의 오른쪽 칸. */
     public EventEditAvailability afterBookingOpened() {
         return afterBookingOpened;
     }

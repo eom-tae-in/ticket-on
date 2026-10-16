@@ -12,12 +12,14 @@ import static com.ticketon.domain.event.EventStatusFixtures.EVENT_ID;
 import static com.ticketon.domain.event.EventStatusFixtures.MARCH_14;
 import static com.ticketon.domain.event.EventStatusFixtures.MARCH_21;
 import static com.ticketon.domain.event.EventStatusFixtures.MARCH_22;
+import static com.ticketon.domain.event.EventStatusFixtures.OPENS_AT;
 import static com.ticketon.domain.event.EventStatusFixtures.STAFF_ACCOUNT_ID;
 import static com.ticketon.domain.event.EventStatusFixtures.cancelledSinglePerformance;
 import static com.ticketon.domain.event.EventStatusFixtures.consistentMomentFor;
 import static com.ticketon.domain.event.EventStatusFixtures.eightPerformances;
 import static com.ticketon.domain.event.EventStatusFixtures.korean;
 import static com.ticketon.domain.event.EventStatusFixtures.lateSummerFestival;
+import static com.ticketon.domain.event.EventStatusFixtures.opensAtMarchFirst;
 import static com.ticketon.domain.event.EventStatusFixtures.singlePerformance;
 import static com.ticketon.domain.event.EventStatusFixtures.singlePerformanceWithoutEndTime;
 import static com.ticketon.domain.event.EventStatusFixtures.springPlayIn;
@@ -516,6 +518,41 @@ class EventTransitionTest {
             assertThat(event.reflectSessionCancellation(empty, BEFORE_OPEN)).isFalse();
 
             assertThat(event.status()).isEqualTo(EventStatus.AWAITING_OPEN);
+        }
+    }
+
+    @Nested
+    @DisplayName("예매가 열린 시각 — 처음 판매 중이 된 때")
+    class BookingOpened {
+
+        @Test
+        @DisplayName("오픈 시각을 비우고 판매를 시작하면 그 순간 예매가 열린다")
+        void opensAtSalesStart() {
+            Event event = springPlayIn(EventStatus.DRAFT, withOpensAt(null));
+
+            event.startSales(singlePerformance(), false, BEFORE_OPEN);
+
+            assertThat(event.bookingOpenedAt()).contains(BEFORE_OPEN);
+        }
+
+        @Test
+        @DisplayName("판매 대기가 오픈 시각에 판매 중이 되면 그때 예매가 열리고, 판매 대기 동안은 열린 적이 없다")
+        void opensWhenAwaitingBecomesOnSale() {
+            Event event = springPlayIn(EventStatus.AWAITING_OPEN);
+            assertThat(event.hasBookingOpened()).isFalse();
+
+            event.advanceByTime(singlePerformance(), OPENS_AT);
+
+            assertThat(event.bookingOpenedAt()).contains(OPENS_AT);
+        }
+
+        @Test
+        @DisplayName("작성 중 · 판매 대기에는 예매가 열린 시각이 없고, 판매 중에는 반드시 있다")
+        void restoreConsistency() {
+            assertThatIllegalArgumentException().isThrownBy(
+                    () -> springPlayIn(EventStatus.AWAITING_OPEN, opensAtMarchFirst(), List.of(), OPENS_AT));
+            assertThatIllegalArgumentException().isThrownBy(
+                    () -> springPlayIn(EventStatus.ON_SALE, opensAtMarchFirst(), List.of(), null));
         }
     }
 }

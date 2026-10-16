@@ -5,11 +5,16 @@ import static com.ticketon.domain.event.EventEditAvailability.ALLOWED_WITH_RULES
 import static com.ticketon.domain.event.EventEditAvailability.LOCKED;
 import static com.ticketon.domain.event.EventEditAvailability.NEEDS_ADMIN_APPROVAL;
 import static com.ticketon.domain.event.EventFixtures.assertRejected;
+import static com.ticketon.domain.event.EventStatusFixtures.ADMIN_ACCOUNT_ID;
+import static com.ticketon.domain.event.EventStatusFixtures.BEFORE_OPEN;
+import static com.ticketon.domain.event.EventStatusFixtures.DURING_SALES;
 import static com.ticketon.domain.event.EventStatusFixtures.MARCH_14;
 import static com.ticketon.domain.event.EventStatusFixtures.MARCH_15;
 import static com.ticketon.domain.event.EventStatusFixtures.eightPerformances;
 import static com.ticketon.domain.event.EventStatusFixtures.korean;
+import static com.ticketon.domain.event.EventStatusFixtures.STAFF_ACCOUNT_ID;
 import static com.ticketon.domain.event.EventStatusFixtures.singlePerformance;
+import static com.ticketon.domain.event.EventStatusFixtures.springPlayHeldBeforeOpening;
 import static com.ticketon.domain.event.EventStatusFixtures.springPlayIn;
 import static com.ticketon.domain.event.EventStatusFixtures.withOpensAt;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -183,6 +188,79 @@ class EventEditScopeTest {
         @DisplayName("항목 규칙이 붙는 항목은 막지 않고 규칙이 붙는다고 알려 준다 — 판매 중 도면")
         void ruledTargetIsNotRejected() {
             assertThat(springPlayIn(EventStatus.ON_SALE).requireEditable(EventEditTarget.FLOOR_PLAN)).isEqualTo(ALLOWED_WITH_RULES);
+        }
+    }
+
+    @Nested
+    @DisplayName("예매가 열린 적 없는 판매 중단 — 판매 대기에서 관리자 조치로 멈춘 행사는 판매 대기와 같다 (docs/04 \"판매 대기는 예매가 없어 전부 고칠 수 있습니다\")")
+    class PausedBeforeBookingOpened {
+
+        private static final long LAST_SESSION = 108L;
+        private static final Instant SIX_DAYS_BEFORE_LAST_SESSION = korean(LocalDate.of(2026, 3, 16), 19, 0);
+
+        @ParameterizedTest(name = "{0}")
+        @EnumSource(EventEditTarget.class)
+        @DisplayName("수정 범위가 판매 대기와 같다 — 초대권이 걸린 것에만 규칙이 붙는다")
+        void sameScopeAsAwaiting(EventEditTarget target) {
+            EventEditAvailability expected = LOCKED_BY_INVITATIONS.contains(target) ? ALLOWED_WITH_RULES : ALLOWED;
+
+            assertThat(springPlayHeldBeforeOpening().editAvailability(target)).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("판매 대기 → 관리자 조치 → 판매 중단이어도 취소 규정과 회차 시간을 고칠 수 있다 — 멈춘 동안 오픈 시각이 지나도 그대로")
+        void cancellationPolicyAndSessionTimeStayEditable() {
+            Event event = springPlayIn(EventStatus.AWAITING_OPEN);
+            EventSchedule schedule = eightPerformances(Set.of());
+            event.holdSales(SalesPauseCause.ADMIN_SUSPENSION, ADMIN_ACCOUNT_ID, schedule, BEFORE_OPEN);
+            event.advanceByTime(schedule, korean(LocalDate.of(2026, 3, 10), 12, 0));
+
+            assertThat(event.status()).isEqualTo(EventStatus.SALES_PAUSED);
+            assertThat(event.hasBookingOpened()).isFalse();
+            assertThat(event.editScope()).isEqualTo(EventEditScope.EVERYTHING_EXCEPT_INVITED);
+            assertThat(event.requireEditable(EventEditTarget.CANCELLATION_POLICY)).isEqualTo(ALLOWED);
+            assertThatNoException().isThrownBy(
+                    () -> event.requireSessionTimeEditable(schedule, LAST_SESSION, SIX_DAYS_BEFORE_LAST_SESSION));
+        }
+
+        @Test
+        @DisplayName("오픈 시각 뒤에 멈춘 판매 중단은 예매가 열린 뒤라 그대로 잠긴다")
+        void pausedAfterOpeningStaysLocked() {
+            Event event = springPlayIn(EventStatus.AWAITING_OPEN);
+            EventSchedule schedule = eightPerformances(Set.of());
+
+            event.holdSales(SalesPauseCause.ADMIN_SUSPENSION, ADMIN_ACCOUNT_ID, schedule, DURING_SALES);
+
+            assertThat(event.status()).isEqualTo(EventStatus.SALES_PAUSED);
+            assertThat(event.bookingOpenedAt()).contains(DURING_SALES);
+            assertThat(event.editScope()).isEqualTo(EventEditScope.AFTER_BOOKING_OPENED);
+            assertRejected(() -> event.requireEditable(EventEditTarget.CANCELLATION_POLICY), EventErrorCode.EDIT_LOCKED_AFTER_BOOKING_OPENED);
+            assertRejected(() -> event.requireSessionTimeEditable(schedule, LAST_SESSION, SIX_DAYS_BEFORE_LAST_SESSION),
+                    EventErrorCode.SESSION_TIME_EDIT_LOCKED);
+        }
+
+        @Test
+        @DisplayName("주최자가 멈춘 판매 중단은 판매 중에서만 멈추므로 예매가 열린 뒤다")
+        void organizerPauseIsAfterOpening() {
+            Event event = springPlayIn(EventStatus.ON_SALE);
+
+            event.pauseSales(STAFF_ACCOUNT_ID, null, singlePerformance(), DURING_SALES);
+
+            assertRejected(() -> event.requireEditable(EventEditTarget.CANCELLATION_POLICY), EventErrorCode.EDIT_LOCKED_AFTER_BOOKING_OPENED);
+        }
+
+        @Test
+        @DisplayName("조치가 풀려 오픈 시각 뒤에 재개하면 그때 예매가 열리고, 그 뒤로는 잠긴다")
+        void resumedAfterOpeningLocks() {
+            Event event = springPlayHeldBeforeOpening();
+            Instant resumedAt = korean(LocalDate.of(2026, 3, 10), 12, 0);
+            event.releaseSalesHold(SalesPauseCause.ADMIN_SUSPENSION, resumedAt);
+
+            event.resumeSales(singlePerformance(), resumedAt);
+
+            assertThat(event.status()).isEqualTo(EventStatus.ON_SALE);
+            assertThat(event.bookingOpenedAt()).contains(resumedAt);
+            assertRejected(() -> event.requireEditable(EventEditTarget.CANCELLATION_POLICY), EventErrorCode.EDIT_LOCKED_AFTER_BOOKING_OPENED);
         }
     }
 

@@ -102,10 +102,24 @@ final class EventStatusFixtures {
         return springPlayIn(status, bookingSettings, salesPauses);
     }
 
-    /** 그 상태 · 예매 설정 · 판매 중단 이력으로 저장돼 있던 봄 정기공연. */
+    /** 그 상태 · 예매 설정 · 판매 중단 이력으로 저장돼 있던 봄 정기공연. 작성 중 · 판매 대기가 아니면 3/1 14:00 오픈에 예매가 열렸던 것이다. */
     static Event springPlayIn(EventStatus status, BookingSettings bookingSettings, List<SalesPause> salesPauses) {
+        boolean beforeOpening = status == EventStatus.DRAFT || status == EventStatus.AWAITING_OPEN;
+        return springPlayIn(status, bookingSettings, salesPauses, beforeOpening ? null : OPENS_AT);
+    }
+
+    /** 그 상태 · 예매 설정 · 판매 중단 이력 · 예매가 열린 시각으로 저장돼 있던 봄 정기공연. */
+    static Event springPlayIn(EventStatus status, BookingSettings bookingSettings, List<SalesPause> salesPauses,
+            Instant bookingOpenedAt) {
         return Event.restore(EVENT_ID, TWELVE_MONTHS_ORGANIZER, ADDRESS, twelveMonthsSpringPlay(), new EventPoster("poster-key.jpg"),
-                EventVisibilitySetting.publicByDefault(), bookingSettings, CancellationPolicy.standard(), status, salesPauses);
+                EventVisibilitySetting.publicByDefault(), bookingSettings, CancellationPolicy.standard(), status, bookingOpenedAt,
+                salesPauses);
+    }
+
+    /** 판매 대기에서 관리자 조치(정지 2단계)로 2/20 12:00에 멈춰 예매가 한 번도 열리지 않은 판매 중단 — 3/1 14:00 오픈. */
+    static Event springPlayHeldBeforeOpening() {
+        return springPlayIn(EventStatus.SALES_PAUSED, opensAtMarchFirst(),
+                List.of(new SalesPause(SalesPauseCause.ADMIN_SUSPENSION, ADMIN_ACCOUNT_ID, null, BEFORE_OPEN, null)), null);
     }
 
     /** 공연 하나 — 3/14 19:00~21:00, 회차 id 101. */
