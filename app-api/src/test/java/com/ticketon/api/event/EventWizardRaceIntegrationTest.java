@@ -160,7 +160,10 @@ class EventWizardRaceIntegrationTest {
                 () -> StaffAccountLocks.lockInIdOrder(staffAccountRepository, junghoon, planner),
                 () -> removeOperatorUseCase.remove(new RemoveOperatorCommand(acting(junghoon), planner)),
                 () -> saveTitle(planner, ENCORE_TITLE),
-                this::assertEventRowFree);
+                () -> {
+                    assertOrganizerRowUnlocked();
+                    assertEventRowFree();
+                });
 
         assertDeniedWith(contender, OrganizerErrorCode.NOT_ORGANIZER_STAFF);
         assertThat(eventTitle()).isEqualTo(SPRING_PLAY_TITLE);
@@ -174,8 +177,7 @@ class EventWizardRaceIntegrationTest {
                 () -> StaffAccountLocks.lockInIdOrder(staffAccountRepository, junghoon, planner),
                 () -> removeOperatorUseCase.remove(new RemoveOperatorCommand(acting(junghoon), planner)),
                 () -> createEventUseCase.create(new CreateEventCommand(acting(planner), items(ENCORE_TITLE))),
-                () -> assertThatNoException().isThrownBy(() -> jdbcTemplate.queryForObject(
-                        "SELECT id FROM organizer WHERE id = ? FOR KEY SHARE NOWAIT", Long.class, twelveMonths)));
+                this::assertOrganizerRowUnlocked);
 
         assertDeniedWith(contender, OrganizerErrorCode.NOT_ORGANIZER_STAFF);
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM event WHERE organizer_id = ?", Long.class, twelveMonths))
@@ -221,6 +223,15 @@ class EventWizardRaceIntegrationTest {
     private void assertEventRowFree() {
         assertThatNoException().isThrownBy(() -> jdbcTemplate.queryForObject(
                 "SELECT id FROM event WHERE id = ? FOR UPDATE NOWAIT", Long.class, springPlay));
+    }
+
+    /**
+     * 맞서는 흐름이 계정 줄에서 기다리는 동안 주최자 줄에는 아무 잠금도 없다 — 외래 키 확인 잠금(FOR KEY SHARE)끼리는 부딪히지 않으므로 FOR UPDATE로
+     * 잡아 본다. 맞서는 흐름이 계정 줄보다 주최자 줄을 먼저 잡았다면(잠금 순서를 거꾸로) 여기서 잠금을 얻지 못한다.
+     */
+    private void assertOrganizerRowUnlocked() {
+        assertThatNoException().isThrownBy(() -> jdbcTemplate.queryForObject(
+                "SELECT id FROM organizer WHERE id = ? FOR UPDATE NOWAIT", Long.class, twelveMonths));
     }
 
     /** 맞서는 흐름이 잠근 뒤 다시 확인한 권한에서 그 오류로 막혔다. */
