@@ -8,7 +8,7 @@ package com.ticketon.domain.event;
  * 8회차 공연에서 3회차는 끝났고 5회차는 남았다면 행사는 여전히 판매 중이다. 행사 상태는 행사가, 회차 상태는 회차마다 따로 본다.
  * <ul>
  *   <li>회차 상태는 <b>시간만</b> 본다. 예매가 열렸는지(오픈 시각), 판매를 멈췄는지는 행사 상태가 본다.</li>
- *   <li>회차를 취소했는지는 회차 상태와 따로 갖는다({@code EventSession#isCancelled}). 취소된 회차는 시간이 남아 있어도 팔지 않는다.</li>
+ *   <li>회차를 취소했는지는 회차 상태와 따로 갖는다({@link EventSession#isCancelled}). 취소된 회차는 시간이 남아 있어도 팔지 않는다.</li>
  * </ul>
  */
 public enum SessionStatus {

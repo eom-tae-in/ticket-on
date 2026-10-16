@@ -25,7 +25,7 @@ import java.util.Optional;
  * 예: 19:00 회차형 회차는 처음 값(1시간)으로 18:00에 예매를 닫고 18:00부터 검표를 연다(docs/04 "판매 종료는 공연이 끝난 때가 아닙니다").
  * 10:00 ~ 18:00 종일형은 마지막 입장을 비우면 17:00에 예매를 닫고 9:00부터 검표를 연다(docs/03).
  * <p>
- * 이 값은 회차 시간을 읽어 낸 결과일 뿐이라 회차가 취소됐는지는 모른다({@code EventSession#isCancelled}).
+ * 이 값은 회차 시간을 읽어 낸 결과일 뿐이라 회차가 취소됐는지는 모른다({@link EventSession#isCancelled}).
  */
 public final class SessionTimes {
 
@@ -150,7 +150,7 @@ public final class SessionTimes {
      * 알 수 없어 행사 종료를 판정할 수 없기 때문이다(docs/02 "회차의 시간 정보", docs/04 "전환 트리거"). 종일형은 운영 종료가 늘 있어 해당하지
      * 않는다.
      * <p>
-     * 잠긴 뒤에도 비어 있던 종료 시각을 채우는 것만은 할 수 있다({@code EventSchedule#enterSessionEndTime}).
+     * 잠긴 뒤에도 비어 있던 종료 시각을 채우는 것만은 할 수 있다({@link EventSchedule#enterSessionEndTime}).
      */
     public boolean needsEndTimeInput(Instant now) {
         return endsAt == null && isTimeEditLocked(now);

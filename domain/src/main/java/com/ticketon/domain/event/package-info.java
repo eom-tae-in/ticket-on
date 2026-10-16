@@ -9,5 +9,9 @@
  * ({@link com.ticketon.domain.event.EventPublicAddress}), 위저드 5단계의 예매 설정({@link com.ticketon.domain.event.BookingSettings})과
  * 취소 규정({@link com.ticketon.domain.event.CancellationPolicy})을 갖는다. 카테고리는 관리자 승격으로 늘어나는 데이터라 enum이 아니라
  * {@link com.ticketon.domain.event.EventCategoryCatalog 목록}으로 다룬다.
+ * <p>
+ * 날짜 · 회차는 행사의 일정({@link com.ticketon.domain.event.EventSchedule})이 갖는다 — 회차 방식(회차형 / 종일형), 종일형의 기본 운영
+ * 시간, 날짜({@link com.ticketon.domain.event.EventDate})와 그 아래 회차({@link com.ticketon.domain.event.EventSession}). 회차의 예매
+ * 종료 · 검표 시작 · 회차 상태는 저장하지 않고 회차의 시각({@link com.ticketon.domain.event.SessionTimes})으로 계산한다.
  */
 package com.ticketon.domain.event;
