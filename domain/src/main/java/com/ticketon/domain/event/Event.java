@@ -1,6 +1,7 @@
 package com.ticketon.domain.event;
 
 import com.ticketon.domain.error.RuleViolationException;
+import com.ticketon.domain.organizer.StaffAction;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -14,7 +15,7 @@ import java.util.Set;
 /**
  * 행사 — 주최자가 여는 하나의 공연 · 전시 · 페스티벌. 주최자에 속한다(docs/00 "용어", docs/14 "무엇이 무엇을 가리키나").
  * <p>
- * 지금은 위저드 1단계의 기본 정보, 5단계의 공개 수준 · 예매 설정 · 취소 규정, 공개 주소를 갖는다.
+ * 위저드 1단계의 기본 정보, 5단계의 공개 수준 · 예매 설정 · 취소 규정, 공개 주소와 행사 상태 · 판매 중단 이력을 갖는다.
  * <ul>
  *   <li><b>기본 정보</b>({@link EventBasicInformation}) — 제목 · 유형 · 카테고리 · 소개 · 장소 등. 행사를 만들 때 함께 받는다 — 위저드는
  *       단계를 넘길 때마다 저장하므로(docs/03 "임시저장은 자동으로") 1단계를 마쳐야 처음 저장된다.</li>
@@ -43,6 +44,9 @@ import java.util.Set;
  * ({@link #requireEditable}), 회차 시간은 그 회차 시작 1주일 전 잠금까지 본다({@link #requireSessionTimeEditable}). 이 판정은 저장된 상태로
  * 하므로, 시간이 움직이는 상태의 행사는 먼저 {@link #advanceByTime}으로 지금 시각을 반영한다. 각 수정 메서드(기본 정보 · 공개 수준 · 예매 설정 ·
  * 취소 규정)에 이 판정을 거는 일과 제목 · 소개 · 포스터의 변경 이력은 수정 유스케이스가 한다(#65, #46).
+ * <p>
+ * <b>삭제</b>는 상태가 아니라 팔린 표나 초대권이 있었는지로 정한다({@link #requireDeletable}). 누가 지울 수 있는지는 판매를 시작했는지로 갈린다
+ * ({@link #deleteAction}).
  * <p>
  * 저장소에서 다시 읽을 때는 {@link #restore}를 쓴다. 저장 전 행사는 id가 없다.
  */
@@ -453,6 +457,30 @@ public final class Event {
         if (status.editScope() == EventEditScope.AFTER_BOOKING_OPENED
                 && schedule.timesOf(schedule.session(sessionId)).isTimeEditLocked(now)) {
             throw new RuleViolationException(EventErrorCode.SESSION_TIME_EDIT_LOCKED, detail() + ", 회차 " + sessionId);
+        }
+    }
+
+    /**
+     * 이 행사를 지울 때 확인할 운영진의 일 — 작성 중은 운영진 누구나({@link StaffAction#DELETE_EVENT_BEFORE_SALES_STARTED}), 판매를 시작한 뒤에는
+     * 소유자만({@link StaffAction#DELETE_EVENT_AFTER_SALES_STARTED})(docs/04 "행사 삭제", docs/01 "권한 두 가지"). 그 일을 할 수 있는지는 운영진
+     * 권한 확인이 본다.
+     */
+    public StaffAction deleteAction() {
+        return status.hasStartedSales() ? StaffAction.DELETE_EVENT_AFTER_SALES_STARTED : StaffAction.DELETE_EVENT_BEFORE_SALES_STARTED;
+    }
+
+    /**
+     * 지울 수 있는지 확인한다. <b>결제된 예매와 초대권이 한 번도 없었으면 상태와 상관없이 지울 수 있다</b> — 가격을 잘못 넣고 판매를 시작했는데 아직
+     * 0건이면 지우고 새로 만든다(docs/04 "행사 삭제", docs/15 박정훈). 한 장이라도 팔렸거나 초대권을 발권했으면 전부 취소 · 회수됐어도 지울 수 없다 —
+     * 결제 · 환불 기록이 법정 보존 대상이고 초대권 링크가 이미 나갔다. 그때는 행사 취소를 쓴다.
+     *
+     * @param everHadTicket 이 행사에 티켓(결제된 예매 · 초대권)이 한 번이라도 있었는지 — 취소 · 회수된 티켓도 센다. 티켓은 위 층이 알므로 부르는
+     *                      쪽이 조회해 넘긴다(#66)
+     * @throws RuleViolationException 티켓이 있었으면({@link EventErrorCode#EVENT_HAD_TICKETS})
+     */
+    public void requireDeletable(boolean everHadTicket) {
+        if (everHadTicket) {
+            throw new RuleViolationException(EventErrorCode.EVENT_HAD_TICKETS, detail());
         }
     }
 
