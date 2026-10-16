@@ -13,5 +13,11 @@
  * 날짜 · 회차는 행사의 일정({@link com.ticketon.domain.event.EventSchedule})이 갖는다 — 회차 방식(회차형 / 종일형), 종일형의 기본 운영
  * 시간, 날짜({@link com.ticketon.domain.event.EventDate})와 그 아래 회차({@link com.ticketon.domain.event.EventSession}). 회차의 예매
  * 종료 · 검표 시작 · 회차 상태는 저장하지 않고 회차의 시각({@link com.ticketon.domain.event.SessionTimes})으로 계산한다.
+ * <p>
+ * 도면은 회차와 무관하게 행사에 하나다({@link com.ticketon.domain.event.FloorPlan}) — 가격을 매기는 구역({@link com.ticketon.domain.event.Zone},
+ * 지정형 / 수량형), 번호를 매기는 블록({@link com.ticketon.domain.event.SeatBlock})과 그 안의 좌석({@link com.ticketon.domain.event.Seat}), 무대
+ * 위치. 좌석의 정체성은 좌석 id이고 도면을 고쳐도 좌석 번호는 다시 매기지 않는다. 좌석 표기("12열 7번" / "1층 12열 7번")는 티켓에 복사하지 않고
+ * 그릴 때마다 만든다({@link com.ticketon.domain.event.SeatLabel}). 회차마다 다른 판매 상태 · 판매 제외는 재고(inventory)가 갖는다. 입구 목록도
+ * 도면에 속하지만 판매가 끝난 뒤에도 고칠 수 있어 따로 둔다({@link com.ticketon.domain.event.EventEntrances}).
  */
 package com.ticketon.domain.event;

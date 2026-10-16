@@ -24,6 +24,10 @@ import java.util.Set;
  *   <li>확인 필요 (#35) — 1회 선택 매수가 전체 좌석에서 차지하는 비율을 보여 줄 때의 반올림(올림한 정수 퍼센트):
  *       {@code domain.event.SeatsPerSelectionFeedback#percentOfTotal}.</li>
  *   <li>확인 필요 (#35) — 예매 오픈 시각의 처음 값(비워 두면 판매를 시작하는 순간 연다): {@code domain.event.BookingSettings}.</li>
+ *   <li>확인 필요 (#37) — 좌석 번호를 매기는 방식(블록 격자의 행 순번이 "N열", 그 행 안의 순번이 "N번". 얹을 때 정하고 비활성 좌석이 있어도 다시
+ *       매기지 않음): {@code domain.event.SeatNumber}.</li>
+ *   <li>확인 필요 (#37) — 비운 블록 이름에 붙이는 "블록 N"의 번호(다른 블록 · 구역이 쓰지 않는 가장 작은 수):
+ *       {@code domain.event.FloorPlan#addBlock}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
@@ -185,6 +189,52 @@ public final class ProposedPolicy {
      * 글이 회차 목록과 변경 이력(#46)에 실린다. 문서에는 "선택. 자유 입력 한 줄"만 있고 길이가 없다.
      */
     public static final int SESSION_PERFORMERS_MAXIMUM_LENGTH = 100;
+
+    /**
+     * 확인 필요 (#37, 문서에 없음) — 블록 이름 최대 길이(글자 수). 이보다 긴 이름은 받지 않는다({@code domain.event.BlockName}).
+     * 글자 수는 앞뒤 공백을 걷고 NFC로 맞춘 뒤 사람이 세는 대로 센다(유니코드 code point).
+     * 20자를 제안한다: 블록이 둘 이상이면 블록 이름이 좌석 표기 앞머리로 티켓 · 예매 카드 · 검표 결과(좌석을 크게 보임)에 실린다(docs/02 "좌석 번호
+     * 표기", docs/07 "티켓 표기", docs/13 "검표 — 결과 표시 (좌석 크게)"). 문서 예시 "1층" · "2층" · "좌측" · "중앙"(2자)과 "지하 1층"(docs/02
+     * "도면은 행사마다 따로 갖습니다", 5자)보다 넉넉해 "2층 발코니 좌측"처럼 층과 방향을 함께 적어도 들어가고, 카테고리 이름
+     * ({@link #EVENT_CATEGORY_NAME_MAXIMUM_LENGTH})처럼 한 줄에 보이는 짧은 이름의 상한과 같다. 상한이 없으면 아주 긴 이름이 좌석 표기를 넘친다.
+     * 문서에는 "이름은 자유 입력"만 있고 길이가 없다(docs/02 "블록").
+     */
+    public static final int BLOCK_NAME_MAXIMUM_LENGTH = 20;
+
+    /**
+     * 확인 필요 (#37, 문서에 없음) — 구역 이름 최대 길이(글자 수). 이보다 긴 이름은 받지 않는다({@code domain.event.ZoneName}).
+     * 글자 수는 앞뒤 공백을 걷고 NFC로 맞춘 뒤 사람이 세는 대로 센다(유니코드 code point).
+     * 20자를 제안한다: 구역 이름은 좌석 선택 화면의 범례("R석 50,000원"), 티켓("R석 12열 10번", "스탠딩A · 0091-2"), 검표 결과에 한 줄로 실린다
+     * (docs/02 "관객에게는 번호를 보여주지 않습니다", docs/07 "티켓 표기"). 문서 예시 "VIP석" · "R석" · "스탠딩A" · "테이블석" · "전체"(docs/02
+     * "구역", 5자 이하)와 "휠체어 구역"(docs/02 "휠체어석은 체크박스 확인", 6자)보다 넉넉하고, 블록 이름({@link #BLOCK_NAME_MAXIMUM_LENGTH})과
+     * 서로 겹치지 않게 견주는 이름이라 같은 상한으로 둔다. 문서에는 구역 이름의 길이가 없다.
+     */
+    public static final int ZONE_NAME_MAXIMUM_LENGTH = 20;
+
+    /**
+     * 확인 필요 (#37, 문서에 없음 — 기술값) — 블록 하나의 최대 행 수(가로줄 수). 이보다 많은 행의 블록은 받지 않는다({@code domain.event.BlockSize}).
+     * 50행을 제안한다: 블록은 "5행 × 10열" 같은 덩어리이고(docs/02 "에디터는 블록 단위") 도면 하나는 좌석 수백 개이며(docs/02 "도면은 행사마다
+     * 따로 갖습니다") 가장 큰 템플릿도 500석이다(docs/99 C "좌석 템플릿"). 열 상한({@link #SEAT_BLOCK_MAXIMUM_COLUMNS})과 함께 블록 하나가
+     * 2,500석까지라 한 층짜리 대공연장도 블록 하나로 그릴 수 있고, 더 크면 "1층" · "2층" · "좌측"처럼 블록을 나눈다. 상한이 없으면 요청 하나로 좌석
+     * 수백만 개를 만들어 서버와 DB를 묶을 수 있다.
+     */
+    public static final int SEAT_BLOCK_MAXIMUM_ROWS = 50;
+
+    /**
+     * 확인 필요 (#37, 문서에 없음 — 기술값) — 블록 하나의 최대 열 수(한 줄의 자리 수). 이보다 많은 열의 블록은 받지 않는다
+     * ({@code domain.event.BlockSize}). 50열을 제안한다: 행 상한({@link #SEAT_BLOCK_MAXIMUM_ROWS})과 같은 까닭이다. 대공연장도 통로로 나뉜 한
+     * 줄이 50석을 넘는 일은 드물고, 넘으면 블록을 나눈다.
+     */
+    public static final int SEAT_BLOCK_MAXIMUM_COLUMNS = 50;
+
+    /**
+     * 확인 필요 (#37, 문서에 없음) — 입구 이름 최대 길이(글자 수). 이보다 긴 이름은 받지 않는다({@code domain.event.EntranceName}).
+     * 글자 수는 앞뒤 공백을 걷고 NFC로 맞춘 뒤 사람이 세는 대로 센다(유니코드 code point).
+     * 20자를 제안한다: 입구 이름은 검표 시작 때 고르는 목록과 검표 화면의 입구 변경, 게이트별 입장 현황에 한 줄로 보인다(docs/02 "입구 (게이트)",
+     * docs/13 "검표"). 문서 예시 "정문" · "2층 전용" · "VIP 입구"(docs/02, 6자 이하)와 "옆문"(docs/04)보다 넉넉하고, 블록 · 구역 이름
+     * ({@link #BLOCK_NAME_MAXIMUM_LENGTH}, {@link #ZONE_NAME_MAXIMUM_LENGTH})과 같은 한 줄 이름의 상한으로 둔다. 문서에는 입구 이름의 길이가 없다.
+     */
+    public static final int ENTRANCE_NAME_MAXIMUM_LENGTH = 20;
 
     private ProposedPolicy() {
     }
