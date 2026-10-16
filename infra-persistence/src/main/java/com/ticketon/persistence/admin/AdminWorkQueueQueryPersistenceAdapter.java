@@ -2,6 +2,7 @@ package com.ticketon.persistence.admin;
 
 import static com.ticketon.persistence.jooq.Tables.ORGANIZER;
 import static com.ticketon.persistence.jooq.Tables.ORGANIZER_APPLICATION;
+import static com.ticketon.persistence.jooq.Tables.ORGANIZER_CHANGE_REQUEST;
 import static com.ticketon.persistence.jooq.Tables.ORGANIZER_NAME_CHANGE;
 import static com.ticketon.persistence.jooq.Tables.OWNERSHIP_CHANGE;
 import static com.ticketon.persistence.jooq.Tables.OWNERSHIP_CLAIM;
@@ -11,6 +12,8 @@ import com.ticketon.application.admin.port.out.AdminWorkQueueQueryPort;
 import com.ticketon.application.admin.query.AdminWorkKind;
 import com.ticketon.application.admin.query.PendingAdminWork;
 import com.ticketon.domain.organizer.OrganizerApplicationStatus;
+import com.ticketon.domain.organizer.OrganizerChangeRequestKind;
+import com.ticketon.domain.organizer.OrganizerChangeRequestStatus;
 import com.ticketon.domain.organizer.OwnershipChangeMethod;
 import com.ticketon.domain.organizer.OwnershipClaimStatus;
 import com.ticketon.persistence.jooq.tables.StaffAccount;
@@ -32,6 +35,8 @@ import org.springframework.stereotype.Component;
  *       프로필의 닉네임으로 적는다. 접수 일시는 신청 일시다. 사유는 심사 화면에서 본다.</li>
  *   <li>주최자명 변경 — 주최자명 변경 이력 표(organizer_name_change — V17)의 확인 전인 줄. 제목은 "바꾸기 전 이름 → 바꾼 이름"으로 그 한
  *       건의 두 이름을 그대로 적는다 — 그 뒤 또 바꿨어도 줄마다 무엇을 무엇으로 바꿨는지 읽힌다. 접수 일시는 바꾼 일시다.</li>
+ *   <li>정산 계좌 · 사업자 정보 변경 확인 — 변경 요청 표(organizer_change_request — V18)의 확인 중인 줄. 제목은 "주최자명 · 정산 계좌 변경"
+ *       (또는 "주최자명 · 사업자 정보 변경")이고 새 값(계좌번호 · 사업자등록번호 등)은 읽지 않는다. 접수 일시는 요청 일시다.</li>
  * </ul>
  * 다른 종류는 그 기능의 이슈가 원천 조회를 하나씩 더해 {@link #pendingWork}에 잇는다.
  */
@@ -52,7 +57,7 @@ public class AdminWorkQueueQueryPersistenceAdapter implements AdminWorkQueueQuer
     @Override
     public List<PendingAdminWork> pendingWork() {
         return Stream.of(pendingOrganizerApplications(), unconfirmedOwnershipChanges(), pendingOwnershipClaims(),
-                        unconfirmedOrganizerNameChanges())
+                        unconfirmedOrganizerNameChanges(), pendingOrganizerChangeRequests())
                 .flatMap(List::stream)
                 .sorted(RECEIVED_ORDER)
                 .toList();
@@ -83,6 +88,17 @@ public class AdminWorkQueueQueryPersistenceAdapter implements AdminWorkQueueQuer
                 .where(ORGANIZER_NAME_CHANGE.CONFIRMED_AT.isNull())
                 .fetch(row -> new PendingAdminWork(AdminWorkKind.ORGANIZER_NAME_CHANGE, row.value1(),
                         row.value2() + " → " + row.value3(), row.value4().toInstant()));
+    }
+
+    private List<PendingAdminWork> pendingOrganizerChangeRequests() {
+        return dsl.select(ORGANIZER_CHANGE_REQUEST.ID, ORGANIZER.NAME, ORGANIZER_CHANGE_REQUEST.KIND,
+                        ORGANIZER_CHANGE_REQUEST.REQUESTED_AT)
+                .from(ORGANIZER_CHANGE_REQUEST)
+                .join(ORGANIZER).on(ORGANIZER.ID.eq(ORGANIZER_CHANGE_REQUEST.ORGANIZER_ID))
+                .where(ORGANIZER_CHANGE_REQUEST.STATUS.eq(OrganizerChangeRequestStatus.UNDER_REVIEW.name()))
+                .fetch(row -> new PendingAdminWork(AdminWorkKind.ORGANIZER_CHANGE_REQUEST, row.value1(),
+                        row.value2() + " · " + OrganizerChangeRequestKind.valueOf(row.value3()).label() + " 변경",
+                        row.value4().toInstant()));
     }
 
     private List<PendingAdminWork> unconfirmedOwnershipChanges() {

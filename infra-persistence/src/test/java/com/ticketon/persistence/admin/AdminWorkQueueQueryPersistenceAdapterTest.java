@@ -10,9 +10,13 @@ import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.organizer.BusinessDeclaration;
+import com.ticketon.domain.organizer.BusinessInformation;
+import com.ticketon.domain.organizer.BusinessRegistrationNumber;
 import com.ticketon.domain.organizer.OrganizerApplication;
 import com.ticketon.domain.organizer.OrganizerApplicationForm;
 import com.ticketon.domain.organizer.OrganizerApplicationStatus;
+import com.ticketon.domain.organizer.OrganizerBusinessDetails;
+import com.ticketon.domain.organizer.OrganizerChangeRequest;
 import com.ticketon.domain.organizer.OrganizerName;
 import com.ticketon.domain.organizer.OrganizerNameChange;
 import com.ticketon.domain.organizer.OrganizerNameChangeEntry;
@@ -25,9 +29,11 @@ import com.ticketon.domain.organizer.OwnershipClaimReason;
 import com.ticketon.domain.organizer.OwnershipClaimStatus;
 import com.ticketon.domain.organizer.OwnershipTransfer;
 import com.ticketon.domain.organizer.RejectionReason;
+import com.ticketon.domain.organizer.RequestedOrganizerChange;
 import com.ticketon.domain.organizer.SettlementAccount;
 import com.ticketon.domain.organizer.TelephoneNumber;
 import com.ticketon.persistence.organizer.OrganizerApplicationPersistenceAdapter;
+import com.ticketon.persistence.organizer.OrganizerChangeRequestPersistenceAdapter;
 import com.ticketon.persistence.organizer.OrganizerNameChangePersistenceAdapter;
 import com.ticketon.persistence.organizer.OrganizerRows;
 import com.ticketon.persistence.organizer.OwnershipChangePersistenceAdapter;
@@ -50,7 +56,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 진짜 PostgreSQL에 마이그레이션 전체를 올리고 관리자 처리 목록 조회를 본다 — 지금 원천은 심사 중인 주최자 신청, 확인 전인 소유자 넘기기, 심사
- * 중인 소유자 이전 신청, 확인 전인 주최자명 변경이다.
+ * 중인 소유자 이전 신청, 확인 전인 주최자명 변경, 확인 중인 정산 계좌 · 사업자 정보 변경 요청이다.
  * Docker가 없는 환경에서는 건너뛴다.
  */
 @Testcontainers(disabledWithoutDocker = true)
@@ -224,6 +230,40 @@ class AdminWorkQueueQueryPersistenceAdapterTest {
         nameChanges.saveConfirmation(confirmed);
 
         assertThat(adapter.pendingWork()).extracting(PendingAdminWork::targetId).containsExactly(application, second);
+    }
+
+    @Test
+    @DisplayName("확인 중인 정산 계좌 · 사업자 정보 변경 요청이 접수 순서로 쌓이고 — 대상은 요청 id, 제목은 '주최자명 · 종류 변경' — 처리하면 빠진다")
+    void pendingOrganizerChangeRequestsJoinTheQueue() {
+        long organizerId = rows.organizer("늦여름", OrganizerStatus.ACTIVE);
+        long owner = rows.staffAccount("yeoreum@example.com");
+        long application = submit("applicant@example.com", "극단 열두달", MONDAY_MORNING.plusSeconds(60));
+        OrganizerBusinessDetails current = new OrganizerBusinessDetails(BusinessDeclaration.business(
+                new BusinessInformation("늦여름 레코드", "최여름", "서울특별시 마포구 와우산로 12", TelephoneNumber.of("02-123-4567"),
+                        BusinessRegistrationNumber.of("123-45-67890"))),
+                new SettlementAccount("신한은행", "110-123-456789", "늦여름 레코드"));
+        OrganizerChangeRequestPersistenceAdapter changeRequests = new OrganizerChangeRequestPersistenceAdapter(dsl);
+        long accountRequest = changeRequests.add(OrganizerChangeRequest.request(organizerId, owner, current,
+                new RequestedOrganizerChange.NewSettlementAccount(new SettlementAccount("우리은행", "1002-345-678901", "최여름")),
+                false, MONDAY_MORNING)).id().orElseThrow();
+        long businessRequest = changeRequests.add(OrganizerChangeRequest.request(organizerId, owner, current,
+                new RequestedOrganizerChange.NewBusinessInformation(new BusinessInformation("늦여름 레코드", "최여름",
+                        "서울특별시 마포구 독막로 7", TelephoneNumber.of("02-765-4321"), BusinessRegistrationNumber.of("123-45-67890"))),
+                false, MONDAY_MORNING.plusSeconds(120))).id().orElseThrow();
+
+        assertThat(adapter.pendingWork()).containsExactly(
+                new PendingAdminWork(AdminWorkKind.ORGANIZER_CHANGE_REQUEST, accountRequest, "늦여름 · 정산 계좌 변경",
+                        MONDAY_MORNING),
+                new PendingAdminWork(AdminWorkKind.ORGANIZER_APPLICATION, application, "극단 열두달",
+                        MONDAY_MORNING.plusSeconds(60)),
+                new PendingAdminWork(AdminWorkKind.ORGANIZER_CHANGE_REQUEST, businessRequest, "늦여름 · 사업자 정보 변경",
+                        MONDAY_MORNING.plusSeconds(120)));
+
+        OrganizerChangeRequest rejected = changeRequests.findById(accountRequest).orElseThrow();
+        rejected.reject(RejectionReason.of("예금주가 대표자 이름과 다릅니다"), adminAccount(), MONDAY_MORNING.plusSeconds(3_600));
+        changeRequests.saveReview(rejected);
+
+        assertThat(adapter.pendingWork()).extracting(PendingAdminWork::targetId).containsExactly(application, businessRequest);
     }
 
     /** 활동 중인 주최자에서 소유자가 운영자에게 넘긴 한 건을 이력으로 저장한다 — 소속은 이 조회와 상관없어 넣지 않는다. */

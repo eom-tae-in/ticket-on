@@ -98,6 +98,16 @@ class GetAdminWorkQueueServiceTest {
                 AdminWorkKind.ORGANIZER_NAME_CHANGE, 5, "극단 열두달 → 열두달 프로젝트", changedAt, false));
     }
 
+    @Test
+    @DisplayName("정산 계좌 · 사업자 정보 변경 확인은 문서에 정한 처리 기한이 없어 오래돼도 강조하지 않는다 — 확인 중에는 기존 값이 쓰인다")
+    void organizerChangeRequestIsNotHighlighted() {
+        Instant requestedAt = KoreanTime.toInstant(LocalDateTime.of(2026, 10, 1, 10, 0));
+        queryPort.add(new PendingAdminWork(AdminWorkKind.ORGANIZER_CHANGE_REQUEST, 8, "늦여름 · 정산 계좌 변경", requestedAt));
+
+        assertThat(service.getWorkQueue().items()).containsExactly(new AdminWorkQueueResult.Item(
+                AdminWorkKind.ORGANIZER_CHANGE_REQUEST, 8, "늦여름 · 정산 계좌 변경", requestedAt, false));
+    }
+
     private static PendingAdminWork application(long applicationId, String name, LocalDateTime submittedAtKorea) {
         return new PendingAdminWork(AdminWorkKind.ORGANIZER_APPLICATION, applicationId, name,
                 KoreanTime.toInstant(submittedAtKorea));

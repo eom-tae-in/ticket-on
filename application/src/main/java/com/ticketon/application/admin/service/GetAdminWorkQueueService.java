@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>소유자 변경 — 강조하지 않는다. 이미 바뀐 일을 사후 확인하는 것이라 문서에 정한 기한이 없다.</li>
  *   <li>소유자 이전 신청 — 강조하지 않는다. 문서에 정한 처리 기한이 없다.</li>
  *   <li>주최자명 변경 — 강조하지 않는다. 이미 바뀐 일을 사후 확인하는 것이라 문서에 정한 기한이 없다.</li>
+ *   <li>정산 계좌 · 사업자 정보 변경 확인 — 강조하지 않는다. 문서에 정한 처리 기한이 없다(확인 중에는 기존 값이 그대로 쓰인다).</li>
  * </ul>
  * 종류를 더하는 이슈는 강조 기준도 여기 함께 더한다. 오늘은 한국 날짜로 본다.
  */
@@ -50,7 +51,7 @@ public class GetAdminWorkQueueService implements GetAdminWorkQueueUseCase {
         return switch (work.kind()) {
             case ORGANIZER_APPLICATION -> OrganizerReviewDeadline.of(work.receivedAt(), businessDayCalculator)
                     .isApproaching(today, businessDayCalculator);
-            case OWNERSHIP_CHANGE, OWNERSHIP_CLAIM, ORGANIZER_NAME_CHANGE -> false;
+            case OWNERSHIP_CHANGE, OWNERSHIP_CLAIM, ORGANIZER_NAME_CHANGE, ORGANIZER_CHANGE_REQUEST -> false;
         };
     }
 }
