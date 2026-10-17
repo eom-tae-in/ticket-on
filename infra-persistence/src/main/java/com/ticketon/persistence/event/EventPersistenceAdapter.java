@@ -15,6 +15,7 @@ import com.ticketon.domain.event.EventCategory;
 import com.ticketon.domain.event.EventCategoryName;
 import com.ticketon.domain.event.EventCategorySelection;
 import com.ticketon.domain.event.EventPasswordHash;
+import com.ticketon.domain.event.EventPoster;
 import com.ticketon.domain.event.EventPublicAddress;
 import com.ticketon.domain.event.EventPublicContact;
 import com.ticketon.domain.event.EventStatus;
@@ -54,16 +55,17 @@ import org.jooq.SelectConditionStep;
 import org.springframework.stereotype.Component;
 
 /**
- * 행사 저장소(event · event_cancellation_fee_tier · event_sales_pause — V19) 어댑터.
+ * 행사 저장소(event · event_cancellation_fee_tier · event_sales_pause — V19, 포스터 칸 — V21) 어댑터.
  * <p>
- * 행사 한 줄에 기본 정보 · 공개 수준 · 예매 설정 · 상태 · 작성 진행 단계 · 마지막 수정 시각을 두고, 취소 규정 구간과 판매 중단 이력은 따로 둔다.
+ * 행사 한 줄에 기본 정보 · 포스터 열쇠 · 공개 수준 · 예매 설정 · 상태 · 작성 진행 단계 · 마지막 수정 시각을 두고, 취소 규정 구간과 판매 중단 이력은
+ * 따로 둔다.
  * 정식 카테고리는 카테고리 표의 줄을 (id, 유형)으로 가리키고, '기타'면 장르명만 둔다. 예매 종료 · 검표 시작의 앞섬은 분 단위로 저장한다 — 분
  * 단위가 아닌 앞섬은 저장하지 않는다(들어오는 어댑터가 분으로 받는다).
  * <p>
  * 위저드 단계 저장은 {@link #findByIdForUpdate}({@code SELECT … FOR UPDATE})로 행사 줄을 잠그고 읽은 뒤 저장하므로, 저장은 조건 없이 그 행사의
  * 칸을 모두 지금 값으로 쓴다. 공개 주소 · 주최자는 바뀌지 않아 처음 넣을 때만 쓴다. 지운 행사(deleted_at)는 찾지도 저장하지도 않는다.
  * <p>
- * 포스터 칸은 포스터 업로드(#40)가 더한다. 그 전까지 포스터가 있는 행사는 저장하지 않는다 — 말없이 빠뜨리지 않게.
+ * 포스터는 열쇠만 둔다 — 파일은 파일 저장소에 있다. 포스터 열쇠는 유일 칸이라(event_poster_file_key_uk) 두 행사가 같은 파일을 가리키지 않는다.
  */
 @Component
 public class EventPersistenceAdapter implements EventRepository {
@@ -79,7 +81,6 @@ public class EventPersistenceAdapter implements EventRepository {
         if (newEvent.id().isPresent()) {
             throw new IllegalArgumentException("이미 저장된 행사입니다: " + newEvent.id().getAsLong());
         }
-        requireNoPoster(newEvent);
         Map<Field<?>, Object> values = changeableColumns(newEvent);
         values.put(EVENT.ORGANIZER_ID, newEvent.organizerId());
         values.put(EVENT.PUBLIC_ADDRESS, newEvent.publicAddress().value());
@@ -90,8 +91,8 @@ public class EventPersistenceAdapter implements EventRepository {
                 .value1();
         insertCancellationFeeTiers(id, newEvent.cancellationPolicy());
         saveSalesPauses(id, newEvent.salesPauses());
-        return Event.restore(id, newEvent.organizerId(), newEvent.publicAddress(), newEvent.basicInformation(), null,
-                newEvent.visibility(), newEvent.bookingSettings(), newEvent.cancellationPolicy(), newEvent.status(),
+        return Event.restore(id, newEvent.organizerId(), newEvent.publicAddress(), newEvent.basicInformation(),
+                newEvent.poster().orElse(null), newEvent.visibility(), newEvent.bookingSettings(), newEvent.cancellationPolicy(), newEvent.status(),
                 newEvent.bookingOpenedAt().orElse(null), newEvent.salesPauses(), newEvent.wizardProgress(),
                 newEvent.lastModifiedAt());
     }
@@ -109,7 +110,6 @@ public class EventPersistenceAdapter implements EventRepository {
     @Override
     public void save(Event event) {
         long id = event.id().orElseThrow(() -> new IllegalArgumentException("저장 전 행사는 고쳐 저장할 수 없습니다"));
-        requireNoPoster(event);
         int updated = dsl.update(EVENT)
                 .set(changeableColumns(event))
                 .where(EVENT.ID.eq(id))
@@ -141,6 +141,7 @@ public class EventPersistenceAdapter implements EventRepository {
         values.put(EVENT.VENUE_DETAILS, information.venueDetails());
         values.put(EVENT.MAP_LINK, information.mapLink() == null ? null : information.mapLink().value());
         values.put(EVENT.PUBLIC_CONTACT, information.publicContact() == null ? null : information.publicContact().value());
+        values.put(EVENT.POSTER_FILE_KEY, event.poster().map(EventPoster::fileKey).orElse(null));
         values.put(EVENT.VISIBILITY, visibility.visibility().name());
         values.put(EVENT.PASSWORD_HASH, visibility.passwordHash() == null ? null : visibility.passwordHash().value());
         values.put(EVENT.BOOKING_OPENS_AT, toDatabaseTime(settings.bookingOpensAt()));
@@ -219,8 +220,9 @@ public class EventPersistenceAdapter implements EventRepository {
         long id = row.getId();
         EventVisibilitySetting visibility = new EventVisibilitySetting(EventVisibility.valueOf(row.getVisibility()),
                 row.getPasswordHash() == null ? null : new EventPasswordHash(row.getPasswordHash()));
+        EventPoster poster = row.getPosterFileKey() == null ? null : new EventPoster(row.getPosterFileKey());
         return Event.restore(id, row.getOrganizerId(), new EventPublicAddress(row.getPublicAddress()), toBasicInformation(row),
-                null, visibility, toBookingSettings(row), cancellationPolicyOf(id), EventStatus.valueOf(row.getStatus()),
+                poster, visibility, toBookingSettings(row), cancellationPolicyOf(id), EventStatus.valueOf(row.getStatus()),
                 toInstant(row.getBookingOpenedAt()), salesPausesOf(id), EventWizardStep.valueOf(row.getWizardProgressStep()),
                 row.getLastModifiedAt().toInstant());
     }
@@ -290,12 +292,6 @@ public class EventPersistenceAdapter implements EventRepository {
             throw new IllegalArgumentException("기준 시각보다 앞서는 시간은 분 단위로 저장합니다: " + duration);
         }
         return Math.toIntExact(duration.toMinutes());
-    }
-
-    private static void requireNoPoster(Event event) {
-        if (event.poster().isPresent()) {
-            throw new IllegalStateException("포스터 칸이 아직 없습니다(#40) — 포스터가 있는 행사를 저장하지 않습니다: " + event.id());
-        }
     }
 
     private static OffsetDateTime toDatabaseTime(Instant instant) {
