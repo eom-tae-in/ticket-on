@@ -257,7 +257,7 @@ class EventScheduleIntegrationTest {
     }
 
     @Test
-    @DisplayName("출연 · 가격 조정 · 회차 일시를 저장하면 다시 읽을 때 그대로이고, 같은 값을 다시 보내면 조작 기록도 마지막 수정 시각도 그대로다")
+    @DisplayName("출연 · 가격 조정 · 회차 일시를 저장하면 다시 읽을 때 그대로이고, 같은 값을 다시 보내면 200에 같은 일정을 돌려주며 조작 기록도 마지막 수정 시각도 그대로다")
     void savesSessionDetailsAndIgnoresSameValues() throws Exception {
         try (Browser operator = new Browser()) {
             operator.logInStaff(plannerEmail);
@@ -290,11 +290,17 @@ class EventScheduleIntegrationTest {
             List<String> operationsBefore = eventOperations(twelveMonths);
             String lastModifiedBefore = lastModifiedAt(eventId);
 
-            operator.put(schedule + "/session-mode", Map.of("sessionMode", "TIMED"));
-            operator.put(schedule + "/sessions/" + evening + "/performers", Map.of("performers", "김배우 · 박배우"));
-            operator.put(schedule + "/sessions/" + evening + "/price-adjustment", Map.of("kind", "AMOUNT", "amount", 10_000));
-            operator.put(schedule + "/sessions/" + evening + "/date-time", sessionBody("2026-03-15", "19:00", "21:00"));
+            List<HttpResponse<String>> resent = List.of(
+                    operator.put(schedule + "/session-mode", Map.of("sessionMode", "TIMED")),
+                    operator.put(schedule + "/sessions/" + evening + "/performers", Map.of("performers", "김배우 · 박배우")),
+                    operator.put(schedule + "/sessions/" + evening + "/price-adjustment", Map.of("kind", "AMOUNT", "amount", 10_000)),
+                    operator.put(schedule + "/sessions/" + evening + "/date-time", sessionBody("2026-03-15", "19:00", "21:00")));
 
+            for (HttpResponse<String> response : resent) {
+                assertThat(response.statusCode()).as(response.request().uri().getPath()).isEqualTo(200);
+                assertThat(jsonMapper.readTree(response.body())).as(response.request().uri().getPath()).isEqualTo(read);
+            }
+            assertThat(jsonMapper.readTree(operator.get(schedule).body())).isEqualTo(read);
             assertThat(eventOperations(twelveMonths)).isEqualTo(operationsBefore);
             assertThat(lastModifiedAt(eventId)).isEqualTo(lastModifiedBefore);
             assertThat(sessionNotices.about(eventId)).hasSize(2);
