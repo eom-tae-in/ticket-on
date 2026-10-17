@@ -2,6 +2,7 @@ package com.ticketon.domain.ticket;
 
 import com.ticketon.domain.error.RuleViolationException;
 import com.ticketon.domain.event.EventStatus;
+import com.ticketon.domain.pricing.BundleDayPrices;
 import com.ticketon.domain.pricing.DiscountKind;
 import com.ticketon.domain.pricing.Money;
 import com.ticketon.domain.pricing.SessionPrice;
@@ -55,13 +56,13 @@ public final class Ticket {
     private final Long id;
     private final TicketParent parent;
     private final int sequence;
-    private final List<TicketSession> sessions;
+    private List<TicketSession> sessions;
     private final long zoneId;
     private final Long seatId;
     private final TicketPrice price;
-    private final Money partiallyRefundedAmount;
+    private Money partiallyRefundedAmount;
     private final Set<DeductionExemptionCause> deductionExemptionCauses;
-    private final boolean compensatedOnCancel;
+    private boolean compensatedOnCancel;
     private TicketCancellation cancellation;
     private QrKey qrKey;
 
@@ -243,6 +244,143 @@ public final class Ticket {
         return Optional.empty();
     }
 
+    /**
+     * 공제 면제를 붙인다 — 주최자 쪽 사정으로 산 표의 내용이 바뀌었다(docs/04 "공제 면제"). 이 티켓은 이후 언제 취소해도 공제 0%다. <b>출연자
+     * 변경</b>이면 취소 시 10% 배상 표시도 함께 붙는다. 여러 까닭이 겹쳐 붙을 수 있고, 이미 붙은 까닭이면 그대로다.
+     * <p>
+     * 붙는 대상(변경 시점에 이미 산, 바뀐 회차의 표)을 고르는 일은 각 흐름(연기 #106 · 장소 변경 · 회차 시간 수정 #105 · 출연자 변경)이 한다.
+     * 변경으로 생긴 새 티켓에 면제를 옮길 때는 이 메서드가 아니라 {@link #inheritDeductionExemptionsFrom}을 쓴다 — 배상은 옮기지 않는다.
+     *
+     * @return 바뀌었는지 — 새 까닭이 붙었거나 배상 표시가 새로 붙었으면
+     * @throws IllegalStateException 초대권 티켓이면(환불이 없다), 취소된 티켓이면, 묶음권에 출연자 변경이면 — 묶음권은 바뀐 날만 포기한다
+     *                               ({@link #forfeitSession})
+     */
+    public boolean exemptFromDeduction(DeductionExemptionCause cause) {
+        Objects.requireNonNull(cause, "cause");
+        requireBookingTicket("공제 면제");
+        requireNotCancelledState("공제 면제");
+        if (cause == DeductionExemptionCause.PERFORMER_CHANGE && isBundle()) {
+            throw new IllegalStateException("묶음권에는 출연자 변경 면제가 붙지 않습니다 — 바뀐 날만 포기합니다: 티켓 " + describe());
+        }
+        boolean added = deductionExemptionCauses.add(cause);
+        if (cause == DeductionExemptionCause.PERFORMER_CHANGE && !compensatedOnCancel) {
+            compensatedOnCancel = true;
+            return true;
+        }
+        return added;
+    }
+
+    /**
+     * 변경으로 바뀐 기존 티켓의 공제 면제를 이 새 티켓에 옮긴다(docs/08 "공제 면제가 붙은 티켓"). 연기 때문에 자리를 옮기는 경우가 많은데 옮기는 순간
+     * 면제를 잃으면 연기 피해자가 두 번 손해를 본다. <b>출연자 변경의 10% 배상은 옮기지 않는다</b> — 배상은 그 회차를 포기하고 취소할 때만 붙고,
+     * 다른 회차로 바꾼 사람은 원하던 공연을 보러 가는 것이다. 변경 흐름은 #80이 맡는다.
+     *
+     * @param replaced 변경으로 취소되는(또는 취소된) 기존 티켓 — 같은 예매 건의 티켓
+     * @throws IllegalArgumentException 같은 예매 건의 티켓이 아니거나, 둘 중 하나가 묶음권 · 초대권이면 — 묶음권 · 초대권은 변경할 수 없다
+     * @throws IllegalStateException    이 티켓이 취소됐으면
+     */
+    public void inheritDeductionExemptionsFrom(Ticket replaced) {
+        Objects.requireNonNull(replaced, "replaced");
+        if (!parent.isBooking() || !replaced.parent.isBooking() || isBundle() || replaced.isBundle()) {
+            throw new IllegalArgumentException("묶음권 · 초대권은 변경할 수 없어 면제를 옮기지 않습니다: 티켓 " + describe() + " ← " + replaced.describe());
+        }
+        if (parent.id() != replaced.parent.id()) {
+            throw new IllegalArgumentException("다른 예매 건의 티켓에서 면제를 옮기지 않습니다: 티켓 " + describe() + " ← " + replaced.describe());
+        }
+        requireNotCancelledState("공제 면제");
+        deductionExemptionCauses.addAll(replaced.deductionExemptionCauses);
+    }
+
+    /**
+     * 묶음권에서 출연자가 바뀐 날을 포기한다(docs/04 "묶음권은 바뀐 날만 포기합니다", docs/07 "출연자가 바뀐 날을 포기하면"). 티켓은 그 회차를
+     * <b>계속 가리키되 포기 표시</b>가 붙는다 — 빼면 검표가 "환불받은 날짜"와 "처음부터 다른 날짜 표"를 가를 수 없고, 예매 카드에 "5/4 포기"를
+     * 보여 줄 근거도 사라진다. 나머지 날은 그대로 들어간다.
+     * <p>
+     * 그날 몫({@link #dayShare}) 환불과 10% 배상은 출연자 변경 흐름이 계산해 돌려주고, 돌려준 그날 몫은 {@link #recordPartialRefund}로 남긴다.
+     * 포기할 수 있는지(그 회차에 출연자 변경 알림이 있었는지, 그날 입장 전인지)도 그 흐름이 본다. 첫날 입장했어도 포기할 수 있다.
+     *
+     * @throws RuleViolationException   이미 취소된 티켓이면({@link TicketErrorCode#TICKET_ALREADY_CANCELLED}), 이미 포기한 날이면
+     *                                  ({@link TicketErrorCode#SESSION_ALREADY_FORFEITED})
+     * @throws IllegalArgumentException 이 티켓이 가리키지 않는 회차면
+     * @throws IllegalStateException    초대권 티켓이거나 묶음권이 아니면 — 포기는 예매한 묶음권의 권리다
+     */
+    public void forfeitSession(long sessionId, Instant now) {
+        Objects.requireNonNull(now, "now");
+        requireBookingTicket("회차별 포기");
+        if (!isBundle()) {
+            throw new IllegalStateException("회차별 포기는 묶음권만 합니다: 티켓 " + describe());
+        }
+        requireNotCancelled();
+        TicketSession session = sessionOf(sessionId);
+        if (session.isForfeited()) {
+            throw new RuleViolationException(TicketErrorCode.SESSION_ALREADY_FORFEITED,
+                    "티켓 " + describe() + ", 회차 " + sessionId + ", 포기 " + session.forfeitedAt().orElseThrow());
+        }
+        sessions = sessions.stream()
+                .map(pointed -> pointed.sessionId() == sessionId ? pointed.forfeit(now) : pointed)
+                .toList();
+    }
+
+    /**
+     * 그 회차를 포기했는지 — 포기한 날에 QR을 찍으면 "환불받은 날짜입니다"로 막힌다(docs/07, 검표 #90).
+     *
+     * @throws IllegalArgumentException 이 티켓이 가리키지 않는 회차면
+     */
+    public boolean isForfeited(long sessionId) {
+        return sessionOf(sessionId).isForfeited();
+    }
+
+    /**
+     * 그 회차의 그날 몫 = 결제 금액 × 그날 가격 ÷ 날짜별 가격 합계, 원 미만 버림(docs/08 "묶음권 중 하루가 취소되면", docs/99 C "묶음권 그날 몫").
+     * 그날 가격은 티켓이 가리키는 그 날 회차의 <b>산 때의 가격</b>이다 — 주최자가 그 뒤 가격을 바꿔도 몫은 그대로다.
+     * <pre>
+     * 3일권 130,200원 (40,000 + 50,000 + 50,000 = 140,000원, 7% 할인) — 토요일 몫  130,200 × 50,000 ÷ 140,000 = 46,500원
+     * 3일권 94,500원 (35,000 × 3, 10% 할인) − 쿠폰 5,000원 = 89,500원 — 둘째 날 몫  89,500 × 35,000 ÷ 105,000 = 29,833원
+     * </pre>
+     * 주최자가 하루를 취소할 때, 출연자가 바뀐 날을 포기할 때, 묶음권의 공연 지연 환급(그날 몫의 10%)에 쓴다. 일반 티켓은 회차가 하나라 결제 금액
+     * 전부다. 몫은 늘 처음 결제 금액으로 나눈다 — 이미 다른 날 몫을 돌려줬어도 줄지 않는다. 배상 · 환급액 계산은 #96이 한다.
+     *
+     * @throws IllegalArgumentException 이 티켓이 가리키지 않는 회차면
+     * @throws IllegalStateException    초대권 티켓이면 — 결제가 없다
+     */
+    public Money dayShare(long sessionId) {
+        requireBookingTicket("그날 몫");
+        SessionPrice dayPrice = sessionOf(sessionId).purchasedPrice().orElseThrow();
+        return BundleDayPrices.of(sessions.stream().map(session -> session.purchasedPrice().orElseThrow()).toList())
+                .dayShare(paidAmount(), dayPrice);
+    }
+
+    /**
+     * 일부를 돌려준 금액을 남긴다 — 묶음권 그날 몫(주최자의 하루 취소 · 출연자 변경 포기)이나 공연 지연 환급(docs/08 "기준 금액"). 티켓은 그대로
+     * 유효하다. 남긴 금액만큼 환불 기준액이 줄어 같은 돈을 두 번 돌려주지 않는다({@link #refundBaseAmount}). 배상은 돌려준 입장료가 아니라 여기
+     * 넣지 않는다 — 이미 받은 배상은 그대로 둔다(docs/08 "부분 취소").
+     *
+     * @param amount 돌려준 금액, 1원 이상
+     * @throws IllegalArgumentException 0원이거나 환불 기준액보다 크면
+     * @throws IllegalStateException    초대권 티켓이면(결제가 없다), 취소된 티켓이면
+     */
+    public void recordPartialRefund(Money amount) {
+        Objects.requireNonNull(amount, "amount");
+        requireBookingTicket("부분 환불");
+        requireNotCancelledState("부분 환불");
+        if (amount.isZero()) {
+            throw new IllegalArgumentException("돌려준 금액은 1원 이상이어야 합니다");
+        }
+        if (amount.isGreaterThan(refundBaseAmount())) {
+            throw new IllegalArgumentException("돌려준 금액이 환불 기준액보다 큽니다: " + amount + " > " + refundBaseAmount() + ", 티켓 " + describe());
+        }
+        partiallyRefundedAmount = partiallyRefundedAmount.plus(amount);
+    }
+
+    /**
+     * 환불 기준액 = 결제 금액 − 이미 돌려준 부분 금액(docs/08 "기준 금액", docs/99 D "일부 환불된 묶음권의 전체 취소"). 항상 실제 결제액이 기준이고,
+     * 일부를 돌려받았으면 그만큼 뺀다. 3일권 130,200원에서 토요일 몫 46,500원을 돌려줬으면 83,700원이다. 공제율 · 공제 기준일은 환불 계산(#78)이
+     * 본다. 초대권 티켓은 0원이다.
+     */
+    public Money refundBaseAmount() {
+        return paidAmount().minus(partiallyRefundedAmount);
+    }
+
     /** 저장 전이면 비어 있다. */
     public OptionalLong id() {
         return id == null ? OptionalLong.empty() : OptionalLong.of(id);
@@ -347,6 +485,26 @@ public final class Ticket {
             throw new RuleViolationException(TicketErrorCode.TICKET_ALREADY_CANCELLED,
                     "티켓 " + describe() + ", " + cancellation.cancelledAt() + " " + cancellation.reason());
         }
+    }
+
+    /** 취소된 티켓에 붙이지 않는 것(면제 · 부분 환불) — 흐름이 살아 있는 티켓만 골라 부르므로 여기 오면 프로그램 오류다. */
+    private void requireNotCancelledState(String what) {
+        if (cancellation != null) {
+            throw new IllegalStateException("취소된 티켓에는 " + what + "을(를) 남기지 않습니다: 티켓 " + describe());
+        }
+    }
+
+    private void requireBookingTicket(String what) {
+        if (!parent.isBooking()) {
+            throw new IllegalStateException("초대권 티켓에는 " + what + "이(가) 없습니다 — 결제 · 환불이 없습니다: 티켓 " + describe());
+        }
+    }
+
+    private TicketSession sessionOf(long sessionId) {
+        return sessions.stream()
+                .filter(session -> session.sessionId() == sessionId)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("이 티켓이 가리키지 않는 회차입니다: 티켓 " + describe() + ", 회차 " + sessionId));
     }
 
     private String describe() {

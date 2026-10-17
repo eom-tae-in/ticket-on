@@ -13,6 +13,10 @@
  * 돌려준다({@link com.ticketon.domain.ticket.PreviousQrKey}). 공유 링크는 열쇠로 만들고, 무효가 된 링크는 이유를 알려 준다
  * ({@link com.ticketon.domain.ticket.ShareLinkInvalidReason}).
  * <p>
+ * 그 티켓에만 붙는 권리도 티켓이 갖는다 — 공제 면제와 취소 시 배상({@link com.ticketon.domain.ticket.DeductionExemptionCause}), 묶음권의
+ * 회차별 포기, 이미 돌려준 부분 금액(그날 몫 · 공연 지연 환급). 그날 몫은 산 때의 날짜별 가격으로 나누고, 환불 기준액은 결제 금액에서 돌려준 금액을
+ * 뺀 값이다. 공제율 · 배상액은 환불 계산(#78 · #96)이 이 값들로 계산한다.
+ * <p>
  * 같은 층(②)의 가격(pricing)을 쓴다 — 금액은 {@link com.ticketon.domain.pricing.Money}, 장당 금액 · 적용 할인은
  * {@link com.ticketon.domain.pricing.TicketPrice}, 산 때의 회차 가격은 {@link com.ticketon.domain.pricing.SessionPrice}. 가격은 티켓을 부르지
  * 않는다. 아래 층(①)의 행사(event)도 쓴다 — 공유 링크의 행사 종료는 행사 상태로 본다.
