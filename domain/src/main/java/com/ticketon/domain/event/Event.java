@@ -324,6 +324,190 @@ public final class Event {
     }
 
     /**
+     * 위저드 3단계에서 이 행사의 도면에 블록을 얹는다 — 이름 + 행 × 열 덩어리를 얹으면 격자의 모든 자리에 좌석이 생긴다(docs/02 "에디터는 블록
+     * 단위"). 이름을 비웠으면 "블록 N"을 붙인다({@link FloorPlan#addBlock}).
+     * <ol>
+     *   <li><b>지금 상태의 수정 범위를 확인한다</b> — 도면({@link EventEditTarget#FLOOR_PLAN}). 예매가 열린 뒤에도 빈 블록은 더한다(docs/04 "빈 블록
+     *       추가도 허용합니다"). 판매가 끝나면 도면이 고정되어 막힌다.</li>
+     *   <li>블록을 얹고, 작성 중이면 진행 단계를 3단계까지로 올리고, 마지막 수정 시각을 지금으로 한다. 얹으면 늘 바뀐 것이다.</li>
+     * </ol>
+     * {@link #requireEditable}처럼 저장된 상태로 판정한다. 하나라도 막히면 아무것도 바꾸지 않는다.
+     *
+     * @param requestedName 블록 이름. 비웠으면 null
+     * @return 얹은 블록(블록 · 좌석 모두 아직 id 없음)
+     * @throws RuleViolationException   지금 상태에서 도면을 고칠 수 없으면({@link #requireEditable}과 같은 오류), 이름이 다른 블록 · 구역과
+     *                                  겹치면({@link EventErrorCode#BLOCK_NAME_ALREADY_TAKEN}, {@link EventErrorCode#BLOCK_NAME_TAKEN_BY_ZONE})
+     * @throws IllegalArgumentException 다른 행사의 도면이면
+     */
+    public SeatBlock addBlock(FloorPlan floorPlan, BlockName requestedName, BlockSize size, CanvasPoint position, BlockAngle angle,
+            Instant now) {
+        requireOwnFloorPlan(floorPlan);
+        Objects.requireNonNull(now, "now");
+        requireEditable(EventEditTarget.FLOOR_PLAN);
+        SeatBlock added = floorPlan.addBlock(requestedName, size, position, angle);
+        completeWizardStep(EventWizardStep.SEATING, true, now);
+        return added;
+    }
+
+    /**
+     * 위저드 3단계에서 블록 이름을 바꾼다. 이미 팔린 표의 표기도 따라 바뀐다 — 이력은 남기지 않는다(docs/02 "판매 중에도 블록 이름을 고칠 수
+     * 있습니다"). 좌석의 id와 번호는 그대로다.
+     * <p>
+     * 이름이 바뀔 때만 지금 상태의 수정 범위를 확인한다 — 블록 이름({@link EventEditTarget#BLOCK_NAME}). 예매가 열린 뒤에도 고치고, 판매가 끝나면
+     * 막힌다. 지금과 같은 이름(비웠으면 붙을 "블록 N"이 지금 이름과 같을 때도)이면 수정 범위를 보지 않고 블록도 그대로다 — 같은 값을 몇 번 저장해도
+     * 안전하다. 작성 중이면 진행 단계를 3단계까지로 올리고, 무엇이든 바뀌었으면 마지막 수정 시각을 지금으로 한다. 팔린 좌석이 있는 블록이면 "예매자에게
+     * 알릴까요?" 창은 부르는 쪽이 띄운다(#110).
+     *
+     * @param requestedName 새 이름. 비웠으면 null — "블록 N"을 붙인다
+     * @return 바뀐 것(블록 이름 · 진행 단계)이 있는지
+     * @throws com.ticketon.domain.error.NotFoundException 도면에 없는 블록이면({@link EventErrorCode#BLOCK_NOT_FOUND})
+     * @throws RuleViolationException                      지금 상태에서 블록 이름을 고칠 수 없으면({@link #requireEditable}과 같은 오류),
+     *                                                     이름이 다른 블록 · 구역과 겹치면
+     * @throws IllegalArgumentException                    다른 행사의 도면이면
+     */
+    public boolean renameBlock(FloorPlan floorPlan, long blockId, BlockName requestedName, Instant now) {
+        requireOwnFloorPlan(floorPlan);
+        Objects.requireNonNull(now, "now");
+        boolean renamed = floorPlan.renameBlock(blockId, requestedName, () -> requireEditable(EventEditTarget.BLOCK_NAME));
+        return completeWizardStep(EventWizardStep.SEATING, renamed, now);
+    }
+
+    /**
+     * 위저드 3단계에서 블록을 옮긴다 — 좌석은 블록 안의 자리 · 번호 그대로 함께 옮겨진다. 위치가 바뀔 때만 도면의 수정 범위
+     * ({@link EventEditTarget#FLOOR_PLAN})를 확인한다. 티켓이 걸린 좌석이 있는 블록을 옮길 수 없는 규칙은 #64가 더한다. 진행 단계 · 마지막 수정
+     * 시각은 {@link #renameBlock}과 같다.
+     *
+     * @return 바뀐 것(블록 위치 · 진행 단계)이 있는지
+     * @throws com.ticketon.domain.error.NotFoundException 도면에 없는 블록이면({@link EventErrorCode#BLOCK_NOT_FOUND})
+     * @throws RuleViolationException                      위치가 바뀌는데 지금 상태에서 도면을 고칠 수 없으면
+     * @throws IllegalArgumentException                    다른 행사의 도면이면
+     */
+    public boolean moveBlock(FloorPlan floorPlan, long blockId, CanvasPoint newPosition, Instant now) {
+        requireOwnFloorPlan(floorPlan);
+        Objects.requireNonNull(now, "now");
+        boolean moved = floorPlan.moveBlock(blockId, newPosition, () -> requireEditable(EventEditTarget.FLOOR_PLAN));
+        return completeWizardStep(EventWizardStep.SEATING, moved, now);
+    }
+
+    /**
+     * 위저드 3단계에서 블록을 돌린다(부채꼴 객석) — 좌석은 블록 안의 자리 · 번호 그대로 함께 돌아간다. 각도가 바뀔 때만 도면의 수정 범위를
+     * 확인한다. 나머지는 {@link #moveBlock}과 같다.
+     *
+     * @return 바뀐 것(블록 각도 · 진행 단계)이 있는지
+     * @throws com.ticketon.domain.error.NotFoundException 도면에 없는 블록이면({@link EventErrorCode#BLOCK_NOT_FOUND})
+     * @throws RuleViolationException                      각도가 바뀌는데 지금 상태에서 도면을 고칠 수 없으면
+     * @throws IllegalArgumentException                    다른 행사의 도면이면
+     */
+    public boolean rotateBlock(FloorPlan floorPlan, long blockId, BlockAngle newAngle, Instant now) {
+        requireOwnFloorPlan(floorPlan);
+        Objects.requireNonNull(now, "now");
+        boolean rotated = floorPlan.rotateBlock(blockId, newAngle, () -> requireEditable(EventEditTarget.FLOOR_PLAN));
+        return completeWizardStep(EventWizardStep.SEATING, rotated, now);
+    }
+
+    /**
+     * 위저드 3단계에서 블록을 그 안의 좌석과 함께 지운다. 지운 블록 · 좌석은 저장소가 지운 시각을 적어 남긴다 — 취소 · 회수된 티켓은 원래 좌석을
+     * 그대로 가리킨다(docs/14). 도면의 수정 범위({@link EventEditTarget#FLOOR_PLAN})를 확인한다. 티켓이 걸린 좌석이 있는 블록을 지울 수 없는
+     * 규칙은 #64가 더한다. 작성 중이면 진행 단계를 3단계까지로 올리고, 마지막 수정 시각을 지금으로 한다.
+     *
+     * @return 지운 블록(좌석 포함) — 재고에 알리고 조작 기록을 남기는 데 쓴다
+     * @throws com.ticketon.domain.error.NotFoundException 도면에 없는 블록이면({@link EventErrorCode#BLOCK_NOT_FOUND})
+     * @throws RuleViolationException                      지금 상태에서 도면을 고칠 수 없으면({@link #requireEditable}과 같은 오류)
+     * @throws IllegalArgumentException                    다른 행사의 도면이면
+     */
+    public SeatBlock removeBlock(FloorPlan floorPlan, long blockId, Instant now) {
+        requireOwnFloorPlan(floorPlan);
+        Objects.requireNonNull(now, "now");
+        floorPlan.block(blockId);
+        requireEditable(EventEditTarget.FLOOR_PLAN);
+        SeatBlock removed = floorPlan.removeBlock(blockId);
+        completeWizardStep(EventWizardStep.SEATING, true, now);
+        return removed;
+    }
+
+    /**
+     * 위저드 3단계에서 좌석들을 지정형 구역에 배정한다(색칠). 하나라도 바뀔 때만 도면의 수정 범위({@link EventEditTarget#FLOOR_PLAN})를 확인한다
+     * — 모두 이미 그 구역이면 보지 않는다. 묶음 안에 도면에 없는 좌석이 하나라도 있으면 아무것도 바꾸지 않는다. 진행 단계 · 마지막 수정 시각은
+     * {@link #renameBlock}과 같다.
+     *
+     * @return 바뀐 것(좌석 · 진행 단계)이 있는지
+     * @throws com.ticketon.domain.error.NotFoundException 도면에 없는 구역 · 좌석이면({@link EventErrorCode#ZONE_NOT_FOUND},
+     *                                                     {@link EventErrorCode#SEAT_NOT_FOUND})
+     * @throws RuleViolationException                      바뀌는데 지금 상태에서 도면을 고칠 수 없으면, 수량형 구역이면
+     *                                                     ({@link EventErrorCode#QUANTITY_ZONE_HAS_NO_SEATS})
+     * @throws IllegalArgumentException                    다른 행사의 도면이면
+     */
+    public boolean assignSeatsToZone(FloorPlan floorPlan, Set<Long> seatIds, long zoneId, Instant now) {
+        requireOwnFloorPlan(floorPlan);
+        Objects.requireNonNull(now, "now");
+        boolean assigned = floorPlan.assignSeatsToZone(seatIds, zoneId, () -> requireEditable(EventEditTarget.FLOOR_PLAN));
+        return completeWizardStep(EventWizardStep.SEATING, assigned, now);
+    }
+
+    /**
+     * 위저드 3단계에서 좌석들의 구역 배정을 푼다(색 지우기). 나머지는 {@link #assignSeatsToZone}과 같다.
+     *
+     * @return 바뀐 것(좌석 · 진행 단계)이 있는지
+     * @throws com.ticketon.domain.error.NotFoundException 도면에 없는 좌석이면({@link EventErrorCode#SEAT_NOT_FOUND})
+     * @throws RuleViolationException                      바뀌는데 지금 상태에서 도면을 고칠 수 없으면
+     * @throws IllegalArgumentException                    다른 행사의 도면이면
+     */
+    public boolean unassignSeats(FloorPlan floorPlan, Set<Long> seatIds, Instant now) {
+        requireOwnFloorPlan(floorPlan);
+        Objects.requireNonNull(now, "now");
+        boolean unassigned = floorPlan.unassignSeats(seatIds, () -> requireEditable(EventEditTarget.FLOOR_PLAN));
+        return completeWizardStep(EventWizardStep.SEATING, unassigned, now);
+    }
+
+    /**
+     * 위저드 3단계에서 좌석들의 속성(일반 · 휠체어 · 시야제한)을 정한다 — 물리적 사실이라 도면에 붙는다(docs/02 "좌석 속성"). 나머지는
+     * {@link #assignSeatsToZone}과 같다.
+     *
+     * @return 바뀐 것(좌석 · 진행 단계)이 있는지
+     * @throws com.ticketon.domain.error.NotFoundException 도면에 없는 좌석이면({@link EventErrorCode#SEAT_NOT_FOUND})
+     * @throws RuleViolationException                      바뀌는데 지금 상태에서 도면을 고칠 수 없으면
+     * @throws IllegalArgumentException                    다른 행사의 도면이면
+     */
+    public boolean changeSeatAttribute(FloorPlan floorPlan, Set<Long> seatIds, SeatAttribute attribute, Instant now) {
+        requireOwnFloorPlan(floorPlan);
+        Objects.requireNonNull(now, "now");
+        boolean changed = floorPlan.changeSeatAttribute(seatIds, attribute, () -> requireEditable(EventEditTarget.FLOOR_PLAN));
+        return completeWizardStep(EventWizardStep.SEATING, changed, now);
+    }
+
+    /**
+     * 위저드 3단계에서 좌석들을 끄거나(통로 · 기둥 같은 빈 자리) 다시 켠다(docs/02 "블록 안 개별 좌석 비활성화"). 번호는 다시 매기지 않고 구역 ·
+     * 속성은 그대로 둔다. 티켓이 걸린 좌석을 끌 수 없는 규칙은 #64가 더한다. 나머지는 {@link #assignSeatsToZone}과 같다.
+     *
+     * @param active 켤지(true) 끌지(false)
+     * @return 바뀐 것(좌석 · 진행 단계)이 있는지
+     * @throws com.ticketon.domain.error.NotFoundException 도면에 없는 좌석이면({@link EventErrorCode#SEAT_NOT_FOUND})
+     * @throws RuleViolationException                      바뀌는데 지금 상태에서 도면을 고칠 수 없으면
+     * @throws IllegalArgumentException                    다른 행사의 도면이면
+     */
+    public boolean changeSeatActivation(FloorPlan floorPlan, Set<Long> seatIds, boolean active, Instant now) {
+        requireOwnFloorPlan(floorPlan);
+        Objects.requireNonNull(now, "now");
+        boolean changed = floorPlan.changeSeatActivation(seatIds, active, () -> requireEditable(EventEditTarget.FLOOR_PLAN));
+        return completeWizardStep(EventWizardStep.SEATING, changed, now);
+    }
+
+    /**
+     * 위저드 3단계에서 무대 위치를 정한다(docs/02 "에디터는 블록 단위" — 무대 위치 지정). 위치가 바뀔 때만 도면의 수정 범위를 확인한다. 진행 단계 ·
+     * 마지막 수정 시각은 {@link #renameBlock}과 같다.
+     *
+     * @return 바뀐 것(무대 위치 · 진행 단계)이 있는지
+     * @throws RuleViolationException   위치가 바뀌는데 지금 상태에서 도면을 고칠 수 없으면({@link #requireEditable}과 같은 오류)
+     * @throws IllegalArgumentException 다른 행사의 도면이면
+     */
+    public boolean placeStage(FloorPlan floorPlan, CanvasPoint position, Instant now) {
+        requireOwnFloorPlan(floorPlan);
+        Objects.requireNonNull(now, "now");
+        boolean placed = floorPlan.placeStage(position, () -> requireEditable(EventEditTarget.FLOOR_PLAN));
+        return completeWizardStep(EventWizardStep.SEATING, placed, now);
+    }
+
+    /**
      * 위저드 6단계에서 이 행사의 입구 목록에 입구를 더한다(docs/02 "입구 (게이트)"). 입구 목록은 판매가 끝난 뒤에도 행사가 끝날 때까지 고친다 —
      * 18:10에 정문 줄이 길어 "옆문"을 더한다(docs/04 "판매 종료는 공연이 끝난 때가 아닙니다", {@link EventEditTarget#ENTRANCES}).
      * <p>
