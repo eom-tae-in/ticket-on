@@ -5,6 +5,7 @@ import static com.ticketon.domain.event.EventFixtures.assertRejected;
 import static com.ticketon.domain.event.EventFixtures.twelveMonthsSpringPlay;
 import static com.ticketon.domain.event.EventStatusFixtures.ADDRESS;
 import static com.ticketon.domain.event.EventStatusFixtures.LAST_MODIFIED_AT;
+import static com.ticketon.domain.event.EventStatusFixtures.POSTER;
 import static com.ticketon.domain.event.EventStatusFixtures.korean;
 import static com.ticketon.domain.event.EventStatusFixtures.springPlayIn;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,6 +40,9 @@ class EventWizardStepSaveTest {
 
     private static final EventPasswordHash HASH_OF_0315 = new EventPasswordHash("{test}0315");
     private static final EventPasswordHash HASH_OF_0412 = new EventPasswordHash("{test}0412");
+
+    /** 새로 올린 포스터 — 크롭 도구로 3:4로 자른 JPEG. */
+    private static final EventPoster NEW_POSTER = new EventPoster("Nw4pS7tU2vW9xY1zA6bC8dE3fG5hJ0kM.jpg");
 
     /** "공연 3일 전까지 전액 환불"(docs/08 조정 예시). */
     private static final CancellationPolicy FULL_REFUND_UNTIL_THREE_DAYS_BEFORE = CancellationPolicy.of(List.of(
@@ -362,6 +366,77 @@ class EventWizardStepSaveTest {
 
             assertRejected(() -> event.saveBookingStep(EventVisibility.LINK_ONLY, null, BookingSettings.defaults(),
                     CancellationPolicy.standard(), SAVED_AT), EventErrorCode.EDIT_LOCKED_AFTER_SALES_CLOSED);
+        }
+    }
+
+    @Nested
+    @DisplayName("1단계 — 포스터")
+    class PosterStep {
+
+        @Test
+        @DisplayName("처음 올리면 바꾸기 전 포스터가 없고, 1단계 필수 항목이 다 차며, 마지막 수정 시각이 올린 시각이 된다")
+        void firstUpload() {
+            Event event = newSpringPlay();
+
+            assertThat(event.changePoster(NEW_POSTER, SAVED_AT)).isEmpty();
+
+            assertThat(event.poster()).contains(NEW_POSTER);
+            assertThat(event.isBasicInformationComplete()).isTrue();
+            assertThat(event.wizardProgress()).isEqualTo(EventWizardStep.BASIC_INFORMATION);
+            assertThat(event.lastModifiedAt()).isEqualTo(SAVED_AT);
+        }
+
+        @Test
+        @DisplayName("5단계까지 저장한 뒤 포스터를 바꿔도 진행 단계는 5단계에서 내려가지 않는다 — 바꾸기 전 포스터를 돌려준다")
+        void replacingKeepsProgress() {
+            Event event = newSpringPlay();
+            event.changePoster(POSTER, SAVED_AT);
+            saveDefaultBookingStep(event, SAVED_AT);
+
+            assertThat(event.changePoster(NEW_POSTER, SAVED_AGAIN_AT)).contains(POSTER);
+
+            assertThat(event.poster()).contains(NEW_POSTER);
+            assertThat(event.wizardProgress()).isEqualTo(EventWizardStep.BOOKING_SETTINGS);
+            assertThat(event.lastModifiedAt()).isEqualTo(SAVED_AGAIN_AT);
+        }
+
+        @Test
+        @DisplayName("판매 대기와 예매가 열린 뒤(판매 중 · 판매 중단)에도 포스터를 자유롭게 바꾼다 — 진행 단계는 움직이지 않는다")
+        void replaceableUntilSalesClose() {
+            for (EventStatus status : List.of(EventStatus.AWAITING_OPEN, EventStatus.ON_SALE, EventStatus.SALES_PAUSED)) {
+                Event event = springPlayIn(status);
+
+                assertThat(event.changePoster(NEW_POSTER, SAVED_AT)).as(status.name()).contains(POSTER);
+
+                assertThat(event.poster()).as(status.name()).contains(NEW_POSTER);
+                assertThat(event.wizardProgress()).as(status.name()).isEqualTo(EventWizardStep.ENTRANCES_AND_CHECKIN_ACCOUNTS);
+                assertThat(event.lastModifiedAt()).as(status.name()).isEqualTo(SAVED_AT);
+            }
+        }
+
+        @Test
+        @DisplayName("판매가 끝나면 포스터가 고정되고, 지난 행사도 고정이다 — 막히면 포스터도 마지막 수정 시각도 그대로다")
+        void lockedAfterSalesClosed() {
+            Event salesClosed = springPlayIn(EventStatus.SALES_CLOSED);
+
+            assertRejected(() -> salesClosed.changePoster(NEW_POSTER, SAVED_AT), EventErrorCode.EDIT_LOCKED_AFTER_SALES_CLOSED);
+            assertThat(salesClosed.poster()).contains(POSTER);
+            assertThat(salesClosed.lastModifiedAt()).isEqualTo(LAST_MODIFIED_AT);
+            for (EventStatus status : List.of(EventStatus.ENDED, EventStatus.SETTLED, EventStatus.CANCELLED)) {
+                Event past = springPlayIn(status);
+
+                assertRejected(() -> past.changePoster(NEW_POSTER, SAVED_AT), EventErrorCode.EDIT_LOCKED_FOR_PAST_EVENT);
+                assertThat(past.poster()).as(status.name()).contains(POSTER);
+            }
+        }
+
+        @Test
+        @DisplayName("지금 포스터와 같은 열쇠는 받지 않는다 — 바꾸기 전 포스터로 정리하다 지금 포스터의 파일을 지우지 않게")
+        void sameKeyIsRejected() {
+            Event event = springPlayIn(EventStatus.DRAFT);
+
+            assertThatIllegalArgumentException().isThrownBy(() -> event.changePoster(POSTER, SAVED_AT));
+            assertThat(event.lastModifiedAt()).isEqualTo(LAST_MODIFIED_AT);
         }
     }
 

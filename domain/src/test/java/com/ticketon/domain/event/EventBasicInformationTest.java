@@ -183,12 +183,5 @@ class EventBasicInformationTest {
             assertThat(EventPublicContact.of("010-2345-6789")).hasToString("EventPublicContact[****]");
             assertThat(twelveMonthsSpringPlay().toString()).doesNotContain("twelve-months@example.com");
         }
-
-        @Test
-        @DisplayName("포스터는 파일 열쇠를 가리키고, 열쇠는 비울 수 없다")
-        void posterFileKey() {
-            assertThat(new EventPoster(" poster-key.jpg ").fileKey()).isEqualTo("poster-key.jpg");
-            assertThatIllegalArgumentException().isThrownBy(() -> new EventPoster("  "));
-        }
     }
 }

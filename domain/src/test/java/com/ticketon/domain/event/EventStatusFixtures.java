@@ -25,6 +25,9 @@ final class EventStatusFixtures {
 
     static final long EVENT_ID = 7L;
     static final EventPublicAddress ADDRESS = new EventPublicAddress("Xb3kQ9-_mN2pL7vR4tY8wZ1aC5dE6fG0");
+
+    /** 저장돼 있던 행사에 올라가 있는 포스터. */
+    static final EventPoster POSTER = new EventPoster("Pq7rS2tU9vW4xY6zA1bC3dE5fG8hJ0kL.jpg");
     static final LocalDate MARCH_14 = LocalDate.of(2026, 3, 14);
     static final LocalDate MARCH_15 = LocalDate.of(2026, 3, 15);
     static final LocalDate MARCH_21 = LocalDate.of(2026, 3, 21);
@@ -114,7 +117,7 @@ final class EventStatusFixtures {
     /** 그 상태 · 예매 설정 · 판매 중단 이력 · 예매가 열린 시각으로 저장돼 있던 봄 정기공연. */
     static Event springPlayIn(EventStatus status, BookingSettings bookingSettings, List<SalesPause> salesPauses,
             Instant bookingOpenedAt) {
-        return Event.restore(EVENT_ID, TWELVE_MONTHS_ORGANIZER, ADDRESS, twelveMonthsSpringPlay(), new EventPoster("poster-key.jpg"),
+        return Event.restore(EVENT_ID, TWELVE_MONTHS_ORGANIZER, ADDRESS, twelveMonthsSpringPlay(), POSTER,
                 EventVisibilitySetting.publicByDefault(), bookingSettings, CancellationPolicy.standard(), status, bookingOpenedAt,
                 salesPauses, EventWizardStep.ENTRANCES_AND_CHECKIN_ACCOUNTS, LAST_MODIFIED_AT);
     }

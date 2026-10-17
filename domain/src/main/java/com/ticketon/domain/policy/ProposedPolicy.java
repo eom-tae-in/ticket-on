@@ -131,8 +131,8 @@ public final class ProposedPolicy {
      * 확인 필요 (#29, 문서에 없음) — 주최자 로고 파일 용량 상한. 이보다 큰 로고는 받지 않는다(1MB = 1,048,576바이트,
      * {@link FileSize}).
      * 2MB를 제안한다: 로고는 화면에서 정사각형으로 잘라 올리는 작은 그림이고(docs/01 "공개 페이지 — 로고"), 주최자 페이지 머리에 작게 보여 수백
-     * 픽셀이면 충분하다. 휴대폰 사진을 잘라 그대로 올려도 대개 들어가는 크기다. 포스터(#40, 제안 5MB)는 목록 카드와 상세 페이지에 크게 보여 더
-     * 넉넉히 둔다. 로고는 "포스터처럼 크롭 도구"로 올리므로(docs/01) 포스터의 "업로드 후 크롭 도구를 제공하고 용량 상한을 둡니다"(docs/03
+     * 픽셀이면 충분하다. 휴대폰 사진을 잘라 그대로 올려도 대개 들어가는 크기다. 포스터({@link #EVENT_POSTER_MAXIMUM_SIZE}, 제안 5MB)는 목록
+     * 카드와 상세 페이지에 크게 보여 더 넉넉히 둔다. 로고는 "포스터처럼 크롭 도구"로 올리므로(docs/01) 포스터의 "업로드 후 크롭 도구를 제공하고 용량 상한을 둡니다"(docs/03
      * "기본 정보")를 로고에도 같은 방식으로 적용했다.
      */
     public static final FileSize ORGANIZER_LOGO_MAXIMUM_SIZE = FileSize.ofMegabytes(2);
@@ -149,12 +149,42 @@ public final class ProposedPolicy {
 
     /**
      * 확인 필요 (#29, 문서에 없음 — 기술값) — 파일 올리기 요청 하나의 바깥 울타리. 서버는 이보다 큰 파일 · 요청을 끝까지 읽지 않고 끊는다(400).
-     * 파일마다의 상한(로고 {@link #ORGANIZER_LOGO_MAXIMUM_SIZE})은 그 안에서 따로 본다.
-     * 10MB를 제안한다: 파일마다의 상한(로고 2MB, 포스터 제안 5MB — #40)보다 넉넉해, 상한을 조금 넘은 파일도 끝까지 받아 "2MB 이하로 올려 주세요"처럼
+     * 파일마다의 상한(로고 {@link #ORGANIZER_LOGO_MAXIMUM_SIZE}, 포스터 {@link #EVENT_POSTER_MAXIMUM_SIZE})은 그 안에서 따로 본다.
+     * 10MB를 제안한다: 파일마다의 상한(로고 2MB, 포스터 5MB)보다 넉넉해, 상한을 조금 넘은 파일도 끝까지 받아 "2MB 이하로 올려 주세요"처럼
      * 까닭을 칸 옆에 알려 줄 수 있다. 그보다 훨씬 큰 요청(휴대폰 원본 동영상 등)은 읽기 전에 끊어 서버 디스크 · 메모리를 아낀다. Spring 기본값(1MB)은
      * 로고 상한보다 작아 그대로 둘 수 없다.
      */
     public static final FileSize UPLOAD_REQUEST_MAXIMUM_SIZE = FileSize.ofMegabytes(10);
+
+    /**
+     * 확인 필요 (#40, 문서에 "용량 상한을 둡니다"만 있고 값이 없음) — 행사 포스터 파일 용량 상한. 이보다 큰 포스터는 받지 않는다(1MB =
+     * 1,048,576바이트, {@link FileSize}).
+     * 5MB를 제안한다: 포스터는 목록 카드와 행사 상세 페이지에 크게 보이고 카톡 링크 미리보기 그림으로도 쓰여(docs/03 "기본 정보", docs/13) 로고
+     * ({@link #ORGANIZER_LOGO_MAXIMUM_SIZE}, 2MB)보다 큰 그림이 필요하다. 인쇄용 포스터를 화면의 크롭 도구로 3:4로 잘라 내보내도(브라우저 캔버스의
+     * JPEG · PNG) 대개 들어가는 크기이고, 관객이 휴대폰으로 행사 목록을 넘길 때 받는 그림이 지나치게 커지지 않는다. 파일 올리기 요청의 바깥 울타리
+     * ({@link #UPLOAD_REQUEST_MAXIMUM_SIZE}, 10MB)보다 작아, 상한을 조금 넘은 포스터도 끝까지 받아 칸 옆에 까닭을 알려 줄 수 있다.
+     */
+    public static final FileSize EVENT_POSTER_MAXIMUM_SIZE = FileSize.ofMegabytes(5);
+
+    /**
+     * 확인 필요 (#40, 문서에 없음) — 행사 포스터로 받는 그림 형식. 이 밖의 형식은 받지 않는다. 형식은 올린 쪽이 적은 형식과 파일 첫머리의 실제
+     * 시그니처가 모두 맞아야 한다(확장자는 보지 않는다).
+     * PNG · JPEG를 제안한다: 주최자 로고({@link #ORGANIZER_LOGO_ACCEPTED_FORMATS})와 같은 까닭이다 — 화면의 크롭 도구가 잘라 낸 그림을 내보내는
+     * 형식이고, SVG는 그림 안에 스크립트를 넣을 수 있어 누구나 여는 공개 주소로 내주기 위험하며, GIF · WebP는 JDK ImageIO가 크기를 읽지 못하거나
+     * (WebP) 움직이는 그림이라(GIF) 뺐다.
+     */
+    public static final Set<ImageFormat> EVENT_POSTER_ACCEPTED_FORMATS =
+            Collections.unmodifiableSet(EnumSet.of(ImageFormat.PNG, ImageFormat.JPEG));
+
+    /**
+     * 확인 필요 (#40, 문서에 "3:4 세로 고정"만 있고 오차가 없음) — 행사 포스터 비율({@link QuantityPolicy#POSTER_ASPECT_RATIO}, 3:4)의 허용 오차.
+     * 그림의 가로 ÷ 세로가 3 ÷ 4에서 이 비율 넘게 벗어나면 받지 않는다({@link AspectRatio#isMatchedBy}). 예: 세로 1,200픽셀이면 가로 891~909픽셀.
+     * 1%를 제안한다: 화면의 크롭 도구가 3:4로 잘라도 픽셀은 정수라 가로가 조금 어긋난다(세로 1,199픽셀의 3:4 가로는 899.25픽셀). 가로를 정수로
+     * 맞추며 생기는 어긋남(1픽셀 미만)은 세로가 67픽셀 이상이면, 꼭 1픽셀 어긋나도 세로가 134픽셀 이상이면 1% 안에 들고, 1% 차이는 목록 카드에서
+     * 눈에 띄지 않는다. 오차가 크면 비율을 고정한 뜻이 옅어진다 — A4 세로
+     * (1:1.414, 3:4에서 약 6%)처럼 흔한 다른 비율은 크롭 도구로 3:4로 잘라 올리게 한다.
+     */
+    public static final Percent EVENT_POSTER_ASPECT_RATIO_TOLERANCE = Percent.of(1);
 
     /**
      * 확인 필요 (#31, 문서에 없음) — 소유자 화면의 정산 계좌번호에서 그대로 보이는 마지막 숫자의 수. 나머지 숫자는 {@code *}로 가린다

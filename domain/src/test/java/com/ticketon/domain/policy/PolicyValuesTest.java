@@ -90,6 +90,39 @@ class PolicyValuesTest {
             assertThatThrownBy(() -> new AspectRatio(0, 4)).isInstanceOf(IllegalArgumentException.class);
             assertThatThrownBy(() -> new AspectRatio(3, -4)).isInstanceOf(IllegalArgumentException.class);
         }
+
+        @Test
+        @DisplayName("3:4에 오차 1%면 세로 1,200픽셀의 가로는 891~909픽셀이 맞고, 그 밖은 맞지 않는다 — 경계는 같은 것으로 본다")
+        void matchesWithinTolerance() {
+            AspectRatio threeByFour = new AspectRatio(3, 4);
+
+            assertThat(threeByFour.isMatchedBy(900, 1200, Percent.of(0))).isTrue();
+            assertThat(threeByFour.isMatchedBy(901, 1200, Percent.of(0))).isFalse();
+            assertThat(threeByFour.isMatchedBy(891, 1200, Percent.of(1))).isTrue();
+            assertThat(threeByFour.isMatchedBy(909, 1200, Percent.of(1))).isTrue();
+            assertThat(threeByFour.isMatchedBy(890, 1200, Percent.of(1))).isFalse();
+            assertThat(threeByFour.isMatchedBy(910, 1200, Percent.of(1))).isFalse();
+        }
+
+        @Test
+        @DisplayName("1:1 · 4:3은 3:4와 맞지 않는다 — 아주 큰 픽셀 수도 넘치지 않고 셈한다")
+        void otherRatiosDoNotMatch() {
+            AspectRatio threeByFour = new AspectRatio(3, 4);
+
+            assertThat(threeByFour.isMatchedBy(1200, 1200, Percent.of(1))).isFalse();
+            assertThat(threeByFour.isMatchedBy(1200, 900, Percent.of(1))).isFalse();
+            assertThat(threeByFour.isMatchedBy(1_500_000_000, 2_000_000_000, Percent.of(1))).isTrue();
+            assertThat(threeByFour.isMatchedBy(Integer.MAX_VALUE, Integer.MAX_VALUE, Percent.of(1))).isFalse();
+        }
+
+        @Test
+        @DisplayName("0 이하의 픽셀은 견주지 않는다")
+        void nonPositivePixelsRejected() {
+            assertThatThrownBy(() -> new AspectRatio(3, 4).isMatchedBy(0, 4, Percent.of(1)))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> new AspectRatio(3, 4).isMatchedBy(3, -4, Percent.of(1)))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
     }
 
     @Nested

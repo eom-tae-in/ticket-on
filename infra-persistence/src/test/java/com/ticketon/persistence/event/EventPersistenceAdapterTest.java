@@ -337,7 +337,7 @@ class EventPersistenceAdapterTest {
     @DisplayName("포스터 칸이 생기기 전(#40)에는 포스터가 있는 행사를 저장하지 않는다 — 말없이 빠뜨리지 않게")
     void refusesPosterUntilColumnExists() {
         Event event = adapter.add(newSpringPlay());
-        event.changePoster(new EventPoster("poster-key.jpg"));
+        event.changePoster(new EventPoster("Pq7rS2tU9vW4xY6zA1bC3dE5fG8hJ0kL.jpg"), SAVED_AT);
 
         assertThatIllegalStateException().isThrownBy(() -> adapter.save(event));
     }
