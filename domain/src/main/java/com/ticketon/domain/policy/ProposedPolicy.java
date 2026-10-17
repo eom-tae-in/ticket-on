@@ -53,6 +53,13 @@ import java.util.Set;
  *       {@code domain.pricing.Discount#requireLeavesPositivePrice}.</li>
  *   <li>확인 필요 (#49) — 할인 기간(조기예매 기간 · 쿠폰 유효 기간)은 시작과 끝을 모두 받고, 시작 순간부터 끝 순간 직전까지다:
  *       {@code domain.pricing.DiscountPeriod}.</li>
+ *   <li>확인 필요 (#49) — 끝난(소진 · 기간 종료) 조기예매는 설정을 바꿀 수 없고, 수량은 사용 수 아래로 줄일 수 없다:
+ *       {@code domain.pricing.EarlyBird#reconfigure}.</li>
+ *   <li>확인 필요 (#49) — 조기예매 기간 겹침 경고는 적용 범위를 보지 않고 기간만 본다(1일권 전용 · 3일권 전용이 같은 기간이어도 경고). 한 티켓에
+ *       닿는 조기예매가 여럿이면 유리한 쪽 → 먼저 끝나는 쪽 → 만든 순서로 고르고, 앞의 것에서 모자란 몫은 다음 것에서 채운다:
+ *       {@code domain.pricing.EarlyBirds}.</li>
+ *   <li>확인 필요 (#49) — 31번째 사람의 "정가로 진행할지 확인"은 닿는 조기예매가 기간 안인데 몫이 모자라면(일부만 모자라도, 이미 소진된 뒤라도)
+ *       묻고, 기간 밖이면 묻지 않는다: {@code domain.pricing.EarlyBirdAllocation#needsRegularPriceConfirmation}.</li>
  * </ul>
  */
 public final class ProposedPolicy {

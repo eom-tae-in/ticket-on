@@ -8,7 +8,7 @@ import java.util.Optional;
  * <p>
  * 기본 가격은 일반 티켓이면 회차 가격({@link SessionPrice}), 묶음권이면 묶음권 가격({@link BundleDayPrices#bundlePrice})이다. 조기예매 몫은
  * 좌석을 선점하는 순간 티켓마다 잡히므로(docs/05 "조기예매 — 재고") 몫이 2장만 남았는데 4매를 사면 두 장에만 조기예매가 붙는다. 어느 티켓이 몫을
- * 받았는지는 선점(#70)이, 조기예매의 할인 값은 조기예매 규칙(#49)이 정한다.
+ * 받았는지와 그 할인은 몫을 잡은 결과({@link EarlyBirdAllocation#ticketsBeforeDiscount})가 정하고, 선점(#70)이 잠근다.
  *
  * @param basePrice 기본 가격, 1원 이상
  * @param earlyBird 이 티켓이 받은 조기예매 할인. 몫을 받지 못했으면 비어 있다
