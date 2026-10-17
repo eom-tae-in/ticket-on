@@ -8,6 +8,10 @@
  *       {@link com.ticketon.domain.inventory.SeatSaleStatus}의 표 하나에 있다.</li>
  *   <li><b>수량형</b> — 회차 × 구역 정원 · 판매 수 · 선점 수 · 관계자 확보 수 · 초대 발권 수({@link com.ticketon.domain.inventory.QuantityZoneStock}).
  *       수량형의 판매 제외는 "관계자용 10석 확보"다(docs/09).</li>
+ *   <li><b>회차 재고</b>({@link com.ticketon.domain.inventory.SessionInventory}) — 한 회차의 좌석 재고와 수량형 재고. 좌석 여럿을 한꺼번에
+ *       잡고, 도면과 함께 구역별 잔여를 센다.</li>
+ *   <li><b>행사 재고</b>({@link com.ticketon.domain.inventory.EventInventory}) — 한 행사의 회차 재고 전부. 판매 제외 전 회차 일괄 적용과,
+ *       회차 · 좌석 · 수량형 구역이 생기고 지워질 때 회차마다 재고를 만들고 빼는 일을 한다.</li>
  * </ul>
  * '매진'은 상태가 아니라 잔여가 0인 순간의 표시라 저장하지 않는다(docs/04 "'매진'은 상태가 아닙니다"). 매진 · 매진 임박은
  * {@link com.ticketon.domain.inventory.RemainingSeats}가 계산한다.
