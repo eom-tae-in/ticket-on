@@ -2,6 +2,9 @@ package com.ticketon.domain.ticket;
 
 import com.ticketon.domain.error.RuleViolationException;
 import com.ticketon.domain.event.EventStatus;
+import com.ticketon.domain.event.SeatLabel;
+import com.ticketon.domain.event.SessionTimes;
+import com.ticketon.domain.event.ZoneName;
 import com.ticketon.domain.pricing.BundleDayPrices;
 import com.ticketon.domain.pricing.DiscountKind;
 import com.ticketon.domain.pricing.Money;
@@ -11,6 +14,7 @@ import java.time.Instant;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -47,6 +51,9 @@ import java.util.Set;
  * <p>
  * <b>예매 티켓과 초대권 티켓</b> — 예매 티켓은 결제 금액 · 적용 할인과 회차마다 산 때의 가격을 갖는다. 초대권 티켓은 결제가 없어 그 칸이 비고,
  * 공제 면제 · 배상 · 회차별 포기 · 부분 환불도 없다(돈이 오가지 않는다, docs/08 "초대권").
+ * <p>
+ * 티켓이 저장하는 상태는 "취소됐나"(취소 시각 · 사유)뿐이다. "입장 완료"와 "만료(공연 종료)"는 저장하지 않고 회차의 시각과 입장 기록 여부로 그때마다
+ * 계산한다({@link #display}, docs/14 "저장하는 것과 계산하는 것").
  * <p>
  * 새 티켓은 {@link #issueForBooking} · {@link #issueForInvitation}으로 발급하고, 저장소에서 다시 읽을 때는 {@link #restore}를 쓴다. 저장 전
  * 티켓은 id가 없다. 발급하는 흐름은 #74(예매) · #86(초대권)이, 저장은 #57이 맡는다.
@@ -379,6 +386,79 @@ public final class Ticket {
      */
     public Money refundBaseAmount() {
         return paidAmount().minus(partiallyRefundedAmount);
+    }
+
+    /**
+     * 관객 화면에 그릴 모습을 계산한다 — 저장하지 않는다(docs/07 "관객 화면의 표시는 계산됩니다"). 차례대로 본다.
+     * <ol>
+     *   <li>취소 시각이 있으면 <b>취소됨 · 사유</b>.</li>
+     *   <li>가리키는 회차가 모두 끝났으면 <b>공연 종료</b> — 입장 기록이 있어도 그렇다. 1년 전 공연에 "입장 완료"가 붙어 있을 필요가 관객에게 없다
+     *       (docs/07 "입장 기록은 30일 후 소멸합니다"). 확인 필요 (#56) — 입장 기록이 남은 30일 동안 어느 쪽을 보일지는 문서에 없다.</li>
+     *   <li>입장 기록이 있으면 <b>입장 완료</b>.</li>
+     *   <li>그 밖에는 <b>유효</b>.</li>
+     * </ol>
+     * QR · 공유 버튼은 취소됨 · 공연 종료에서 빠진다({@link TicketDisplay#showsQrAndShareButtons}).
+     *
+     * @param sessionTimes   가리키는 회차마다 그 회차의 시각 — 회차 id로 찾는다. 다른 회차가 더 있어도 된다
+     * @param hasEntryRecord 이 티켓에 입장 기록이 하나라도 있는지 — 입장 기록은 검표(checkin)가 갖고, 티켓에 "입장했음"을 남기지 않는다(docs/99 B
+     *                       "티켓의 '입장했음' 요약")
+     * @throws IllegalArgumentException 가리키는 회차의 시각이 빠졌으면
+     */
+    public TicketDisplay display(Map<Long, SessionTimes> sessionTimes, boolean hasEntryRecord, Instant now) {
+        boolean allSessionsEnded = hasAllSessionsEnded(sessionTimes, now);
+        if (cancellation != null) {
+            return TicketDisplay.cancelled(cancellation.reason());
+        }
+        if (allSessionsEnded) {
+            return TicketDisplay.of(TicketDisplayStatus.PERFORMANCE_ENDED);
+        }
+        return TicketDisplay.of(hasEntryRecord ? TicketDisplayStatus.ENTERED : TicketDisplayStatus.VALID);
+    }
+
+    /**
+     * 가리키는 회차가 모두 끝났는지 — 그러면 QR · 공유 버튼을 그리지 않는다(docs/07 "화면에서는 버튼만 빠집니다"). <b>판단은 티켓마다</b>다. 8회차
+     * 행사에서 3/14 표는 3/14 공연이 끝나면 버튼이 사라지고, 3일권은 마지막 날이 끝나야 사라진다.
+     * <p>
+     * 회차가 끝난 때는 회차 상태의 '종료'와 같다 — 회차형은 종료 시각, 종일형은 운영 종료, 그 순간부터 끝난 것이다({@link SessionTimes#endsAt}).
+     * 회차형에서 종료 시각을 비워 두었으면 끝났는지 알 수 없어 끝나지 않은 것으로 본다 — 행사 종료도 그때는 판정하지 않는다(docs/04 "회차 종료
+     * 시각이 없으면 행사 종료를 판정할 수 없습니다"). 취소된 회차 · 포기한 회차도 그 회차의 시각이 지나야 끝난 것으로 센다. 확인 필요 (#56) —
+     * 문서는 "가리키는 회차가 모두 끝났으면"만 적는다.
+     *
+     * @param sessionTimes 가리키는 회차마다 그 회차의 시각 — 회차 id로 찾는다. 다른 회차가 더 있어도 된다
+     * @throws IllegalArgumentException 가리키는 회차의 시각이 빠졌으면
+     */
+    public boolean hasAllSessionsEnded(Map<Long, SessionTimes> sessionTimes, Instant now) {
+        Objects.requireNonNull(sessionTimes, "sessionTimes");
+        Objects.requireNonNull(now, "now");
+        boolean allEnded = true;
+        for (TicketSession session : sessions) {
+            SessionTimes times = sessionTimes.get(session.sessionId());
+            if (times == null) {
+                throw new IllegalArgumentException("가리키는 회차의 시각이 없습니다: 티켓 " + describe() + ", 회차 " + session.sessionId());
+            }
+            boolean ended = times.endsAt().map(endsAt -> !now.isBefore(endsAt)).orElse(false);
+            allEnded = allEnded && ended;
+        }
+        return allEnded;
+    }
+
+    /**
+     * 티켓 표기 — 지정석은 "R석 12열 7번", 수량형은 "스탠딩A · 0091-2"(docs/07 "티켓 표기"). 이름은 티켓에 복사하지 않고 그릴 때마다 구역 ·
+     * 좌석 · 블록에서 지금 이름을 읽어 넘긴다 — 블록 이름 오타를 고치면 이미 팔린 표의 표기도 따라 바뀐다.
+     *
+     * @param zoneName  가리키는 구역의 지금 이름(지운 구역이면 그 기록에 남은 이름)
+     * @param seatLabel 가리키는 좌석의 표기({@link PointedSeat#label}) — 지정석만 있다
+     * @throws IllegalArgumentException 지정석인데 좌석 표기가 없거나, 수량형인데 좌석 표기가 있으면
+     */
+    public TicketLabel label(ZoneName zoneName, Optional<SeatLabel> seatLabel) {
+        Objects.requireNonNull(zoneName, "zoneName");
+        Objects.requireNonNull(seatLabel, "seatLabel");
+        if ((seatId != null) != seatLabel.isPresent()) {
+            throw new IllegalArgumentException("지정석에만 좌석 표기가 있습니다: 티켓 " + describe() + ", 좌석 " + seatId + ", 표기 " + seatLabel);
+        }
+        return seatLabel
+                .map(seat -> TicketLabel.designated(zoneName, seat))
+                .orElseGet(() -> TicketLabel.quantity(zoneName, number()));
     }
 
     /** 저장 전이면 비어 있다. */
