@@ -158,8 +158,8 @@ public final class EventInventory {
     }
 
     /**
-     * 회차가 지워졌다(#41 {@code SessionRemoved}) — 그 회차 재고를 뺀다. 티켓이 있는 회차를 지울 수 있는지는 도면 쪽이 먼저 본다(#64). 재고도
-     * 선점 · 티켓이 걸린 회차는 빼지 않는다.
+     * 회차가 지워졌다(#41 {@code SessionRemoved}) — 그 회차 재고를 뺀다. 티켓이 있는 회차를 지울 수 있는지는 도면 쪽이 먼저 본다(#64).
+     * 확인 필요 (#53) — 재고도 선점 · 티켓이 걸린 회차는 빼지 않는다. 문서는 티켓만 적었지만 결제 중인 선점도 지킨다.
      *
      * @return 뺀 회차 재고
      * @throws RuleViolationException 선점 · 티켓이 걸려 있으면({@link InventoryErrorCode#TAKEN_INVENTORY_NOT_REMOVABLE})
@@ -190,7 +190,7 @@ public final class EventInventory {
 
     /**
      * 블록이 그 안의 좌석과 함께 지워졌다(#43 {@code SeatBlockRemoved}) — 모든 회차에서 그 좌석들의 재고를 뺀다. 티켓이 걸린 좌석을 지울 수 있는지는
-     * 도면 쪽이 먼저 본다(#64). 재고도 한 회차에서라도 선점 · 티켓이 걸린 좌석이 있으면 아무것도 빼지 않는다.
+     * 도면 쪽이 먼저 본다(#64). 확인 필요 (#53) — 재고도 한 회차에서라도 선점 · 티켓이 걸린 좌석이 있으면 아무것도 빼지 않는다.
      *
      * @return 뺀 재고
      * @throws RuleViolationException 선점 · 티켓이 걸린 좌석이 있으면({@link InventoryErrorCode#TAKEN_INVENTORY_NOT_REMOVABLE})
@@ -225,7 +225,7 @@ public final class EventInventory {
 
     /**
      * 수량형 구역이 지워졌다(#42 {@code ZoneRemoved}) — 모든 회차에서 그 구역의 재고를 뺀다. 티켓이 있는 구역을 지울 수 있는지는 도면 쪽이 먼저
-     * 본다(#64). 재고도 한 회차에서라도 판매 · 선점 · 초대 발권이 있으면 아무것도 빼지 않는다. 관계자 확보 수만 있으면 뺀다.
+     * 본다(#64). 확인 필요 (#53) — 재고도 한 회차에서라도 판매 · 선점 · 초대 발권이 있으면 아무것도 빼지 않는다. 관계자 확보 수만 있으면 뺀다.
      *
      * @return 뺀 재고
      * @throws RuleViolationException 판매 · 선점 · 초대 발권이 있으면({@link InventoryErrorCode#TAKEN_INVENTORY_NOT_REMOVABLE})
