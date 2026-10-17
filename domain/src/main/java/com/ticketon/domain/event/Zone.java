@@ -92,6 +92,11 @@ public final class Zone {
         return Optional.ofNullable(capacity);
     }
 
+    /** 지금의 이름 · 색 · 기본가 · 정원. */
+    public ZoneSettings settings() {
+        return new ZoneSettings(name, color, basePrice, capacity);
+    }
+
     /** 좌석을 배정받는 구역인지 — 지정형이다. */
     public boolean takesSeats() {
         return kind == ZoneKind.DESIGNATED;

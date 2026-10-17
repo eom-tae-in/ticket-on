@@ -33,6 +33,8 @@ import java.util.Set;
  * 화면마다 부르는 이름이 다르다 — 관객 화면은 유형 이름, 주최자 화면은 "행사"({@link #nameOn}).
  * <p>
  * 위저드 2단계의 회차 방식 · 날짜 · 회차는 행사가 아니라 행사의 일정({@link EventSchedule})이 따로 갖는다 — 날짜와 회차가 많고 따로 고친다.
+ * 위저드 3단계의 구역 · 블록 · 좌석은 도면({@link FloorPlan})이, 6단계의 입구는 입구 목록({@link EventEntrances})이 따로 갖는다. 행사는 그
+ * 단계를 저장할 때 수정 범위를 확인하고 진행 단계 · 마지막 수정 시각을 맡는다({@link #addZone}, {@link #addEntrance} 등).
  * <p>
  * <b>행사 상태</b>({@link EventStatus}) — 작성 중으로 시작한다. 사람이 누르는 전환(판매 시작 · 정산 완료 · 남은 회차 전부 취소)은 의도가 드러나는
  * 메서드로, 시간이 정하는 전환(오픈 · 판매 종료 · 행사 종료)은 {@link #advanceByTime}으로 한다. 시간이 정하는 전환은 일정이 알려 주는 마지막 회차의
@@ -47,8 +49,8 @@ import java.util.Set;
  * ({@link #requireEditable}), 회차 시간은 그 회차 시작 1주일 전 잠금까지 본다({@link #requireSessionTimeEditable}). '예매가 열린 뒤'의 범위는
  * 상태 이름이 아니라 <b>예매가 한 번이라도 열렸는지</b>로 정한다({@link #hasBookingOpened}) — 판매 대기에서 관리자 조치로 멈춘 판매 중단은 예매가
  * 열린 적이 없어 판매 대기와 같다. 이 판정은 저장된 상태로 하므로, 시간이 움직이는 상태의 행사는 먼저 {@link #advanceByTime}으로 지금 시각을
- * 반영한다. 위저드 단계 저장({@link #saveBasicInformationStep}, {@link #saveBookingStep})은 바뀐 항목마다, 포스터 바꾸기({@link #changePoster})는
- * 포스터에 이 판정을 건다. 낱낱의 수정 메서드(기본 정보 · 공개 수준 · 예매 설정 · 취소 규정)에 이 판정을 거는 일과 제목 · 소개 · 포스터의 변경
+ * 반영한다. 위저드 단계 저장({@link #saveBasicInformationStep}, {@link #saveBookingStep}, 구역 · 입구 저장)은 바뀐 항목마다, 포스터
+ * 바꾸기({@link #changePoster})는 포스터에 이 판정을 건다. 낱낱의 수정 메서드(기본 정보 · 공개 수준 · 예매 설정 · 취소 규정)에 이 판정을 거는 일과 제목 · 소개 · 포스터의 변경
  * 이력은 수정 유스케이스가 한다(#65, #46).
  * <p>
  * <b>삭제</b>는 상태가 아니라 팔린 표나 초대권이 있었는지로 정한다({@link #requireDeletable}). 누가 지울 수 있는지는 판매를 시작했는지로 갈린다
@@ -246,6 +248,141 @@ public final class Event {
         poster = newPoster;
         completeWizardStep(EventWizardStep.BASIC_INFORMATION, true, now);
         return previousPoster;
+    }
+
+    /**
+     * 위저드 3단계에서 이 행사의 도면에 구역을 더한다(docs/02 "설정 흐름" — 지정형은 블록 · 좌석이 이어지고 수량형은 정원 입력만).
+     * <ol>
+     *   <li><b>지금 상태의 수정 범위를 확인한다</b> — 도면({@link EventEditTarget#FLOOR_PLAN}). 판매가 끝나면 도면이 고정되어 막힌다.</li>
+     *   <li>도면에 구역을 더한다({@link FloorPlan#addZone}) — 정원이 종류와 맞는지, 이름이 다른 구역 · 블록과 겹치지 않는지 본다.</li>
+     *   <li>3단계를 저장한 것으로 다룬다 — 작성 중이면 진행 단계를 3단계까지로 올리고, 마지막 수정 시각을 지금으로 한다. 더하면 늘 바뀐 것이다.</li>
+     * </ol>
+     * {@link #requireEditable}처럼 저장된 상태로 판정한다. 하나라도 막히면 아무것도 바꾸지 않는다.
+     *
+     * @return 더한 구역(아직 id 없음)
+     * @throws RuleViolationException   지금 상태에서 도면을 고칠 수 없으면({@link #requireEditable}과 같은 오류), 도면이 막으면
+     *                                  ({@link FloorPlan#addZone}과 같은 오류)
+     * @throws IllegalArgumentException 다른 행사의 도면이면
+     */
+    public Zone addZone(FloorPlan floorPlan, ZoneKind kind, ZoneSettings settings, Instant now) {
+        requireOwnFloorPlan(floorPlan);
+        Objects.requireNonNull(now, "now");
+        requireEditable(EventEditTarget.FLOOR_PLAN);
+        Zone added = floorPlan.addZone(kind, settings);
+        completeWizardStep(EventWizardStep.SEATING, true, now);
+        return added;
+    }
+
+    /**
+     * 위저드 3단계에서 이 행사의 도면에 있는 구역 한 줄을 고친다 — 칸(이름 · 색 · 기본가 · 정원)을 모두 보낸다.
+     * <ol>
+     *   <li><b>바뀌는 항목마다 지금 상태의 수정 범위를 확인한다</b>({@link FloorPlan#changedEditTargets}) — 이름 · 색은 도면, 기본가는 가격, 정원은
+     *       정원. 바뀌지 않은 칸은 보지 않는다 — 예매가 열린 뒤 기본가만 고치며 나머지를 그대로 보내도 막지 않는다.</li>
+     *   <li>구역을 고친다({@link FloorPlan#changeZone}).</li>
+     *   <li>작성 중이면 진행 단계를 3단계까지로 올리고, 무엇이든 바뀌었으면 마지막 수정 시각을 지금으로 한다.</li>
+     * </ol>
+     * 같은 값을 몇 번 저장해도 안전하다 — 바뀐 것이 없으면 구역은 그대로다. {@link #requireEditable}처럼 저장된 상태로 판정한다. 하나라도 막히면
+     * 아무것도 바꾸지 않는다.
+     *
+     * @return 바뀐 것(구역 · 진행 단계)이 있는지
+     * @throws com.ticketon.domain.error.NotFoundException 도면에 없는 구역이면({@link EventErrorCode#ZONE_NOT_FOUND})
+     * @throws RuleViolationException                      바뀌는 항목을 지금 상태에서 고칠 수 없으면({@link #requireEditable}과 같은 오류),
+     *                                                     도면이 막으면({@link FloorPlan#changeZone}과 같은 오류)
+     * @throws IllegalArgumentException                    다른 행사의 도면이면
+     */
+    public boolean changeZone(FloorPlan floorPlan, long zoneId, ZoneSettings newSettings, Instant now) {
+        requireOwnFloorPlan(floorPlan);
+        Objects.requireNonNull(now, "now");
+        Set<EventEditTarget> changedTargets = floorPlan.changedEditTargets(zoneId, newSettings);
+        changedTargets.forEach(this::requireEditable);
+        floorPlan.changeZone(zoneId, newSettings);
+        return completeWizardStep(EventWizardStep.SEATING, !changedTargets.isEmpty(), now);
+    }
+
+    /**
+     * 위저드 3단계에서 이 행사의 도면에 있는 구역을 지운다 — 그 구역에 배정했던 좌석은 배정이 풀린다({@link FloorPlan#removeZone}). 지운
+     * 구역은 저장소가 지운 시각을 적어 남긴다 — 취소 · 회수된 티켓은 원래 구역을 그대로 가리킨다(docs/14).
+     * <ol>
+     *   <li><b>지금 상태의 수정 범위를 확인한다</b> — 회차 · 구역 삭제({@link EventEditTarget#SESSION_OR_ZONE_DELETION}). 티켓이 있는 구역을
+     *       지울 수 없는 규칙은 #64가 더한다.</li>
+     *   <li>구역을 지우고, 작성 중이면 진행 단계를 3단계까지로 올리고, 마지막 수정 시각을 지금으로 한다.</li>
+     * </ol>
+     *
+     * @return 지운 구역 — 재고에 알리고 조작 기록을 남기는 데 쓴다
+     * @throws com.ticketon.domain.error.NotFoundException 도면에 없는 구역이면({@link EventErrorCode#ZONE_NOT_FOUND})
+     * @throws RuleViolationException                      지금 상태에서 구역을 지울 수 없으면({@link #requireEditable}과 같은 오류)
+     * @throws IllegalArgumentException                    다른 행사의 도면이면
+     */
+    public Zone removeZone(FloorPlan floorPlan, long zoneId, Instant now) {
+        requireOwnFloorPlan(floorPlan);
+        Objects.requireNonNull(now, "now");
+        Zone zone = floorPlan.zone(zoneId);
+        requireEditable(EventEditTarget.SESSION_OR_ZONE_DELETION);
+        floorPlan.removeZone(zoneId);
+        completeWizardStep(EventWizardStep.SEATING, true, now);
+        return zone;
+    }
+
+    /**
+     * 위저드 6단계에서 이 행사의 입구 목록에 입구를 더한다(docs/02 "입구 (게이트)"). 입구 목록은 판매가 끝난 뒤에도 행사가 끝날 때까지 고친다 —
+     * 18:10에 정문 줄이 길어 "옆문"을 더한다(docs/04 "판매 종료는 공연이 끝난 때가 아닙니다", {@link EventEditTarget#ENTRANCES}).
+     * <p>
+     * 수정 범위를 확인하고, 입구를 더하고, 작성 중이면 진행 단계를 6단계까지로 올리고, 마지막 수정 시각을 지금으로 한다. {@link #requireEditable}처럼
+     * 저장된 상태로 판정한다.
+     *
+     * @return 더한 입구(아직 id 없음)
+     * @throws RuleViolationException   지난 행사면({@link EventErrorCode#EDIT_LOCKED_FOR_PAST_EVENT}), 같은 이름의 입구가 있으면
+     *                                  ({@link EventErrorCode#ENTRANCE_NAME_ALREADY_TAKEN})
+     * @throws IllegalArgumentException 다른 행사의 입구 목록이면
+     */
+    public Entrance addEntrance(EventEntrances entrances, EntranceName name, Instant now) {
+        requireOwnEntrances(entrances);
+        Objects.requireNonNull(now, "now");
+        requireEditable(EventEditTarget.ENTRANCES);
+        Entrance added = entrances.add(name);
+        completeWizardStep(EventWizardStep.ENTRANCES_AND_CHECKIN_ACCOUNTS, true, now);
+        return added;
+    }
+
+    /**
+     * 위저드 6단계에서 이 행사의 입구 이름을 바꾼다. 지금과 같은 이름이면 수정 범위를 보지 않고 입구도 그대로다 — 같은 값을 몇 번 저장해도 안전하다.
+     * 작성 중이면 진행 단계를 6단계까지로 올리고, 무엇이든 바뀌었으면 마지막 수정 시각을 지금으로 한다.
+     *
+     * @return 바뀐 것(입구 이름 · 진행 단계)이 있는지
+     * @throws com.ticketon.domain.error.NotFoundException 목록에 없는 입구면({@link EventErrorCode#ENTRANCE_NOT_FOUND})
+     * @throws RuleViolationException                      지난 행사면({@link EventErrorCode#EDIT_LOCKED_FOR_PAST_EVENT}), 다른 입구가 쓰는
+     *                                                     이름이면({@link EventErrorCode#ENTRANCE_NAME_ALREADY_TAKEN})
+     * @throws IllegalArgumentException                    다른 행사의 입구 목록이면
+     */
+    public boolean renameEntrance(EventEntrances entrances, long entranceId, EntranceName newName, Instant now) {
+        requireOwnEntrances(entrances);
+        Objects.requireNonNull(newName, "newName");
+        Objects.requireNonNull(now, "now");
+        boolean renamed = !entrances.entrance(entranceId).name().equals(newName);
+        if (renamed) {
+            requireEditable(EventEditTarget.ENTRANCES);
+            entrances.rename(entranceId, newName);
+        }
+        return completeWizardStep(EventWizardStep.ENTRANCES_AND_CHECKIN_ACCOUNTS, renamed, now);
+    }
+
+    /**
+     * 위저드 6단계에서 이 행사의 입구를 지운다. 지운 입구는 저장소가 지운 시각을 적어 남긴다 — 그 입구를 가리키는 입장 기록이 남는다(docs/14
+     * "입장 기록 — 티켓 + 회차 + 입구"). 작성 중이면 진행 단계를 6단계까지로 올리고, 마지막 수정 시각을 지금으로 한다.
+     *
+     * @return 지운 입구 — 조작 기록을 남기는 데 쓴다
+     * @throws com.ticketon.domain.error.NotFoundException 목록에 없는 입구면({@link EventErrorCode#ENTRANCE_NOT_FOUND})
+     * @throws RuleViolationException                      지난 행사면({@link EventErrorCode#EDIT_LOCKED_FOR_PAST_EVENT})
+     * @throws IllegalArgumentException                    다른 행사의 입구 목록이면
+     */
+    public Entrance removeEntrance(EventEntrances entrances, long entranceId, Instant now) {
+        requireOwnEntrances(entrances);
+        Objects.requireNonNull(now, "now");
+        Entrance entrance = entrances.entrance(entranceId);
+        requireEditable(EventEditTarget.ENTRANCES);
+        entrances.remove(entranceId);
+        completeWizardStep(EventWizardStep.ENTRANCES_AND_CHECKIN_ACCOUNTS, true, now);
+        return entrance;
     }
 
     /**
@@ -800,6 +937,28 @@ public final class Event {
         }
         if (schedule.eventId() != id) {
             throw new IllegalArgumentException("행사 " + id + "에 다른 행사(" + schedule.eventId() + ")의 일정을 넘겼습니다");
+        }
+    }
+
+    private void requireOwnFloorPlan(FloorPlan floorPlan) {
+        Objects.requireNonNull(floorPlan, "floorPlan");
+        requireSaved("도면");
+        if (floorPlan.eventId() != id) {
+            throw new IllegalArgumentException("행사 " + id + "에 다른 행사(" + floorPlan.eventId() + ")의 도면을 넘겼습니다");
+        }
+    }
+
+    private void requireOwnEntrances(EventEntrances entrances) {
+        Objects.requireNonNull(entrances, "entrances");
+        requireSaved("입구 목록");
+        if (entrances.eventId() != id) {
+            throw new IllegalArgumentException("행사 " + id + "에 다른 행사(" + entrances.eventId() + ")의 입구 목록을 넘겼습니다");
+        }
+    }
+
+    private void requireSaved(String what) {
+        if (id == null) {
+            throw new IllegalStateException("저장 전 행사는 " + what + "이 없습니다");
         }
     }
 
