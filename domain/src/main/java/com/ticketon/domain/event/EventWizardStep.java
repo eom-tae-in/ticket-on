@@ -64,4 +64,14 @@ public enum EventWizardStep {
     public boolean isAfter(EventWizardStep other) {
         return number > other.number;
     }
+
+    /**
+     * 이 단계까지 저장한 행사가 이어서 할 단계 — 바로 다음 단계다. 작성 중 행사 목록의 [이어서 작성]이 이 단계를 연다(docs/04 "작성 중 행사
+     * 관리" — "멈춘 단계로 바로 가는 버튼"). 4단계까지 저장했으면 5단계를 연다 — 5 · 6단계는 처음 값이 있어 건너뛸 수 있지만(docs/03) 건너뛸지는
+     * 그 단계를 연 주최자가 고른다. 7단계(검토)는 마지막이라 그대로 7단계다.
+     */
+    public EventWizardStep next() {
+        EventWizardStep[] steps = values();
+        return ordinal() + 1 < steps.length ? steps[ordinal() + 1] : this;
+    }
 }

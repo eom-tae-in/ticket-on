@@ -34,6 +34,10 @@ import java.util.Set;
  *       밖의 예매 설정)은 판매 중에 막아 둔다: {@code domain.event.EventEditTarget}.</li>
  *   <li>확인 필요 (#38) — 비어 있던 회차 종료 시각은 판매가 끝난 뒤에도 행사가 끝날 때까지 입력받는다(막으면 행사 종료를 판정할 수 없음):
  *       {@code domain.event.EventEditTarget#MISSING_SESSION_END_TIME}.</li>
+ *   <li>확인 필요 (#45) — 작성 중 행사를 목록에서 접는 "회차 날짜가 이미 지남"은 일정의 모든 날짜가 오늘(한국 날짜) 전일 때(마지막 날짜가 지났을
+ *       때)이고, 날짜가 없으면 접지 않는다: {@code domain.event.DraftEventNudges#isFolded}.</li>
+ *   <li>확인 필요 (#45) — 판매 중단 행사는 내 행사 목록의 진행 중 구역에 둔다(docs/13의 진행 중 목록에 이름이 없음):
+ *       {@code domain.event.EventListSection}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
