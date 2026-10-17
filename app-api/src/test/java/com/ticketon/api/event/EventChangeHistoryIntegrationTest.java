@@ -75,7 +75,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 서버 전체를 진짜 PostgreSQL(마이그레이션 전체)과 로컬 파일 저장소(임시 디렉터리)로 띄우고, 판매를 시작한 행사의 제목 · 포스터 · 회차 출연을
- * 유스케이스로 고쳐 변경 이력이 유효 기간과 함께 쌓이는지 본다(#46 완료 조건 — "변경 이력이 기간과 함께 쌓인다"). Docker가 없는 환경에서는 건너뛴다.
+ * 유스케이스로 고쳐 변경 이력이 유효 기간과 함께 쌓이는지, 운영자가 제목을 바꾸면 소유자에게만 메일이 가는지 본다(#46 완료 조건 — "변경 이력이
+ * 기간과 함께 쌓이고, 운영자 제목 변경 알림"). Docker가 없는 환경에서는 건너뛴다.
  * <p>
  * 극단 열두달(docs/15)의 소유자 박정훈(조용한고래)과 운영자 기획 단원(푸른바람)이 봄 정기공연(11/14 저녁, "주연: 김배우")을 준비했다. 판매 시작(#58)이
  * 아직 없어, 행사를 판매 대기로 바꾸는 일은 표에 바로 하고 첫 버전은 판매 시작이 부를 유스케이스를 같은 트랜잭션에서 부른다. 운영진 로그인 ·
@@ -148,6 +149,8 @@ class EventChangeHistoryIntegrationTest {
     private long twelveMonths;
     private long junghoon;
     private long planner;
+    private String junghoonEmail;
+    private String plannerEmail;
     private long springPlay;
     private long novemberFourteenth;
     private String draftPosterKey;
@@ -165,8 +168,10 @@ class EventChangeHistoryIntegrationTest {
     void publishSpringPlay() {
         MUTABLE_CLOCK.moveTo(PUBLISHED_AT);
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        junghoon = storeStaff("박정훈", "고래" + suffix, "junghoon-" + suffix + "@example.com");
-        planner = storeStaff("김기획", "바람" + suffix, "planner-" + suffix + "@example.com");
+        junghoonEmail = "junghoon-" + suffix + "@example.com";
+        plannerEmail = "planner-" + suffix + "@example.com";
+        junghoon = storeStaff("박정훈", "고래" + suffix, junghoonEmail);
+        planner = storeStaff("김기획", "바람" + suffix, plannerEmail);
         twelveMonths = storeOrganizer("극단 열두달 " + suffix);
         storeMembership(twelveMonths, junghoon, "OWNER");
         storeMembership(twelveMonths, planner, "OPERATOR");
@@ -209,6 +214,22 @@ class EventChangeHistoryIntegrationTest {
                     assertThat(entry.sessionDate()).isEqualTo(NOVEMBER_14);
                     assertThat(entry.newContent()).isEqualTo("주연: 김배우");
                 });
+    }
+
+    @Test
+    @DisplayName("운영자가 제목을 바꾸면 소유자에게만 '운영자가 행사 제목을 바꿈' 메일이 가고, 소유자 본인이 바꾸면 가지 않는다")
+    void operatorTitleChangeMailsOwnerOnly() {
+        MUTABLE_CLOCK.moveTo(FIRST_CHANGE);
+        changeTitle(planner, "2026 봄 앵콜공연 〈열두 번째 달〉");
+
+        assertThat(titleChangeMails()).containsExactly("EMAIL " + junghoonEmail + " true");
+
+        MUTABLE_CLOCK.moveTo(SECOND_CHANGE);
+        changeTitle(junghoon, "2026 봄 앵콜공연 〈열두 번째 달〉 — 추가 회차");
+
+        assertThat(titleChangeMails()).containsExactly("EMAIL " + junghoonEmail + " true");
+        assertThat(historyQueryPort.findByEventId(springPlay)).filteredOn(entry -> entry.target() == EventChangeHistoryTarget.TITLE)
+                .hasSize(3);
     }
 
     @Test
@@ -259,6 +280,14 @@ class EventChangeHistoryIntegrationTest {
                         new StaffPermissionResult(twelveMonths, junghoon, StaffRole.OWNER, StaffAction.EDIT_EVENT), springPlay,
                         FIRST_CHANGE)));
         assertThat(historyQueryPort.findByEventId(springPlay)).hasSize(4);
+    }
+
+    /** 이 테스트의 소유자 · 운영자에게 간 '운영자가 행사 제목을 바꿈' 발송 이력 — "수단 받는 곳 성공". */
+    private List<String> titleChangeMails() {
+        return jdbcTemplate.queryForList("""
+                SELECT channel || ' ' || recipient_address || ' ' || succeeded FROM notification_send_record
+                WHERE kind = 'EVENT_TITLE_CHANGED_BY_OPERATOR' AND recipient_address IN (?, ?) ORDER BY id""", String.class,
+                junghoonEmail, plannerEmail);
     }
 
     private void changeTitle(long staffAccountId, String title) {

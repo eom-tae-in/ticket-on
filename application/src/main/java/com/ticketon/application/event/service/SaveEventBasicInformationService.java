@@ -32,7 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 조작 기록({@link EventEditingLocks}). 지금과 같은 값이면(자동 임시저장을 여러 번 해도) 저장도 이력도 기록도 하지 않는다.
  * <p>
  * <b>변경 이력</b> — 판매를 시작한 뒤 제목 · 소개가 바뀌면 바꾸기 전 기본 정보와 견줘 칸마다 새 버전을 쌓는다
- * ({@link EventChangeHistory#basicInformationVersions}, {@link EventChangeHistoryRecorder}). 작성 중에는 쌓지 않는다. 같은 행사를 거의 동시에 저장하면 뒤의
+ * ({@link EventChangeHistory#basicInformationVersions}, {@link EventChangeHistoryRecorder}). 작성 중에는 쌓지 않는다. 운영자가 제목을 바꾸면
+ * 소유자에게 '운영자가 행사 제목을 바꿈' 메일이 간다 — 소유자 본인이 바꾸면 가지 않는다({@link EventChangeHistory#notifiesOwner}). 같은 행사를 거의 동시에 저장하면 뒤의
  * 저장은 행사 줄에서 앞의 저장을 기다렸다가 바뀐 값을 읽는다 — 같은 값이면 뒤의 저장은 바뀐 것이 없다.
  * <p>
  * 수정 범위는 저장된 상태로 판정한다. 시간이 움직이는 상태(판매 대기 · 판매 중 등)의 행사에 지금 시각을 반영하는 일은 일정(#41)이 생긴 뒤 상태별

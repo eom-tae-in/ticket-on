@@ -64,6 +64,7 @@ final class EventWizardScene {
     final FakeEventEntranceRepository entranceRepository = new FakeEventEntranceRepository();
     final FakeEventScheduleRepository scheduleRepository = new FakeEventScheduleRepository();
     final FakeEventChangeHistoryRepository historyRepository = new FakeEventChangeHistoryRepository(rowLockLog);
+    final RecordingSendNotificationUseCase sendNotificationUseCase = new RecordingSendNotificationUseCase();
     final RecordingEventPublisher eventPublisher = new RecordingEventPublisher();
     final RecordingStaffOperationRecordRepository recordRepository = new RecordingStaffOperationRecordRepository();
     final FixedTokenGenerator tokenGenerator = new FixedTokenGenerator(FIRST_ADDRESS, SECOND_ADDRESS);
@@ -131,9 +132,9 @@ final class EventWizardScene {
                 clock);
     }
 
-    /** 변경 이력 쌓기 — 바꾼 운영진의 닉네임은 계정 저장소에서 읽는다. */
+    /** 변경 이력 쌓기 — 바꾼 운영진의 닉네임은 계정 저장소에서, 주최자명은 주최자 저장소에서 읽고 알림은 모아 둔다. */
     EventChangeHistoryRecorder historyRecorder() {
-        return new EventChangeHistoryRecorder(historyRepository, staffAccountRepository);
+        return new EventChangeHistoryRecorder(historyRepository, staffAccountRepository, organizerRepository, sendNotificationUseCase);
     }
 
     RecordChangeHistoryFirstVersionService recordChangeHistoryFirstVersionService() {

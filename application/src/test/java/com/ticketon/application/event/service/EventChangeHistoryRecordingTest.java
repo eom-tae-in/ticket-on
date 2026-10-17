@@ -23,6 +23,7 @@ import com.ticketon.application.event.port.in.RenameSeatBlockCommand;
 import com.ticketon.application.event.port.in.SaveEventBasicInformationCommand;
 import com.ticketon.application.event.port.in.UploadEventPosterCommand;
 import com.ticketon.application.event.service.FakeEventChangeHistoryRepository.StoredVersion;
+import com.ticketon.application.notification.port.in.SendNotificationCommand;
 import com.ticketon.application.organizer.port.in.StaffPermissionResult;
 import com.ticketon.common.FixedTokenGenerator;
 import com.ticketon.common.KoreanTime;
@@ -40,6 +41,8 @@ import com.ticketon.domain.event.EventTitle;
 import com.ticketon.domain.event.SessionMode;
 import com.ticketon.domain.event.SessionPerformers;
 import com.ticketon.domain.event.TimedSessionTime;
+import com.ticketon.domain.notification.NotificationKind;
+import com.ticketon.domain.notification.NotificationRecipient;
 import com.ticketon.domain.organizer.StaffAction;
 import com.ticketon.domain.organizer.StaffRole;
 import java.time.Instant;
@@ -112,10 +115,14 @@ class EventChangeHistoryRecordingTest {
     }
 
     private void changeTitle(long staffAccountId, String title) {
+        saveBasicInformation(staffAccountId, title, springPlayItems().introduction());
+    }
+
+    private void saveBasicInformation(long staffAccountId, String title, String introduction) {
         EventBasicInformationItems items = springPlayItems();
         scene.saveEventBasicInformationService().save(new SaveEventBasicInformationCommand(acting(staffAccountId, scene.twelveMonths),
                 springPlay, new EventBasicInformationItems(EventTitle.of(title), items.type(), items.categoryName(), items.genreName(),
-                        items.introduction(), items.venue(), items.venueDetails(), items.mapLink(), items.publicContact())));
+                        introduction, items.venue(), items.venueDetails(), items.mapLink(), items.publicContact())));
     }
 
     /** 운영자 기획 단원이 판매를 시작한 것으로 둔다 — 판매 대기로 바꿔 저장한 뒤 같은 트랜잭션에서 첫 버전을 쌓는다(판매 시작 #58이 할 일). */
@@ -285,6 +292,70 @@ class EventChangeHistoryRecordingTest {
 
             assertThat(scene.floorPlanRepository.findByEventId(springPlay).block(blockId).name().value()).isEqualTo("1층");
             assertThat(scene.historyRepository.versionsOf(springPlay)).hasSize(4);
+        }
+    }
+
+    @Nested
+    @DisplayName("운영자가 제목을 바꾸면 소유자에게 알린다 (docs/12 \"운영자가 행사 제목을 바꿈\")")
+    class OwnerNotice {
+
+        @Test
+        @DisplayName("판매를 시작한 뒤 운영자(푸른바람)가 제목을 바꾸면 소유자에게만 가는 '운영자가 행사 제목을 바꿈' 메일 한 통 — 바꾸기 전 · 뒤 · 바꾼 사람 · 때")
+        void operatorTitleChangeNotifiesOwner() {
+            startSalesByPlanner();
+            scene.clock.moveTo(FIRST_CHANGE);
+
+            changeTitle(PLANNER, "2026 봄 앵콜공연 〈열두 번째 달〉");
+
+            assertThat(scene.sendNotificationUseCase.sentCommands()).singleElement().satisfies(command -> {
+                assertThat(command.recipient()).isEqualTo(NotificationRecipient.organizer(scene.twelveMonths));
+                assertThat(command.kind()).isEqualTo(NotificationKind.EVENT_TITLE_CHANGED_BY_OPERATOR);
+                assertThat(command.content().title())
+                        .isEqualTo("운영자가 행사 제목을 바꿨습니다: 2026 봄 정기공연 〈열두 번째 달〉 → 2026 봄 앵콜공연 〈열두 번째 달〉");
+                assertThat(command.content().body()).isEqualTo("""
+                        '극단 열두달'의 행사 제목을 운영자가 바꿨습니다.
+                        바꾸기 전: 2026 봄 정기공연 〈열두 번째 달〉
+                        바꾼 뒤: 2026 봄 앵콜공연 〈열두 번째 달〉
+                        바꾼 사람: 푸른바람 님(운영자)
+                        바꾼 때: 2026년 10월 20일 14:00
+                        승인할 일은 없으며 알려 드리기만 합니다. 모르는 변경이라면 바꾼 운영자와 확인해 주세요.
+                        바꾸기 전 제목은 변경 이력에 남습니다.
+                        """);
+            });
+        }
+
+        @Test
+        @DisplayName("소유자(조용한고래)가 직접 바꾸면 이력만 쌓이고 메일은 가지 않는다")
+        void ownerTitleChangeSendsNothing() {
+            startSalesByPlanner();
+            scene.clock.moveTo(FIRST_CHANGE);
+
+            changeTitle(JUNGHOON, "2026 봄 앵콜공연 〈열두 번째 달〉");
+
+            assertThat(versionsOf(EventChangeHistoryTarget.TITLE)).hasSize(2);
+            assertThat(scene.sendNotificationUseCase.sentCommands()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("운영자가 소개만 바꾸거나 판매를 시작하며 첫 버전을 남기면 알리지 않는다 — 제목과 소개를 함께 바꾸면 제목 메일 한 통")
+        void onlyTitleChangesNotify() {
+            startSalesByPlanner();
+            scene.clock.moveTo(FIRST_CHANGE);
+            saveBasicInformation(PLANNER, "2026 봄 정기공연 〈열두 번째 달〉", "주연: 이배우");
+            assertThat(scene.sendNotificationUseCase.sentCommands()).isEmpty();
+
+            saveBasicInformation(PLANNER, "2026 봄 앵콜공연 〈열두 번째 달〉", "주연: 김배우");
+
+            assertThat(scene.sendNotificationUseCase.sentCommands()).extracting(SendNotificationCommand::kind)
+                    .containsExactly(NotificationKind.EVENT_TITLE_CHANGED_BY_OPERATOR);
+        }
+
+        @Test
+        @DisplayName("작성 중에 운영자가 제목을 고치면 알리지 않는다 — 이력과 같이 공개된 뒤의 변경만 (확인 필요 #46)")
+        void draftTitleChangeSendsNothing() {
+            changeTitle(PLANNER, "2026 봄 앵콜공연 〈열두 번째 달〉");
+
+            assertThat(scene.sendNotificationUseCase.sentCommands()).isEmpty();
         }
     }
 }

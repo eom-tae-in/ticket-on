@@ -17,7 +17,8 @@ import com.ticketon.domain.organizer.StaffAction;
  * 읽는다.
  * <p>
  * 판매를 시작한 뒤 제목 · 소개가 바뀌면 덮어쓰지 않고 변경 이력에 새 버전이 쌓인다(docs/03 "제목 · 소개 · 포스터는 변경 이력을 남깁니다").
- * 작성 중에는 쌓지 않는다.
+ * 작성 중에는 쌓지 않는다. 그때 운영자가 제목을 바꿨으면 소유자에게 '운영자가 행사 제목을 바꿈' 메일([주최])이 간다 — 승인이 아니라 알림이다
+ * (docs/12 "주최자 대상"). 소유자 본인이 바꾸면 가지 않는다.
  */
 public interface SaveEventBasicInformationUseCase {
 
