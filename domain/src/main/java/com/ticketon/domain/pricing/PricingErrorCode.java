@@ -40,7 +40,22 @@ public enum PricingErrorCode implements ErrorCode {
      * 조기예매 수량을 이미 잡힌 몫(사용 수)보다 적게 줄이려 한다({@link EarlyBird#reconfigure}). 잡힌 몫은 돌아오지 않는다(docs/05 "소진되면 영구
      * 마감"). 확인 필요 (#49).
      */
-    EARLY_BIRD_QUANTITY_BELOW_CLAIMED("이미 잡힌 조기예매 몫보다 적게 줄일 수 없습니다.");
+    EARLY_BIRD_QUANTITY_BELOW_CLAIMED("이미 잡힌 조기예매 몫보다 적게 줄일 수 없습니다."),
+
+    /**
+     * 관객이 적은 쿠폰 코드를 이 행사에서 쓸 수 없다 — 없는 코드, 다른 행사의 코드, 유효 기간 밖을 모두 이 하나로 답한다({@link Coupon#requireUsableIn}).
+     * 구분하면 코드를 넣어 보며 다른 행사의 쿠폰이 있는지 알아낼 수 있다(docs/05 "잘못된 코드"). 문구는 문서 그대로다.
+     */
+    COUPON_NOT_USABLE_FOR_EVENT("이 행사에서 사용할 수 없는 코드입니다"),
+
+    /** 이 행사의 쿠폰이지만 전체 사용 가능 횟수(선착순 N회)를 다 썼다({@link Coupon#checkAvailableTo}). 확인 필요 (#49) — 문구는 문서에 없다. */
+    COUPON_USES_EXHAUSTED("사용 가능 횟수가 모두 소진된 코드입니다."),
+
+    /** 1인 1회 쿠폰인데 이 관객이 이미 쓴 예매가 살아 있다({@link Coupon#checkAvailableTo}). 확인 필요 (#49) — 문구는 문서에 없다. */
+    COUPON_ALREADY_USED("이미 사용한 코드입니다. 한 사람이 한 번만 쓸 수 있습니다."),
+
+    /** 쿠폰의 전체 사용 가능 횟수를 이미 쓴 횟수보다 적게 줄이려 한다({@link Coupon#reconfigure}). 확인 필요 (#49). */
+    COUPON_USAGE_LIMIT_BELOW_USED("이미 사용된 횟수보다 적게 줄일 수 없습니다.");
 
     private final String message;
 

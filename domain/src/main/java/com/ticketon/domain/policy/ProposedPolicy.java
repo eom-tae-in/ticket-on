@@ -62,6 +62,14 @@ import java.util.Set;
  *       묻고, 기간 밖이면 묻지 않는다: {@code domain.pricing.EarlyBirdAllocation#needsRegularPriceConfirmation}.</li>
  *   <li>확인 필요 (#49) — 조기예매 임박의 "종료일 3일 이내"는 끝 순간에서 한국 달력 3일(72시간)을 거슬러 올라간 순간부터다:
  *       {@code domain.pricing.EarlyBirdUrgency#byPeriod}.</li>
+ *   <li>확인 필요 (#49) — 쿠폰 코드는 앞뒤 공백을 걷고 NFC · 영문 대문자로 맞춰 대소문자 구분 없이 비교하고, 안에 공백을 둘 수 없다. 발급한 뒤
+ *       코드는 바꾸지 않는다: {@code domain.pricing.CouponCode}, {@code domain.pricing.Coupon}.</li>
+ *   <li>확인 필요 (#49) — 쿠폰 전체 사용 가능 횟수는 꼭 받고(제한 없는 쿠폰 없음), 이미 쓴 횟수 아래로 줄일 수 없다:
+ *       {@code domain.pricing.CouponTerms}, {@code domain.pricing.Coupon#reconfigure}.</li>
+ *   <li>확인 필요 (#49) — 쿠폰 소진과 1인 1회 위반은 "이 행사에서 사용할 수 없는 코드입니다"와 다른 문구로 답한다(이 행사의 코드임을 확인한 뒤라
+ *       다른 행사의 쿠폰은 드러나지 않음): {@code domain.pricing.Coupon#checkAvailableTo}.</li>
+ *   <li>확인 필요 (#49) — 부분 취소가 이어져 마지막 티켓까지 취소되면 그 취소를 전체 취소로 보고 쿠폰을 돌려준다:
+ *       {@code domain.pricing.TicketCancellationKind#ofCancellation}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
@@ -317,6 +325,15 @@ public final class ProposedPolicy {
      * 않았다. 문서에는 "30일 미수정 — 알림"만 있고 언제 보내는지가 없다(docs/04 "작성 중 행사 관리").
      */
     public static final LocalTime DRAFT_EVENT_IDLE_NOTICE_RUN_TIME = LocalTime.of(10, 0);
+
+    /**
+     * 확인 필요 (#49, 문서에 없음) — 쿠폰 코드 최대 길이(글자 수). 이보다 긴 코드는 받지 않는다({@code domain.pricing.CouponCode}).
+     * 글자 수는 앞뒤 공백을 걷고 NFC로 맞춘 뒤 사람이 세는 대로 센다(유니코드 code point).
+     * 20자를 제안한다: 문서 예시 {@code SPRING20}(8자)처럼 코드는 관객이 인스타 게시물에서 찾아 손으로 옮겨 적는 짧은 말이고(docs/05 "쿠폰",
+     * docs/15 한서윤 — 찾느라 1~2분), 길면 잘못 적기 쉽다. 아티스트 이름을 넣은 팬 쿠폰(docs/15 이도현)도 넉넉히 들어가고, 한 줄 이름의 상한
+     * ({@link #ZONE_NAME_MAXIMUM_LENGTH} 등)과 같다. 상한이 없으면 행사 안 코드 유일 색인(#51)에 아주 긴 값이 들어온다.
+     */
+    public static final int COUPON_CODE_MAXIMUM_LENGTH = 20;
 
     private ProposedPolicy() {
     }
