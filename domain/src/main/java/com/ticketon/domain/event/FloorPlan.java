@@ -339,7 +339,7 @@ public final class FloorPlan {
     /**
      * 블록을 그 안의 좌석과 함께 지운다. 티켓이 걸린 좌석이 있는 블록을 지울 수 있는지는 부르는 쪽이 본다(#64).
      *
-     * @return 지운 블록 — 좌석이 함께 빠졌음을 재고에 알리는 데 쓴다(#43)
+     * @return 지운 블록 — 좌석이 함께 빠졌음을 재고에 알리는 데 쓴다({@link SeatBlockRemoved})
      * @throws NotFoundException 도면에 없는 블록이면({@link EventErrorCode#BLOCK_NOT_FOUND})
      */
     public SeatBlock removeBlock(long blockId) {
