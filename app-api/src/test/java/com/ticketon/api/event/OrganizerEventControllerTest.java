@@ -9,6 +9,7 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -28,8 +29,11 @@ import com.ticketon.application.event.port.in.SaveEventBasicInformationCommand;
 import com.ticketon.application.event.port.in.SaveEventBasicInformationUseCase;
 import com.ticketon.application.event.port.in.SaveEventBookingSettingsCommand;
 import com.ticketon.application.event.port.in.SaveEventBookingSettingsUseCase;
+import com.ticketon.application.event.port.in.UploadEventPosterCommand;
+import com.ticketon.application.event.port.in.UploadEventPosterUseCase;
 import com.ticketon.application.organizer.port.in.ActingStaff;
 import com.ticketon.domain.account.AccountKind;
+import com.ticketon.common.TestImages;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.error.NotFoundException;
 import com.ticketon.domain.error.PermissionDeniedException;
@@ -39,6 +43,7 @@ import com.ticketon.domain.event.BookingSettings;
 import com.ticketon.domain.event.CancellationPolicy;
 import com.ticketon.domain.event.EventErrorCode;
 import com.ticketon.domain.event.EventPassword;
+import com.ticketon.domain.event.EventPosterImage;
 import com.ticketon.domain.event.EventPublicContact;
 import com.ticketon.domain.event.EventStatus;
 import com.ticketon.domain.event.EventTitle;
@@ -55,8 +60,11 @@ import com.ticketon.domain.event.Venue;
 import com.ticketon.domain.organizer.ExternalLink;
 import com.ticketon.domain.organizer.OrganizerErrorCode;
 import com.ticketon.domain.policy.CancellationFeeTier;
+import com.ticketon.domain.policy.ProposedPolicy;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -67,9 +75,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.RequestBuilder;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
@@ -115,6 +125,9 @@ class OrganizerEventControllerTest {
 
     @MockitoBean
     private SaveEventBookingSettingsUseCase saveEventBookingSettingsUseCase;
+
+    @MockitoBean
+    private UploadEventPosterUseCase uploadEventPosterUseCase;
 
     @MockitoBean
     private GetEventCategoriesUseCase getEventCategoriesUseCase;
@@ -291,6 +304,133 @@ class OrganizerEventControllerTest {
                     .andExpect(status().isUnauthorized());
 
             verifyNoInteractions(createEventUseCase);
+        }
+    }
+
+    @Nested
+    @DisplayName("1단계 포스터 올리기")
+    class Poster {
+
+        private static final String POSTER_URL =
+                "http://localhost:8080/api/public/files/event-posters/Pq7rS2tU9vW4xY6zA1bC3dE5fG8hJ0kL.jpg";
+
+        private RequestBuilder uploadPoster(String eventId, MockMultipartFile file) {
+            return multipart(EVENTS_PATH + "/" + eventId + "/poster").file(file).with(csrf()).with(loggedInAs(PLANNER));
+        }
+
+        private void expectPosterRejected(MockMultipartFile file, String message) throws Exception {
+            mockMvc.perform(uploadPoster("7", file))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("poster"))
+                    .andExpect(jsonPath("$.fieldErrors[0].message").value(message));
+
+            verifyNoInteractions(uploadEventPosterUseCase);
+        }
+
+        @Test
+        @DisplayName("3:4 세로 포스터를 올리면 경로의 행사 id · 로그인한 운영진 · 그 그림을 넘기고 포스터 주소가 담긴 위저드 값을 돌려준다 — 파일 이름은 쓰지 않는다")
+        void uploadsPoster() throws Exception {
+            byte[] jpeg = TestImages.jpeg(300, 400);
+            EventWizardResult base = springPlayResult();
+            EventWizardResult withPoster = new EventWizardResult(base.eventId(), base.status(), base.wizardProgress(),
+                    base.lastModifiedAt(), base.publicAddress(), POSTER_URL, base.basicInformation(), base.bookingStep());
+            given(uploadEventPosterUseCase.upload(new UploadEventPosterCommand(PLANNER_IN_TWELVE_MONTHS, 7,
+                    EventPosterImage.of("image/jpeg", jpeg))))
+                    .willReturn(withPoster);
+
+            mockMvc.perform(uploadPoster("7", new MockMultipartFile("poster", "../../봄 포스터.jpg", "image/jpeg", jpeg)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.eventId").value(7))
+                    .andExpect(jsonPath("$.posterUrl").value(POSTER_URL));
+        }
+
+        @Test
+        @DisplayName("1:1 · 4:3 그림은 400이고 poster 칸에 3:4 세로로 잘라 올리라고 알려 준다")
+        void rejectsOtherAspectRatios() throws Exception {
+            String message = "포스터는 3:4 세로 비율로 잘라 올려 주세요.";
+            expectPosterRejected(new MockMultipartFile("poster", "poster.png", "image/png", TestImages.png(1200, 1200)), message);
+            expectPosterRejected(new MockMultipartFile("poster", "poster.png", "image/png", TestImages.png(400, 300)), message);
+        }
+
+        @Test
+        @DisplayName("용량 상한(제안 5MB)을 넘는 파일은 400이고 상한을 알려 준다")
+        void rejectsOverSizePoster() throws Exception {
+            byte[] overLimit = Arrays.copyOf(TestImages.png(30, 40),
+                    (int) ProposedPolicy.EVENT_POSTER_MAXIMUM_SIZE.bytes() + 1);
+
+            expectPosterRejected(new MockMultipartFile("poster", "poster.png", "image/png", overLimit),
+                    "포스터는 5MB 이하로 올려 주세요.");
+        }
+
+        @Test
+        @DisplayName("PNG · JPEG가 아닌 그림, 그림인 척한 글자, 적은 형식과 실제 내용이 다른 파일은 400이다 — 확장자는 보지 않는다")
+        void rejectsUnsupportedFormat() throws Exception {
+            String message = "포스터는 PNG 또는 JPEG 그림만 올릴 수 있습니다.";
+            expectPosterRejected(new MockMultipartFile("poster", "poster.gif", "image/gif", TestImages.of("gif", 30, 40)), message);
+            expectPosterRejected(new MockMultipartFile("poster", "poster.jpg", "image/jpeg",
+                    "<svg xmlns=\"http://www.w3.org/2000/svg\"/>".getBytes(StandardCharsets.UTF_8)), message);
+            expectPosterRejected(new MockMultipartFile("poster", "poster.jpg", "image/jpeg", TestImages.png(30, 40)), message);
+            expectPosterRejected(new MockMultipartFile("poster", "poster.png", "application/octet-stream",
+                    TestImages.png(30, 40)), message);
+        }
+
+        @Test
+        @DisplayName("빈 파일은 400이다")
+        void rejectsEmptyPoster() throws Exception {
+            expectPosterRejected(new MockMultipartFile("poster", "poster.jpg", "image/jpeg", new byte[0]), "포스터 파일을 골라 주세요.");
+        }
+
+        @Test
+        @DisplayName("poster 칸 없이 올리면 400이고 poster 칸이 빠졌다고 알려 준다. 행사 id가 1 이상의 정수가 아니면 400이다")
+        void rejectsMissingPartAndInvalidId() throws Exception {
+            mockMvc.perform(uploadPoster("7", new MockMultipartFile("image", "poster.jpg", "image/jpeg", TestImages.jpeg(30, 40))))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("poster"))
+                    .andExpect(jsonPath("$.fieldErrors[0].message").value("필수 항목입니다."));
+            mockMvc.perform(uploadPoster("0", new MockMultipartFile("poster", "poster.jpg", "image/jpeg", TestImages.jpeg(30, 40))))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("eventId"));
+
+            verifyNoInteractions(uploadEventPosterUseCase);
+        }
+
+        @Test
+        @DisplayName("판매가 끝난 행사면 409, 다른 주최자의 운영진이면 403, 다른 주최자의 행사면 404다")
+        void useCaseRejections() throws Exception {
+            MockMultipartFile poster = new MockMultipartFile("poster", "poster.jpg", "image/jpeg", TestImages.jpeg(30, 40));
+
+            willThrow(new RuleViolationException(EventErrorCode.EDIT_LOCKED_AFTER_SALES_CLOSED))
+                    .given(uploadEventPosterUseCase).upload(any());
+            mockMvc.perform(uploadPoster("7", poster))
+                    .andExpect(status().isConflict())
+                    .andExpect(errorBody("EDIT_LOCKED_AFTER_SALES_CLOSED", "판매가 끝난 행사는 입구 목록과 검표 계정만 고칠 수 있습니다."));
+
+            willThrow(new PermissionDeniedException(OrganizerErrorCode.NOT_ORGANIZER_STAFF))
+                    .given(uploadEventPosterUseCase).upload(any());
+            mockMvc.perform(uploadPoster("7", poster))
+                    .andExpect(status().isForbidden())
+                    .andExpect(errorBody("NOT_ORGANIZER_STAFF", "이 주최자의 운영진이 아닙니다."));
+
+            willThrow(new NotFoundException(EventErrorCode.EVENT_NOT_FOUND)).given(uploadEventPosterUseCase).upload(any());
+            mockMvc.perform(uploadPoster("7", poster))
+                    .andExpect(status().isNotFound())
+                    .andExpect(errorBody("EVENT_NOT_FOUND", "행사를 찾을 수 없습니다."));
+        }
+
+        @Test
+        @DisplayName("운영진이 아닌 계정은 403, 로그인하지 않으면 401이다")
+        void onlyStaffArea() throws Exception {
+            MockMultipartFile poster = new MockMultipartFile("poster", "poster.jpg", "image/jpeg", TestImages.jpeg(30, 40));
+
+            mockMvc.perform(multipart(EVENTS_PATH + "/7/poster").file(poster).with(csrf())
+                            .with(loggedInAs(AccountKind.AUDIENCE, 1)))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(multipart(EVENTS_PATH + "/7/poster").file(poster).with(csrf()))
+                    .andExpect(status().isUnauthorized());
+
+            verifyNoInteractions(uploadEventPosterUseCase);
         }
     }
 
