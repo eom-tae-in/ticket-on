@@ -49,7 +49,7 @@ class PriceLayersTest {
         assertThat(days.total()).isEqualTo(Money.of(105_000));
         assertThat(bundlePrice).isEqualTo(Money.of(94_500));
         assertThat(booking.total()).isEqualTo(Money.of(85_000));
-        assertThat(booking.appliedDiscount()).isEqualTo(DiscountKind.EARLY_BIRD);
+        assertThat(booking.tickets()).extracting(TicketPrice::discountKind).containsExactly(DiscountKind.EARLY_BIRD);
     }
 
     @Test

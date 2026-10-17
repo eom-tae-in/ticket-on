@@ -13,8 +13,8 @@
  *       계산한다 — 가격(②)이 행사(①)를 쓰고, 행사는 가격을 부르지 않는다.</li>
  *   <li>묶음권이면 날짜마다 고른 회차의 가격({@link com.ticketon.domain.pricing.BundleDayPrices}) 합계 × (1 − 할인율), 100원 내림.
  *       하루가 취소 · 포기되면 같은 날짜별 가격으로 그날 몫을 낸다.</li>
- *   <li>그 위에 조기예매 또는 쿠폰 중 유리한 하나({@link com.ticketon.domain.pricing.BookingPrice}) — 정액 쿠폰은 티켓마다 비례로 나눠 티켓 한 장의
- *       가격({@link com.ticketon.domain.pricing.TicketPrice})을 하나의 값으로 만든다.</li>
+ *   <li>그 위에 티켓마다 조기예매 또는 쿠폰 중 유리한 하나({@link com.ticketon.domain.pricing.BookingPrice}) — 정액 쿠폰은 티켓마다 비례로 나눈 몫으로
+ *       비교해 티켓 한 장의 가격({@link com.ticketon.domain.pricing.TicketPrice})을 하나의 값으로 만든다.</li>
  * </ol>
  */
 package com.ticketon.domain.pricing;

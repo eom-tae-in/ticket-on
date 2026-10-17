@@ -90,7 +90,8 @@ class BookingPriceTest {
 
             assertThat(pricesOf(bookingPrice)).containsExactly(won(85_000));
             assertThat(discountsOf(bookingPrice)).containsExactly(won(9_500));
-            assertThat(bookingPrice.appliedDiscount()).isEqualTo(DiscountKind.EARLY_BIRD);
+            assertThat(kindsOf(bookingPrice)).containsExactly(DiscountKind.EARLY_BIRD);
+            assertThat(bookingPrice.usesCoupon()).isFalse();
         }
 
         @Test
@@ -99,7 +100,8 @@ class BookingPriceTest {
             BookingPrice bookingPrice = BookingPrice.calculate(List.of(TicketBeforeDiscount.regular(won(94_500))), Optional.of(COUPON_5000));
 
             assertThat(bookingPrice.total()).isEqualTo(won(89_500));
-            assertThat(bookingPrice.appliedDiscount()).isEqualTo(DiscountKind.COUPON);
+            assertThat(kindsOf(bookingPrice)).containsExactly(DiscountKind.COUPON);
+            assertThat(bookingPrice.usesCoupon()).isTrue();
         }
 
         @Test
@@ -122,12 +124,12 @@ class BookingPriceTest {
             assertThat(kindsOf(bookingPrice))
                     .containsExactly(DiscountKind.EARLY_BIRD, DiscountKind.EARLY_BIRD, DiscountKind.NONE, DiscountKind.NONE);
             assertThat(bookingPrice.total()).isEqualTo(won(170_000));
-            assertThat(bookingPrice.appliedDiscount()).isEqualTo(DiscountKind.EARLY_BIRD);
+            assertThat(bookingPrice.usesCoupon()).isFalse();
         }
     }
 
     @Nested
-    @DisplayName("유리한 하나만 — 조기예매와 쿠폰은 중복 불가")
+    @DisplayName("유리한 하나만 — 티켓마다 조기예매와 쿠폰 중 싼 쪽 (docs/05 \"할인 중복 규칙\", docs/08 \"새 티켓에 쿠폰을 적용하는 법\")")
     class FavorableOne {
 
         @Test
@@ -137,7 +139,8 @@ class BookingPriceTest {
                     List.of(TicketBeforeDiscount.withEarlyBird(won(94_500), Discount.rate(Percent.of(10)))), Optional.of(COUPON_5000));
 
             assertThat(pricesOf(bookingPrice)).containsExactly(won(85_000));
-            assertThat(bookingPrice.appliedDiscount()).isEqualTo(DiscountKind.EARLY_BIRD);
+            assertThat(kindsOf(bookingPrice)).containsExactly(DiscountKind.EARLY_BIRD);
+            assertThat(bookingPrice.usesCoupon()).isFalse();
         }
 
         @Test
@@ -148,36 +151,72 @@ class BookingPriceTest {
                     Optional.of(Discount.rate(Percent.of(20))));
 
             assertThat(pricesOf(bookingPrice)).containsExactly(won(75_600));
-            assertThat(bookingPrice.appliedDiscount()).isEqualTo(DiscountKind.COUPON);
+            assertThat(kindsOf(bookingPrice)).containsExactly(DiscountKind.COUPON);
+            assertThat(bookingPrice.usesCoupon()).isTrue();
         }
 
         @Test
-        @DisplayName("4매 중 2매 조기예매 + 정액 쿠폰 5,000원 — 조기예매 쪽 170,000원 < 쿠폰 쪽 195,000원이라 조기예매만")
-        void mixedEarlyBirdBeatsFixedCoupon() {
-            BookingPrice bookingPrice = BookingPrice.calculate(twoOfFourEarlyBird(), Optional.of(COUPON_5000));
-
-            assertThat(pricesOf(bookingPrice)).containsExactly(won(35_000), won(35_000), won(50_000), won(50_000));
-            assertThat(bookingPrice.appliedDiscount()).isEqualTo(DiscountKind.EARLY_BIRD);
-        }
-
-        @Test
-        @DisplayName("4매 중 2매 조기예매 + 정률 쿠폰 20% — 쿠폰 쪽 160,000원 < 170,000원이라 네 장 모두 쿠폰 (한 예매 건에서 섞지 않음, 확인 필요 #48)")
-        void mixedFallsBackToCouponForAll() {
+        @DisplayName("50,000원 4매 · 조기예매 2장 + 정률 쿠폰 20% → 35,000 · 35,000 · 40,000 · 40,000 = 150,000원 (2매씩 나눠 사도 같은 값)")
+        void mixedWithRateCoupon() {
             BookingPrice bookingPrice = BookingPrice.calculate(twoOfFourEarlyBird(), Optional.of(Discount.rate(Percent.of(20))));
 
-            assertThat(pricesOf(bookingPrice)).containsExactly(won(40_000), won(40_000), won(40_000), won(40_000));
-            assertThat(kindsOf(bookingPrice)).containsOnly(DiscountKind.COUPON);
-            assertThat(bookingPrice.total()).isEqualTo(won(160_000));
+            assertThat(pricesOf(bookingPrice)).containsExactly(won(35_000), won(35_000), won(40_000), won(40_000));
+            assertThat(kindsOf(bookingPrice))
+                    .containsExactly(DiscountKind.EARLY_BIRD, DiscountKind.EARLY_BIRD, DiscountKind.COUPON, DiscountKind.COUPON);
+            assertThat(bookingPrice.total()).isEqualTo(won(150_000));
+            assertThat(bookingPrice.usesCoupon()).isTrue();
+
+            Money boughtSeparately = BookingPrice.calculate(twoOfFourEarlyBird().subList(0, 2), Optional.of(Discount.rate(Percent.of(20)))).total()
+                    .plus(BookingPrice.calculate(twoOfFourEarlyBird().subList(2, 4), Optional.of(Discount.rate(Percent.of(20)))).total());
+            assertThat(boughtSeparately).isEqualTo(bookingPrice.total());
         }
 
         @Test
-        @DisplayName("합계가 같으면 조기예매 — 50,000원에 얼리버드 10%와 쿠폰 5,000원이 모두 45,000원 (쿠폰을 남김, 확인 필요 #48)")
+        @DisplayName("50,000원 4매 · 조기예매 2장 + 정액 쿠폰 5,000원 → 장당 1,250원으로 비교 → 35,000 · 35,000 · 48,750 · 48,750 = 167,500원 (확인 필요 #48)")
+        void mixedWithFixedCoupon() {
+            BookingPrice bookingPrice = BookingPrice.calculate(twoOfFourEarlyBird(), Optional.of(COUPON_5000));
+
+            assertThat(pricesOf(bookingPrice)).containsExactly(won(35_000), won(35_000), won(48_750), won(48_750));
+            assertThat(kindsOf(bookingPrice))
+                    .containsExactly(DiscountKind.EARLY_BIRD, DiscountKind.EARLY_BIRD, DiscountKind.COUPON, DiscountKind.COUPON);
+            assertThat(discountsOf(bookingPrice)).containsExactly(won(15_000), won(15_000), won(1_250), won(1_250));
+            assertThat(bookingPrice.total()).isEqualTo(won(167_500));
+        }
+
+        @Test
+        @DisplayName("조기예매를 고른 장의 정액 쿠폰 몫은 다른 장으로 옮기지 않는다 — 쿠폰 2,500원만 쓰인다 (확인 필요 #48)")
+        void earlyBirdTicketShareUnused() {
+            BookingPrice bookingPrice = BookingPrice.calculate(twoOfFourEarlyBird(), Optional.of(COUPON_5000));
+
+            Money couponUsed = Money.sum(bookingPrice.tickets().stream()
+                    .filter(ticket -> ticket.discountKind() == DiscountKind.COUPON)
+                    .map(TicketPrice::discountAmount)
+                    .toList());
+            assertThat(couponUsed).isEqualTo(won(2_500));
+        }
+
+        @Test
+        @DisplayName("같으면 조기예매 — 50,000원에 얼리버드 10%와 쿠폰 5,000원이 모두 45,000원 (쿠폰을 남김, 확인 필요 #48)")
         void tieKeepsCoupon() {
             BookingPrice bookingPrice = BookingPrice.calculate(
                     List.of(TicketBeforeDiscount.withEarlyBird(REGULAR, Discount.rate(Percent.of(10)))), Optional.of(COUPON_5000));
 
             assertThat(pricesOf(bookingPrice)).containsExactly(won(45_000));
-            assertThat(bookingPrice.appliedDiscount()).isEqualTo(DiscountKind.EARLY_BIRD);
+            assertThat(kindsOf(bookingPrice)).containsExactly(DiscountKind.EARLY_BIRD);
+            assertThat(bookingPrice.usesCoupon()).isFalse();
+        }
+
+        @Test
+        @DisplayName("장마다 따로 비교한다 — 쿠폰 8,000원을 5,000 · 3,000원으로 나눠, 조기예매 5,000원과 같은 장은 조기예매, 2,000원인 장은 쿠폰")
+        void comparedPerTicket() {
+            BookingPrice bookingPrice = BookingPrice.calculate(List.of(
+                    TicketBeforeDiscount.withEarlyBird(REGULAR, Discount.fixedAmount(won(5_000))),
+                    TicketBeforeDiscount.withEarlyBird(won(30_000), Discount.fixedAmount(won(2_000)))),
+                    Optional.of(Discount.fixedAmount(won(8_000))));
+
+            assertThat(discountsOf(bookingPrice)).containsExactly(won(5_000), won(3_000));
+            assertThat(kindsOf(bookingPrice)).containsExactly(DiscountKind.EARLY_BIRD, DiscountKind.COUPON);
+            assertThat(pricesOf(bookingPrice)).containsExactly(won(45_000), won(27_000));
         }
 
         @Test
@@ -186,7 +225,8 @@ class BookingPriceTest {
             BookingPrice bookingPrice = BookingPrice.calculate(regularTickets(50_000), Optional.of(Discount.rate(Percent.of(0))));
 
             assertThat(pricesOf(bookingPrice)).containsExactly(REGULAR);
-            assertThat(bookingPrice.appliedDiscount()).isEqualTo(DiscountKind.NONE);
+            assertThat(kindsOf(bookingPrice)).containsExactly(DiscountKind.NONE);
+            assertThat(bookingPrice.usesCoupon()).isFalse();
         }
 
         @Test
@@ -196,7 +236,8 @@ class BookingPriceTest {
 
             assertThat(pricesOf(bookingPrice)).containsExactly(won(50_000), won(30_000));
             assertThat(discountsOf(bookingPrice)).containsOnly(Money.ZERO);
-            assertThat(bookingPrice.appliedDiscount()).isEqualTo(DiscountKind.NONE);
+            assertThat(kindsOf(bookingPrice)).containsOnly(DiscountKind.NONE);
+            assertThat(bookingPrice.usesCoupon()).isFalse();
         }
     }
 
@@ -248,6 +289,15 @@ class BookingPriceTest {
             assertThat(discountsOf(bookingPrice)).containsExactly(won(3_000));
             assertThat(bookingPrice.total()).isEqualTo(Money.ZERO);
         }
+
+        @Test
+        @DisplayName("나눈 몫이 0원인 장은 쿠폰을 쓰지 않는다 — 1원을 두 장에 → 1 · 0원, 둘째 장은 할인 없음")
+        void zeroShareTicketStaysUndiscounted() {
+            BookingPrice bookingPrice = BookingPrice.calculate(regularTickets(50_000, 50_000), Optional.of(Discount.fixedAmount(won(1))));
+
+            assertThat(discountsOf(bookingPrice)).containsExactly(won(1), Money.ZERO);
+            assertThat(kindsOf(bookingPrice)).containsExactly(DiscountKind.COUPON, DiscountKind.NONE);
+        }
     }
 
     @Nested
@@ -255,11 +305,16 @@ class BookingPriceTest {
     class Values {
 
         @Test
-        @DisplayName("한 예매 건에 조기예매와 쿠폰 티켓이 섞이면 받지 않는다")
-        void mixedKindsRejected() {
-            assertThatIllegalArgumentException().isThrownBy(() -> new BookingPrice(List.of(
+        @DisplayName("한 예매 건에 조기예매 티켓과 쿠폰 티켓이 함께 있을 수 있다 — 장마다 종류와 깎은 금액을 그대로 갖는다 (docs/08 \"부분 변경\")")
+        void mixedKindsKeptPerTicket() {
+            BookingPrice bookingPrice = new BookingPrice(List.of(
                     new TicketPrice(REGULAR, DiscountKind.EARLY_BIRD, won(15_000)),
-                    new TicketPrice(REGULAR, DiscountKind.COUPON, won(1_250)))));
+                    new TicketPrice(REGULAR, DiscountKind.COUPON, won(1_250))));
+
+            assertThat(kindsOf(bookingPrice)).containsExactly(DiscountKind.EARLY_BIRD, DiscountKind.COUPON);
+            assertThat(discountsOf(bookingPrice)).containsExactly(won(15_000), won(1_250));
+            assertThat(bookingPrice.total()).isEqualTo(won(83_750));
+            assertThat(bookingPrice.usesCoupon()).isTrue();
         }
 
         @Test
