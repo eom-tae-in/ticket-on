@@ -8,6 +8,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.ticketon.application.account.port.out.StaffAccountRepository;
 import com.ticketon.application.event.port.in.AddEntranceCommand;
 import com.ticketon.application.event.port.in.AddEntranceUseCase;
+import com.ticketon.application.event.port.in.AddSeatBlockCommand;
+import com.ticketon.application.event.port.in.AddSeatBlockUseCase;
 import com.ticketon.application.event.port.in.AddZoneCommand;
 import com.ticketon.application.event.port.in.AddZoneUseCase;
 import com.ticketon.application.event.port.in.CreateEventCommand;
@@ -31,6 +33,10 @@ import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.error.DomainException;
 import com.ticketon.domain.error.PermissionDeniedException;
 import com.ticketon.domain.error.RuleViolationException;
+import com.ticketon.domain.event.BlockAngle;
+import com.ticketon.domain.event.BlockName;
+import com.ticketon.domain.event.BlockSize;
+import com.ticketon.domain.event.CanvasPoint;
 import com.ticketon.domain.event.EntranceName;
 import com.ticketon.domain.event.EventErrorCode;
 import com.ticketon.domain.event.EventPosterImage;
@@ -76,7 +82,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL로 행사를 만들거나 위저드 단계를 저장하거나 포스터를 올리거나 구역 · 입구를 더하는 흐름이 다른 흐름과 가장 나쁜 순간에 엇갈려도
+ * 진짜 PostgreSQL로 행사를 만들거나 위저드 단계를 저장하거나 포스터를 올리거나 구역 · 입구 · 블록을 더하는 흐름이 다른 흐름과 가장 나쁜 순간에 엇갈려도
  * 교착(40P01) 없이 차례로 처리되는 것을 고정한다 — 잠금 순서 운영진 계정 줄 → 주최자 줄 → 행사 줄({@link StaffAccountLocks} 표, #195). 포스터 파일은 임시
  * 디렉터리의 로컬 저장소에 둔다. Docker가 없는 환경에서는 건너뛴다.
  * <p>
@@ -88,7 +94,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
-@DisplayName("행사 만들기 · 위저드 단계 저장 · 포스터 올리기 · 구역 · 입구 추가의 잠금 순서 — 가장 나쁜 순간에 엇갈려도 교착 없이 차례로 (진짜 PostgreSQL)")
+@DisplayName("행사 만들기 · 위저드 단계 저장 · 포스터 올리기 · 구역 · 입구 · 블록 추가의 잠금 순서 — 가장 나쁜 순간에 엇갈려도 교착 없이 차례로 (진짜 PostgreSQL)")
 class EventWizardRaceIntegrationTest {
 
     private static final String SPRING_PLAY_TITLE = "2026 봄 정기공연 〈열두 번째 달〉";
@@ -137,6 +143,9 @@ class EventWizardRaceIntegrationTest {
 
     @Autowired
     private AddEntranceUseCase addEntranceUseCase;
+
+    @Autowired
+    private AddSeatBlockUseCase addSeatBlockUseCase;
 
     @Autowired
     private RemoveOperatorUseCase removeOperatorUseCase;
@@ -312,6 +321,45 @@ class EventWizardRaceIntegrationTest {
     }
 
     @Test
+    @DisplayName("두 운영진이 같은 행사에 같은 이름의 블록을 거의 동시에 얹으면 뒤의 얹기는 행사 줄에서 기다렸다가 앞의 블록을 읽어 409로 멈춘다 — 블록 · 좌석은 하나씩만 남는다")
+    void concurrentBlockAdditionsAreSerialized() throws Exception {
+        Future<?> contender = runInterleaved(
+                () -> {
+                    StaffAccountLocks.lockForReferenceInIdOrder(staffAccountRepository, junghoon);
+                    organizerRepository.findByIdForKeyShare(twelveMonths);
+                    eventRepository.findByIdForUpdate(springPlay);
+                },
+                () -> addBlock(junghoon, "1층"),
+                () -> addBlock(planner, "1층"),
+                () -> assertThat(liveRows("event_block")).isZero());
+
+        assertRejectedWith(contender, EventErrorCode.BLOCK_NAME_ALREADY_TAKEN);
+        assertThat(liveRows("event_block")).isEqualTo(1);
+        assertThat(liveRows("event_seat")).isEqualTo(50);
+        assertThat(eventOperations()).containsExactly("CREATE_EVENT " + junghoon, "EDIT_EVENT " + junghoon);
+    }
+
+    @Test
+    @DisplayName("구역 '1층'을 더하는 흐름이 행사 줄을 쥔 순간 들어온 블록 '1층' 얹기는 행사 줄에서 기다렸다가 앞의 구역을 읽어 409로 멈춘다 — 표를 건넌 이름 겹침도 막힌다 (#42)")
+    void zoneAndBlockWithSameNameAreSerialized() throws Exception {
+        Future<?> contender = runInterleaved(
+                () -> {
+                    StaffAccountLocks.lockForReferenceInIdOrder(staffAccountRepository, junghoon);
+                    organizerRepository.findByIdForKeyShare(twelveMonths);
+                    eventRepository.findByIdForUpdate(springPlay);
+                },
+                () -> addZoneUseCase.add(new AddZoneCommand(acting(junghoon), springPlay, ZoneKind.DESIGNATED,
+                        ZoneSettings.designated(ZoneName.of("1층"), ZoneColor.of("#E5484D"), ZoneBasePrice.of(50_000)))),
+                () -> addBlock(planner, "1층"),
+                () -> assertThat(liveRows("event_zone")).isZero());
+
+        assertRejectedWith(contender, EventErrorCode.BLOCK_NAME_TAKEN_BY_ZONE);
+        assertThat(liveRows("event_zone")).isEqualTo(1);
+        assertThat(liveRows("event_block")).isZero();
+        assertThat(eventOperations()).containsExactly("CREATE_EVENT " + junghoon, "EDIT_EVENT " + junghoon);
+    }
+
+    @Test
     @DisplayName("주최자명 변경이 주최자 줄을 잠근 순간 들어온 구역 추가는 행사 줄을 잡기 전에 주최자 줄에서 기다린다 — 둘 다 끝까지 처리된다")
     void zoneAdditionWaitsOnOrganizerRowBeforeEventRow() throws Exception {
         Future<?> contender = runInterleaved(
@@ -419,12 +467,18 @@ class EventWizardRaceIntegrationTest {
                 ZoneSettings.quantity(ZoneName.of("스탠딩A"), ZoneColor.of("#30A46C"), ZoneBasePrice.of(30_000), ZoneCapacity.of(300))));
     }
 
+    /** 그 운영진이 봄 정기공연에 그 이름의 블록(5행 × 10열)을 얹는다. */
+    private void addBlock(long staffAccountId, String name) {
+        addSeatBlockUseCase.add(new AddSeatBlockCommand(acting(staffAccountId), springPlay, BlockName.of(name), BlockSize.of(5, 10),
+                CanvasPoint.ORIGIN, BlockAngle.NONE));
+    }
+
     /** 그 운영진이 봄 정기공연에 입구 "정문"을 더한다. */
     private void addMainGate(long staffAccountId) {
         addEntranceUseCase.add(new AddEntranceCommand(acting(staffAccountId), springPlay, EntranceName.of("정문")));
     }
 
-    /** 봄 정기공연의 그 표(event_zone · event_entrance)에서 지우지 않은 줄 수. */
+    /** 봄 정기공연의 그 표(event_zone · event_entrance · event_block · event_seat)에서 지우지 않은 줄 수. */
     private long liveRows(String table) {
         Long count = jdbcTemplate.queryForObject("SELECT count(*) FROM " + table + " WHERE event_id = ? AND deleted_at IS NULL",
                 Long.class, springPlay);
