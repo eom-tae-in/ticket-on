@@ -2,10 +2,12 @@ package com.ticketon.persistence.event;
 
 import static com.ticketon.persistence.jooq.Tables.ADMIN_ACCOUNT;
 import static com.ticketon.persistence.jooq.Tables.EVENT;
+import static com.ticketon.persistence.jooq.Tables.EVENT_BLOCK;
 import static com.ticketon.persistence.jooq.Tables.EVENT_CANCELLATION_FEE_TIER;
 import static com.ticketon.persistence.jooq.Tables.EVENT_CATEGORY;
 import static com.ticketon.persistence.jooq.Tables.EVENT_ENTRANCE;
 import static com.ticketon.persistence.jooq.Tables.EVENT_SALES_PAUSE;
+import static com.ticketon.persistence.jooq.Tables.EVENT_SEAT;
 import static com.ticketon.persistence.jooq.Tables.EVENT_ZONE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -37,8 +39,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL에 마이그레이션(V19 · V22)을 올리고, 행사 · 정식 카테고리 · 취소 규정 구간 · 판매 중단 이력 · 구역 · 입구 표의 CHECK가 도메인이
- * 만들 수 없는 줄을 막는지 하나씩 본다 — 맞는 줄에서 칸 하나(또는 둘)만 어긋나게 바꿔 표에 바로 넣으면 그 CHECK의 이름으로 거부된다.
+ * 진짜 PostgreSQL에 마이그레이션(V19 · V22 · V23)을 올리고, 행사 · 정식 카테고리 · 취소 규정 구간 · 판매 중단 이력 · 구역 · 입구 · 블록 ·
+ * 좌석 표의 CHECK가 도메인이 만들 수 없는 줄을 막는지 하나씩 본다 — 맞는 줄에서 칸 하나(또는 둘)만 어긋나게 바꿔 표에 바로 넣으면 그 CHECK의 이름으로 거부된다.
  * <p>
  * <b>PostgreSQL CHECK는 식이 NULL이면 통과한다.</b> 그래서 NULL이 될 수 있는 칸끼리 맞물리는 CHECK(1인 총 매수의 한도 · 세는 범위 등)는 NULL
  * 조합을 일부러 넣어 본다. 저장소가 읽다가 말없이 다른 값으로 되살리거나(한도 없는 줄 → 제한 없음) 실패하는(세는 범위 없는 줄) 일이 없게.
@@ -256,6 +258,82 @@ class EventTableConstraintsTest {
         assertThatNoException().isThrownBy(() -> insertEntrance("정문"));
     }
 
+    // ── 블록(event_block) · 좌석(event_seat) — V23
+
+    static Stream<Arguments> blockRowsBreakingChecks() {
+        return Stream.of(
+                breaking("빈 이름", "event_block_name_ck", values(EVENT_BLOCK.NAME, "")),
+                breaking("0행", "event_block_size_ck", values(EVENT_BLOCK.ROW_COUNT, 0)),
+                breaking("0열", "event_block_size_ck", values(EVENT_BLOCK.COLUMN_COUNT, 0)),
+                breaking("각도가 음수", "event_block_angle_ck", values(EVENT_BLOCK.ANGLE_DEGREES, -15)),
+                breaking("각도가 360", "event_block_angle_ck", values(EVENT_BLOCK.ANGLE_DEGREES, 360)));
+    }
+
+    @ParameterizedTest(name = "{0} → {1}")
+    @MethodSource("blockRowsBreakingChecks")
+    @DisplayName("블록 줄의 칸이 어긋나면 그 CHECK로 거부된다")
+    void blockRowBreakingCheckIsRejected(String description, String constraint, Map<Field<?>, Object> overrides) {
+        assertRejectedBy(constraint, () -> insertBlock(overrides));
+    }
+
+    static Stream<Arguments> seatRowsBreakingChecks() {
+        return Stream.of(
+                breaking("0열", "event_seat_number_ck", values(EVENT_SEAT.SEAT_ROW, 0)),
+                breaking("0번", "event_seat_number_ck", values(EVENT_SEAT.SEAT_NUMBER, 0)),
+                breaking("3종 밖의 속성 — 판매 제외는 회차 단위라 좌석 속성이 아니다", "event_seat_attribute_ck",
+                        values(EVENT_SEAT.ATTRIBUTE, "EXCLUDED")));
+    }
+
+    @ParameterizedTest(name = "{0} → {1}")
+    @MethodSource("seatRowsBreakingChecks")
+    @DisplayName("좌석 줄의 칸이 어긋나면 그 CHECK로 거부된다")
+    void seatRowBreakingCheckIsRejected(String description, String constraint, Map<Field<?>, Object> overrides) {
+        long block = insertBlock(Map.of());
+        assertRejectedBy(constraint, () -> insertSeat(block, overrides));
+    }
+
+    @Test
+    @DisplayName("도메인이 만드는 블록 · 좌석은 받는다 — 돌린 블록, 지운 블록, 구역 없는 좌석, 지정형 구역에 배정한 휠체어석, 끈 좌석, 지운 좌석")
+    void consistentBlocksAndSeatsAreAccepted() {
+        assertThatNoException().isThrownBy(() -> {
+            long firstFloor = insertBlock(values(EVENT_BLOCK.ANGLE_DEGREES, 345));
+            insertBlock(values(EVENT_BLOCK.NAME, "2층", EVENT_BLOCK.DELETED_AT, PAUSED_AT));
+            long rSeat = insertDesignatedZone(springPlay, "R석");
+            insertSeat(firstFloor, values(EVENT_SEAT.SEAT_ROW, 1, EVENT_SEAT.SEAT_NUMBER, 1));
+            insertSeat(firstFloor, values(EVENT_SEAT.SEAT_ROW, 1, EVENT_SEAT.SEAT_NUMBER, 2, EVENT_SEAT.ZONE_ID, rSeat,
+                    EVENT_SEAT.ATTRIBUTE, "WHEELCHAIR"));
+            insertSeat(firstFloor, values(EVENT_SEAT.SEAT_ROW, 1, EVENT_SEAT.SEAT_NUMBER, 3, EVENT_SEAT.ATTRIBUTE, "RESTRICTED_VIEW",
+                    EVENT_SEAT.ACTIVE, false));
+            insertSeat(firstFloor, values(EVENT_SEAT.SEAT_ROW, 1, EVENT_SEAT.SEAT_NUMBER, 4, EVENT_SEAT.DELETED_AT, PAUSED_AT));
+        });
+    }
+
+    @Test
+    @DisplayName("좌석은 같은 행사의 블록 · 구역만 가리킨다 — 다른 행사의 블록 · 구역이면 그 외래 키로 거부된다")
+    void seatPointsOnlyToSameEventsBlockAndZone() {
+        long otherEvent = insertEvent(Map.of());
+        long block = insertBlock(Map.of());
+        long otherEventsZone = insertDesignatedZone(otherEvent, "R석");
+        long otherEventsBlock = insertBlock(values(EVENT_BLOCK.EVENT_ID, otherEvent));
+
+        assertForeignKeyRejected("event_seat_zone_fk", () -> insertSeat(block, values(EVENT_SEAT.ZONE_ID, otherEventsZone)));
+        assertForeignKeyRejected("event_seat_block_fk", () -> insertSeat(otherEventsBlock, values(EVENT_SEAT.EVENT_ID, springPlay)));
+    }
+
+    @Test
+    @DisplayName("한 블록 안에서 좌석 번호는 겹치지 않는다 — 지운 좌석과도 겹치지 않는다(좌석은 블록과 함께만 지워진다)")
+    void seatNumberUniqueInBlock() {
+        long block = insertBlock(Map.of());
+        insertSeat(block, values(EVENT_SEAT.DELETED_AT, PAUSED_AT));
+
+        assertThatExceptionOfType(DataAccessException.class)
+                .isThrownBy(() -> insertSeat(block, Map.of()))
+                .satisfies(rejected -> {
+                    assertThat(rejected.sqlState()).isEqualTo("23505");
+                    assertThat(rejected.getMessage()).contains("\"event_seat_number_uk\"");
+                });
+    }
+
     // ── 취소 규정 구간 · 정식 카테고리
 
     @Test
@@ -358,6 +436,58 @@ class EventTableConstraintsTest {
         row.put(EVENT_ZONE.DELETED_AT, null);
         row.putAll(overrides);
         dsl.insertInto(EVENT_ZONE).set(row).execute();
+    }
+
+    /** 봄 정기공연의 블록 "1층"(12행 × 10열, 원점, 0°) 한 줄에 그 칸들만 덮어써 넣고 id를 돌려준다. */
+    private long insertBlock(Map<Field<?>, Object> overrides) {
+        Map<Field<?>, Object> row = new HashMap<>();
+        row.put(EVENT_BLOCK.EVENT_ID, springPlay);
+        row.put(EVENT_BLOCK.NAME, "1층");
+        row.put(EVENT_BLOCK.ROW_COUNT, 12);
+        row.put(EVENT_BLOCK.COLUMN_COUNT, 10);
+        row.put(EVENT_BLOCK.POSITION_X, 0);
+        row.put(EVENT_BLOCK.POSITION_Y, 0);
+        row.put(EVENT_BLOCK.ANGLE_DEGREES, 0);
+        row.put(EVENT_BLOCK.DELETED_AT, null);
+        row.putAll(overrides);
+        return dsl.insertInto(EVENT_BLOCK).set(row).returningResult(EVENT_BLOCK.ID).fetchSingle().value1();
+    }
+
+    /** 그 블록의 12열 7번 — 활성 · 일반 · 구역 없음 — 한 줄에 그 칸들만 덮어써 넣는다. 행사는 그 블록의 행사다. */
+    private void insertSeat(long blockId, Map<Field<?>, Object> overrides) {
+        Map<Field<?>, Object> row = new HashMap<>();
+        row.put(EVENT_SEAT.EVENT_ID, dsl.select(EVENT_BLOCK.EVENT_ID).from(EVENT_BLOCK).where(EVENT_BLOCK.ID.eq(blockId)).fetchSingle().value1());
+        row.put(EVENT_SEAT.BLOCK_ID, blockId);
+        row.put(EVENT_SEAT.SEAT_ROW, 12);
+        row.put(EVENT_SEAT.SEAT_NUMBER, 7);
+        row.put(EVENT_SEAT.ZONE_ID, null);
+        row.put(EVENT_SEAT.ATTRIBUTE, "GENERAL");
+        row.put(EVENT_SEAT.ACTIVE, true);
+        row.put(EVENT_SEAT.DELETED_AT, null);
+        row.putAll(overrides);
+        dsl.insertInto(EVENT_SEAT).set(row).execute();
+    }
+
+    /** 그 행사의 지정형 구역 한 줄(5만원)을 넣고 id를 돌려준다. */
+    private long insertDesignatedZone(long eventId, String name) {
+        return dsl.insertInto(EVENT_ZONE)
+                .set(EVENT_ZONE.EVENT_ID, eventId)
+                .set(EVENT_ZONE.KIND, "DESIGNATED")
+                .set(EVENT_ZONE.NAME, name)
+                .set(EVENT_ZONE.COLOR, "#E5484D")
+                .set(EVENT_ZONE.BASE_PRICE, 50_000L)
+                .returningResult(EVENT_ZONE.ID)
+                .fetchSingle()
+                .value1();
+    }
+
+    private static void assertForeignKeyRejected(String constraint, Runnable insert) {
+        assertThatExceptionOfType(DataAccessException.class)
+                .isThrownBy(insert::run)
+                .satisfies(rejected -> {
+                    assertThat(rejected.sqlState()).isEqualTo("23503");
+                    assertThat(rejected.getMessage()).contains("\"" + constraint + "\"");
+                });
     }
 
     private void insertEntrance(String name) {
