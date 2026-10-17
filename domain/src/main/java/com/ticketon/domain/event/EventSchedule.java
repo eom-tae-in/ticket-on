@@ -297,7 +297,7 @@ public final class EventSchedule {
      * 회차의 출연을 바꾼다. 출연 칸을 고치는 것만으로는 출연자 변경 알림이 되지 않는다(docs/02 "출연 (선택)").
      *
      * @param performers 새 출연. 지우려면 null
-     * @return 바뀌었는지 — 지금과 같으면 false. 바뀌었으면 변경 이력을 남긴다(#46)
+     * @return 바뀌었는지 — 지금과 같으면 false. 판매를 시작한 뒤 바뀌었으면 변경 이력을 남긴다({@link EventChangeHistory#performersVersion})
      * @throws NotFoundException 일정에 없는 회차면({@link EventErrorCode#SESSION_NOT_FOUND})
      */
     public boolean changePerformers(long sessionId, SessionPerformers performers) {
