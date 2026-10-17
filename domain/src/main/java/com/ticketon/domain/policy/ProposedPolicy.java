@@ -39,6 +39,9 @@ import java.util.Set;
  *       때)이고, 날짜가 없으면 접지 않는다: {@code domain.event.DraftEventNudges#isFolded}.</li>
  *   <li>확인 필요 (#45) — 판매 중단 행사는 내 행사 목록의 진행 중 구역에 둔다(docs/13의 진행 중 목록에 이름이 없음):
  *       {@code domain.event.EventListSection}.</li>
+ *   <li>확인 필요 (#48) — 정액 쿠폰처럼 한 금액을 티켓마다 비례로 나누고 남은 원을 주는 순서(버린 끝자리가 큰 티켓부터 1원씩, 같으면 앞 순번부터):
+ *       {@code domain.pricing.Money#splitProportionally}.</li>
+ *   <li>확인 필요 (#48) — 금액이 바뀌지 않는 퍼센트(0% 할인)는 100원 단위로 내리지 않는다: {@code domain.pricing.Money#percentRoundedDown}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
