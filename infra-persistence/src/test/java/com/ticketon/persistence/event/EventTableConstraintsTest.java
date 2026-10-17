@@ -4,7 +4,9 @@ import static com.ticketon.persistence.jooq.Tables.ADMIN_ACCOUNT;
 import static com.ticketon.persistence.jooq.Tables.EVENT;
 import static com.ticketon.persistence.jooq.Tables.EVENT_CANCELLATION_FEE_TIER;
 import static com.ticketon.persistence.jooq.Tables.EVENT_CATEGORY;
+import static com.ticketon.persistence.jooq.Tables.EVENT_ENTRANCE;
 import static com.ticketon.persistence.jooq.Tables.EVENT_SALES_PAUSE;
+import static com.ticketon.persistence.jooq.Tables.EVENT_ZONE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNoException;
@@ -35,8 +37,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL에 마이그레이션(V19)을 올리고, 행사 · 정식 카테고리 · 취소 규정 구간 · 판매 중단 이력 표의 CHECK가 도메인이 만들 수 없는 줄을
- * 막는지 하나씩 본다 — 맞는 줄에서 칸 하나(또는 둘)만 어긋나게 바꿔 표에 바로 넣으면 그 CHECK의 이름으로 거부된다.
+ * 진짜 PostgreSQL에 마이그레이션(V19 · V22)을 올리고, 행사 · 정식 카테고리 · 취소 규정 구간 · 판매 중단 이력 · 구역 · 입구 표의 CHECK가 도메인이
+ * 만들 수 없는 줄을 막는지 하나씩 본다 — 맞는 줄에서 칸 하나(또는 둘)만 어긋나게 바꿔 표에 바로 넣으면 그 CHECK의 이름으로 거부된다.
  * <p>
  * <b>PostgreSQL CHECK는 식이 NULL이면 통과한다.</b> 그래서 NULL이 될 수 있는 칸끼리 맞물리는 CHECK(1인 총 매수의 한도 · 세는 범위 등)는 NULL
  * 조합을 일부러 넣어 본다. 저장소가 읽다가 말없이 다른 값으로 되살리거나(한도 없는 줄 → 제한 없음) 실패하는(세는 범위 없는 줄) 일이 없게.
@@ -212,6 +214,48 @@ class EventTableConstraintsTest {
         });
     }
 
+    // ── 구역(event_zone) · 입구(event_entrance) — V22
+
+    static Stream<Arguments> zoneRowsBreakingChecks() {
+        return Stream.of(
+                breaking("2종 밖의 종류", "event_zone_kind_ck", values(EVENT_ZONE.KIND, "STANDING")),
+                breaking("2종 밖의 종류 — 정원도 없다", "event_zone_kind_ck", values(EVENT_ZONE.KIND, "TABLE", EVENT_ZONE.CAPACITY, null)),
+                breaking("빈 이름", "event_zone_name_ck", values(EVENT_ZONE.NAME, "")),
+                breaking("색에 #이 없다", "event_zone_color_ck", values(EVENT_ZONE.COLOR, "E5484DA")),
+                breaking("색의 16진수가 소문자다", "event_zone_color_ck", values(EVENT_ZONE.COLOR, "#e5484d")),
+                breaking("색에 16진수가 아닌 글자가 있다", "event_zone_color_ck", values(EVENT_ZONE.COLOR, "#E5484G")),
+                breaking("색이 다섯 자리다", "event_zone_color_ck", values(EVENT_ZONE.COLOR, "#E5484")),
+                breaking("기본가가 0원", "event_zone_base_price_ck", values(EVENT_ZONE.BASE_PRICE, 0L)),
+                breaking("수량형인데 정원이 없다", "event_zone_capacity_ck", values(EVENT_ZONE.CAPACITY, null)),
+                breaking("수량형인데 정원이 0", "event_zone_capacity_ck", values(EVENT_ZONE.CAPACITY, 0)),
+                breaking("지정형인데 정원이 있다", "event_zone_capacity_ck", values(EVENT_ZONE.KIND, "DESIGNATED")));
+    }
+
+    @ParameterizedTest(name = "{0} → {1}")
+    @MethodSource("zoneRowsBreakingChecks")
+    @DisplayName("구역 줄의 칸이 서로 어긋나면 그 CHECK로 거부된다")
+    void zoneRowBreakingCheckIsRejected(String description, String constraint, Map<Field<?>, Object> overrides) {
+        assertRejectedBy(constraint, () -> insertZone(overrides));
+    }
+
+    @Test
+    @DisplayName("도메인이 만드는 구역은 받는다 — 수량형 + 정원, 지정형 + 정원 없음, 지운 구역")
+    void consistentZonesAreAccepted() {
+        assertThatNoException().isThrownBy(() -> {
+            insertZone(values(EVENT_ZONE.NAME, "스탠딩A"));
+            insertZone(values(EVENT_ZONE.NAME, "R석", EVENT_ZONE.KIND, "DESIGNATED", EVENT_ZONE.CAPACITY, null,
+                    EVENT_ZONE.BASE_PRICE, 50_000L, EVENT_ZONE.COLOR, "#E5484D"));
+            insertZone(values(EVENT_ZONE.NAME, "스탠딩B", EVENT_ZONE.DELETED_AT, PAUSED_AT));
+        });
+    }
+
+    @Test
+    @DisplayName("입구 이름은 빈 글자를 받지 않는다")
+    void entranceNameCheck() {
+        assertRejectedBy("event_entrance_name_ck", () -> insertEntrance(""));
+        assertThatNoException().isThrownBy(() -> insertEntrance("정문"));
+    }
+
     // ── 취소 규정 구간 · 정식 카테고리
 
     @Test
@@ -300,6 +344,27 @@ class EventTableConstraintsTest {
         row.put(EVENT_SALES_PAUSE.ENDED_AT, null);
         overrides.forEach((field, value) -> row.put(field, ADMIN_PLACEHOLDER.equals(value) ? admin : value));
         dsl.insertInto(EVENT_SALES_PAUSE).set(row).execute();
+    }
+
+    /** 봄 정기공연의 수량형 구역 "스탠딩C"(정원 300, 3만원) 한 줄에 그 칸들만 덮어써 넣는다. */
+    private void insertZone(Map<Field<?>, Object> overrides) {
+        Map<Field<?>, Object> row = new HashMap<>();
+        row.put(EVENT_ZONE.EVENT_ID, springPlay);
+        row.put(EVENT_ZONE.KIND, "QUANTITY");
+        row.put(EVENT_ZONE.NAME, "스탠딩C");
+        row.put(EVENT_ZONE.COLOR, "#30A46C");
+        row.put(EVENT_ZONE.BASE_PRICE, 30_000L);
+        row.put(EVENT_ZONE.CAPACITY, 300);
+        row.put(EVENT_ZONE.DELETED_AT, null);
+        row.putAll(overrides);
+        dsl.insertInto(EVENT_ZONE).set(row).execute();
+    }
+
+    private void insertEntrance(String name) {
+        dsl.insertInto(EVENT_ENTRANCE)
+                .set(EVENT_ENTRANCE.EVENT_ID, springPlay)
+                .set(EVENT_ENTRANCE.NAME, name)
+                .execute();
     }
 
     private void insertTier(int fromDaysBefore, int deductionRatePercent) {
