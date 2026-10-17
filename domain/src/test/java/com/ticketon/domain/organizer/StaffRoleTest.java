@@ -49,11 +49,13 @@ class StaffRoleTest {
             Map.entry(StaffAction.TRANSFER_OWNERSHIP, false),
             Map.entry(StaffAction.CLOSE_ORGANIZER, false),
             // 표 밖: 판매 시작 전 행사 삭제(docs/11), 주최자명 변경(docs/01·11), 사업자 정보 변경(docs/01·11),
-            // 운영진 목록 보기·이 주최자에서 나가기·소유자 이전 신청(docs/13 "운영진 관리"), 운영자 초대 수락(docs/01 "운영자 초대")
+            // 운영진 목록 보기·이 주최자에서 나가기·소유자 이전 신청(docs/13 "운영진 관리"), 운영자 초대 수락(docs/01 "운영자 초대"),
+            // 내 행사 목록 보기(docs/11 "구조", docs/13 "내 행사 목록")
             Map.entry(StaffAction.DELETE_EVENT_BEFORE_SALES_STARTED, true),
             Map.entry(StaffAction.RENAME_ORGANIZER, false),
             Map.entry(StaffAction.CHANGE_BUSINESS_INFORMATION, false),
             Map.entry(StaffAction.VIEW_STAFF, true),
+            Map.entry(StaffAction.VIEW_EVENTS, true),
             Map.entry(StaffAction.ACCEPT_STAFF_INVITATION, true),
             Map.entry(StaffAction.LEAVE_ORGANIZER, true),
             Map.entry(StaffAction.CLAIM_OWNERSHIP, true));

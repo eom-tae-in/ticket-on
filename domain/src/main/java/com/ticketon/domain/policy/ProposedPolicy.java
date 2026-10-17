@@ -2,6 +2,7 @@ package com.ticketon.domain.policy;
 
 import com.ticketon.common.ImageFormat;
 import java.time.Duration;
+import java.time.LocalTime;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
@@ -34,6 +35,10 @@ import java.util.Set;
  *       밖의 예매 설정)은 판매 중에 막아 둔다: {@code domain.event.EventEditTarget}.</li>
  *   <li>확인 필요 (#38) — 비어 있던 회차 종료 시각은 판매가 끝난 뒤에도 행사가 끝날 때까지 입력받는다(막으면 행사 종료를 판정할 수 없음):
  *       {@code domain.event.EventEditTarget#MISSING_SESSION_END_TIME}.</li>
+ *   <li>확인 필요 (#45) — 작성 중 행사를 목록에서 접는 "회차 날짜가 이미 지남"은 일정의 모든 날짜가 오늘(한국 날짜) 전일 때(마지막 날짜가 지났을
+ *       때)이고, 날짜가 없으면 접지 않는다: {@code domain.event.DraftEventNudges#isFolded}.</li>
+ *   <li>확인 필요 (#45) — 판매 중단 행사는 내 행사 목록의 진행 중 구역에 둔다(docs/13의 진행 중 목록에 이름이 없음):
+ *       {@code domain.event.EventListSection}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
@@ -280,6 +285,15 @@ public final class ProposedPolicy {
      * "출연진 사정으로 잠시 판매를 멈춥니다"(18자) 같은 사유가 넉넉히 들어간다. 상한이 없으면 공개 화면에 아주 긴 글이 실린다.
      */
     public static final int SALES_PAUSE_REASON_MAXIMUM_LENGTH = 50;
+
+    /**
+     * 확인 필요 (#45, 문서에 없음) — 작성 중 행사 30일 미수정 알림을 보내는 정해진 시각 작업이 매일 도는 시각(한국 시각). 그날 이 시각까지 30일이
+     * 지난 행사에 알린다 — 9/14 15:00에 마지막으로 고쳤으면 10/14 15:00에 30일이 차고, 10/15 10:00 작업이 알린다.
+     * 오전 10시를 제안한다: 주최자 쪽 알림은 급한 것이 없어 전부 이메일이고(docs/12 "주최자 대상"), 밤 · 새벽에 메일이 오지 않게 하면서 하루를 시작할
+     * 때 메일함에서 보이는 때다. 관객 전날 리마인더의 낮 12시(docs/12 "전날 리마인더" — 점심시간 확인율)는 관객 문자의 까닭이라 그대로 따르지
+     * 않았다. 문서에는 "30일 미수정 — 알림"만 있고 언제 보내는지가 없다(docs/04 "작성 중 행사 관리").
+     */
+    public static final LocalTime DRAFT_EVENT_IDLE_NOTICE_RUN_TIME = LocalTime.of(10, 0);
 
     private ProposedPolicy() {
     }
