@@ -48,6 +48,11 @@ import java.util.Set;
  *       방식). 같으면 쿠폰을 쓰지 않는 쪽(조기예매 또는 정가): {@code domain.pricing.BookingPrice#calculate}.</li>
  *   <li>확인 필요 (#48) — 정액 할인이 가격보다 크면 0원까지만 깎고, 정액 쿠폰은 예매 건 합계까지만 나눈다:
  *       {@code domain.pricing.Discount.FixedAmount}, {@code domain.pricing.BookingPrice}.</li>
+ *   <li>확인 필요 (#49) — 0원 결제를 막는 조기예매 · 쿠폰 할인 값의 범위: 값 자체는 정액 1원 이상 · 정률 1% 이상 100% 미만이고, 할인이 닿는 가장
+ *       낮은 가격에 적용해도 1원 이상 남아야 한다(절대 상한은 두지 않음): {@code domain.pricing.Discount#requireOfferable},
+ *       {@code domain.pricing.Discount#requireLeavesPositivePrice}.</li>
+ *   <li>확인 필요 (#49) — 할인 기간(조기예매 기간 · 쿠폰 유효 기간)은 시작과 끝을 모두 받고, 시작 순간부터 끝 순간 직전까지다:
+ *       {@code domain.pricing.DiscountPeriod}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
