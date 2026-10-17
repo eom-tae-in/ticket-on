@@ -23,6 +23,8 @@ import com.ticketon.domain.error.NotFoundException;
 import com.ticketon.domain.error.PermissionDeniedException;
 import com.ticketon.domain.error.RuleViolationException;
 import com.ticketon.domain.event.Event;
+import com.ticketon.domain.event.EventChangeHistoryTarget;
+import com.ticketon.domain.event.EventChangeHistoryVersion;
 import com.ticketon.domain.event.EventErrorCode;
 import com.ticketon.domain.event.EventPoster;
 import com.ticketon.domain.event.EventPosterImage;
@@ -201,7 +203,7 @@ class EventPosterServiceTest {
         }
 
         @Test
-        @DisplayName("예매가 열린 뒤(판매 중)에도 포스터를 바꾼다 — 제목 · 포스터 · 소개는 자유 변경")
+        @DisplayName("예매가 열린 뒤(판매 중)에도 포스터를 바꾼다 — 제목 · 포스터 · 소개는 자유 변경. 바꾸기 전 파일은 변경 이력의 근거라 남긴다 (#46)")
         void replaceableAfterBookingOpened() {
             upload(JUNGHOON, threeByFourJpeg());
             storeSpringPlayIn(EventStatus.ON_SALE);
@@ -209,7 +211,10 @@ class EventPosterServiceTest {
             EventWizardResult result = upload(PLANNER, threeByFourJpeg());
 
             assertThat(result.posterUrl()).endsWith(SECOND_TOKEN + ".jpg");
-            assertThat(scene.posterStorage.storedKeys()).containsExactly(SECOND_TOKEN + ".jpg");
+            assertThat(scene.posterStorage.storedKeys()).containsExactlyInAnyOrder(FIRST_TOKEN + ".jpg", SECOND_TOKEN + ".jpg");
+            assertThat(scene.historyRepository.versionsOf(springPlay)).singleElement().satisfies(stored -> assertThat(stored.version())
+                    .isEqualTo(new EventChangeHistoryVersion(EventChangeHistoryTarget.POSTER, null, FIRST_TOKEN + ".jpg",
+                            SECOND_TOKEN + ".jpg")));
         }
 
         @Test
