@@ -45,7 +45,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <b>바꾸기 전 포스터의 파일</b>은 변경 이력에 남는지로 갈린다.
  * <ul>
  *   <li><b>판매를 시작한 뒤</b> — 포스터 버전을 쌓고({@link EventChangeHistory#posterVersion}, {@link EventChangeHistoryRecorder}) 바꾸기 전 파일은
- *       지우지 않는다. 이력의 근거라 보관 기간(행사가 끝난 날부터 6개월) 동안 남기고, 보관 기간이 지나 이력을 지울 때 함께 지운다.</li>
+ *       지우지 않는다. 이력의 근거라 보관 기간(행사가 끝난 날부터 6개월) 동안 남기고, 보관 기간이 지나 이력을 지울 때 함께 지운다
+ *       ({@link PurgeExpiredEventChangeHistoryService}).</li>
  *   <li><b>작성 중</b> — 이력을 쌓지 않으므로 커밋된 뒤 바로 지운다. 공개 전 포스터는 관객이 본 적이 없다.</li>
  * </ul>
  */

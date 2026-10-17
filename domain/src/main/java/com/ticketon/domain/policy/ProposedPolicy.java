@@ -312,6 +312,17 @@ public final class ProposedPolicy {
      */
     public static final LocalTime DRAFT_EVENT_IDLE_NOTICE_RUN_TIME = LocalTime.of(10, 0);
 
+    /**
+     * 확인 필요 (#46, 문서에 없음) — 보관 기간이 지난 행사 변경 이력(제목 · 소개 · 포스터 · 회차 출연)을 지우는 정해진 시각 작업이 매일 도는 시각(한국
+     * 시각). 행사가 끝난 날 + 6개월({@link RecordRetentionPolicy#CHANGE_HISTORY_RETENTION_AFTER_EVENT_END})까지 보관하고 그다음 날 이 시각의 작업이
+     * 지운다 — 10/14에 끝난 행사는 4/14까지 보관하고 4/15 04:00 작업이 지운다. 지울지는 한국 날짜로 판정하므로 이 시각이 그날의 판정을 바꾸지 않는다.
+     * 오전 4시를 제안한다: 사람에게 보내는 것이 없는 정리 작업이라 이용이 가장 적은 새벽에 돌려 행사 줄을 잠깐 잡는 일(편집과 차례로 처리)이 편집과
+     * 거의 겹치지 않게 했고, 날짜가 바뀐 뒤라 그날 지울 이력을 바로 지운다. 작성 중 행사 30일 미수정 알림의 오전 10시
+     * ({@link #DRAFT_EVENT_IDLE_NOTICE_RUN_TIME})는 메일을 받는 사람의 때라 따르지 않았다 — 같은 시각에 돌아도 두 작업은 행사 줄을 FOR KEY SHARE로만
+     * 잡고 대상도 겹치지 않아(작성 중 행사에는 이력이 없다) 맞물리지 않는다. 문서에는 "6개월 — 변경 이력 삭제"만 있고 언제 지우는지가 없다(docs/04 "행사가 끝난 뒤 일어나는 일").
+     */
+    public static final LocalTime EVENT_CHANGE_HISTORY_PURGE_RUN_TIME = LocalTime.of(4, 0);
+
     private ProposedPolicy() {
     }
 }

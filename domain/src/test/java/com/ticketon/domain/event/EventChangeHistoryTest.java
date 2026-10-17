@@ -307,6 +307,20 @@ class EventChangeHistoryTest {
         }
 
         @Test
+        @DisplayName("이력을 지울 때 함께 지울 포스터 파일은 포스터 버전의 바꾸기 전 포스터다 — 첫 버전 · 지금 포스터 · 다른 칸은 들지 않는다")
+        void replacedPostersAreDiscardedWithHistory() {
+            EventPoster second = new EventPoster("Sc7rS2tU9vW4xY6zA1bC3dE5fG8hJ0kL.jpg");
+
+            assertThat(EventChangeHistory.replacedPosters(List.of(
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.TITLE, null, null, "○○밴드 단독공연"),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.POSTER, null, null, POSTER.fileKey()),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.POSTER, null, POSTER.fileKey(), second.fileKey()),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.TITLE, null, "○○밴드 단독공연", "○○밴드 앵콜공연"),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.POSTER, null, second.fileKey(), NEW_POSTER.fileKey()))))
+                    .containsExactly(POSTER, second);
+        }
+
+        @Test
         @DisplayName("끝난 날을 알 수 없으면 지우지 않는다 — 회차가 모두 취소됐거나, 마지막 회차의 종료 시각이 비어 있거나, 회차가 없으면")
         void keepsWhenEndUnknown() {
             Instant muchLater = korean(2030, 1, 1, 0, 0);

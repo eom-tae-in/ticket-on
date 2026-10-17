@@ -201,6 +201,23 @@ public final class EventChangeHistory {
                 .orElse(false);
     }
 
+    /**
+     * 이력과 함께 지울 포스터 파일 — 지운 포스터 버전의 바꾸기 전 포스터들. 판매를 시작한 뒤 바꾼 포스터의 이전 파일은 이력의 근거라 보관 기간 동안
+     * 남겨 두었다({@link #posterVersion}). 지금 포스터는 들지 않는다 — 포스터는 바꿀 때마다 새 열쇠를 받아, 한 번 바뀐(바꾸기 전이 된) 포스터가 다시
+     * 지금 포스터가 되는 일이 없다.
+     *
+     * @param deletedVersions 지운 이력의 버전
+     * @return 겹치지 않게, 지운 차례
+     */
+    public static List<EventPoster> replacedPosters(List<EventChangeHistoryVersion> deletedVersions) {
+        Objects.requireNonNull(deletedVersions, "deletedVersions");
+        return deletedVersions.stream()
+                .filter(version -> version.target() == EventChangeHistoryTarget.POSTER && version.previousContent() != null)
+                .map(version -> new EventPoster(version.previousContent()))
+                .distinct()
+                .toList();
+    }
+
     private static long savedIdOf(Event event) {
         Objects.requireNonNull(event, "event");
         return event.id().orElseThrow(() -> new IllegalStateException("저장 전 행사입니다"));
