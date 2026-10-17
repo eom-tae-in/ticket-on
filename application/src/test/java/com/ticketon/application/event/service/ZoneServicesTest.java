@@ -185,15 +185,35 @@ class ZoneServicesTest {
     }
 
     @Test
-    @DisplayName("기본가 · 이름만 고치면 저장하고 기록하되, 정원이 그대로라 재고에 알리지 않는다")
-    void changesPriceWithoutCapacityNotice() {
+    @DisplayName("수량형 스탠딩A의 기본가 · 이름만 고치고 정원은 300 그대로 보내면 저장하고 기록하되, 정원이 그대로라 재고에 알리지 않는다")
+    void changesQuantityZonePriceWithoutCapacityNotice() {
+        long standingA = add(JUNGHOON, ZoneKind.QUANTITY, STANDING_A_300).zoneId();
+
+        ZoneResult changed = change(standingA, ZoneSettings.quantity(ZoneName.of("스탠딩 1구역"), GREEN, ZoneBasePrice.of(35_000),
+                ZoneCapacity.of(300)));
+
+        assertThat(changed.name()).isEqualTo("스탠딩 1구역");
+        assertThat(changed.basePrice()).isEqualTo(35_000);
+        assertThat(changed.capacity()).isEqualTo(300);
+        assertThat(scene.floorPlanRepository.findByEventId(springPlay).zone(standingA).basePrice())
+                .isEqualTo(ZoneBasePrice.of(35_000));
+        assertThat(scene.eventPublisher.published())
+                .containsExactly(new ZoneAdded(springPlay, standingA, ZoneKind.QUANTITY, ZoneCapacity.of(300)));
+        assertThat(scene.recordRepository.records()).last()
+                .satisfies(record -> assertThat(record.summary()).isEqualTo("구역 수정 · 스탠딩 1구역 (3단계)"));
+    }
+
+    @Test
+    @DisplayName("지정형 R석의 기본가 · 이름을 고쳐도 정원이 없어 재고에 알리지 않는다")
+    void changesDesignatedZoneWithoutCapacityNotice() {
         long rSeat = add(JUNGHOON, ZoneKind.DESIGNATED, R_SEAT).zoneId();
 
         ZoneResult changed = change(rSeat, ZoneSettings.designated(ZoneName.of("VIP석"), RED, ZoneBasePrice.of(70_000)));
 
         assertThat(changed.name()).isEqualTo("VIP석");
         assertThat(changed.basePrice()).isEqualTo(70_000);
-        assertThat(scene.eventPublisher.published()).hasSize(1);
+        assertThat(scene.eventPublisher.published())
+                .containsExactly(new ZoneAdded(springPlay, rSeat, ZoneKind.DESIGNATED, null));
         assertThat(scene.recordRepository.records()).last()
                 .satisfies(record -> assertThat(record.summary()).isEqualTo("구역 수정 · VIP석 (3단계)"));
     }
