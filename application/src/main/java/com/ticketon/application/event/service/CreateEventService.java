@@ -5,6 +5,7 @@ import com.ticketon.application.event.port.in.CreateEventCommand;
 import com.ticketon.application.event.port.in.CreateEventUseCase;
 import com.ticketon.application.event.port.in.EventWizardResult;
 import com.ticketon.application.event.port.out.EventCategoryRepository;
+import com.ticketon.application.event.port.out.EventPosterStoragePort;
 import com.ticketon.application.event.port.out.EventRepository;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionQuery;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionUseCase;
@@ -42,19 +43,21 @@ public class CreateEventService implements CreateEventUseCase {
     private final OrganizerRepository organizerRepository;
     private final EventRepository eventRepository;
     private final EventCategoryRepository categoryRepository;
+    private final EventPosterStoragePort posterStorage;
     private final TokenGenerator tokenGenerator;
     private final Clock clock;
 
     public CreateEventService(CheckStaffPermissionUseCase checkStaffPermissionUseCase,
             RecordStaffOperationUseCase recordStaffOperationUseCase, StaffAccountRepository staffAccountRepository,
             OrganizerRepository organizerRepository, EventRepository eventRepository, EventCategoryRepository categoryRepository,
-            TokenGenerator tokenGenerator, Clock clock) {
+            EventPosterStoragePort posterStorage, TokenGenerator tokenGenerator, Clock clock) {
         this.checkStaffPermissionUseCase = checkStaffPermissionUseCase;
         this.recordStaffOperationUseCase = recordStaffOperationUseCase;
         this.staffAccountRepository = staffAccountRepository;
         this.organizerRepository = organizerRepository;
         this.eventRepository = eventRepository;
         this.categoryRepository = categoryRepository;
+        this.posterStorage = posterStorage;
         this.tokenGenerator = tokenGenerator;
         this.clock = clock;
     }
@@ -72,6 +75,6 @@ public class CreateEventService implements CreateEventUseCase {
         Event created = eventRepository.add(Event.create(permission.organizerId(), publicAddress, basicInformation, now));
         recordStaffOperationUseCase.record(new RecordStaffOperationCommand(permission, StaffOperationTargetKind.EVENT,
                 created.id().orElseThrow(), OPERATION_SUMMARY, now));
-        return EventWizardResults.of(created);
+        return EventWizardResults.of(created, posterStorage);
     }
 }

@@ -12,7 +12,7 @@ import org.springframework.util.unit.DataSize;
  * <p>
  * 값은 정책 숫자 모음에서 가져온다. 설정 파일에 숫자를 따로 적지 않는다(.claude/rules/planning-docs.md "한곳에 모은다"). 이 빈이 있으면 Spring
  * Boot는 spring.servlet.multipart.max-file-size · max-request-size 대신 이 값을 쓴다. 울타리를 넘는 요청은 400 INVALID_INPUT이다
- * (ApiExceptionHandler). 파일마다의 상한(로고 2MB 등)은 울타리 안에서 Request 검증이 보고 칸 옆에 까닭을 알려 준다.
+ * (ApiExceptionHandler). 파일마다의 상한(로고 2MB · 포스터 5MB)은 울타리 안에서 Request 검증이 보고 칸 옆에 까닭을 알려 준다.
  */
 @Configuration(proxyBeanMethods = false)
 public class MultipartConfiguration {

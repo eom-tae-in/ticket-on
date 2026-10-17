@@ -8,9 +8,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ticketon.api.security.SecurityConfiguration;
 import com.ticketon.application.event.port.in.CreateEventUseCase;
 import com.ticketon.application.event.port.in.GetEventCategoriesUseCase;
+import com.ticketon.application.event.port.in.GetEventPosterFileUseCase;
 import com.ticketon.application.event.port.in.GetEventWizardUseCase;
 import com.ticketon.application.event.port.in.SaveEventBasicInformationUseCase;
 import com.ticketon.application.event.port.in.SaveEventBookingSettingsUseCase;
+import com.ticketon.application.event.port.in.UploadEventPosterUseCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springdoc.core.configuration.SpringDocConfiguration;
@@ -24,9 +26,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * 화면 타입은 /v3/api-docs에서 생성된다(npm run api:types). 행사 만들기 위저드의 요청 · 응답 모양이 명세에 그대로 실리는지 본다. DB 없이 돈다.
+ * 화면 타입은 /v3/api-docs에서 생성된다(npm run api:types). 행사 만들기 위저드의 요청 · 응답 모양과 포스터 올리기 · 포스터 파일이 명세에 그대로
+ * 실리는지 본다. DB 없이 돈다.
  */
-@WebMvcTest(controllers = {OrganizerEventController.class, EventCategoryController.class})
+@WebMvcTest(controllers = {OrganizerEventController.class, EventCategoryController.class, EventPosterFileController.class})
 @Import(SecurityConfiguration.class)
 @ImportAutoConfiguration({SpringDocConfiguration.class, SpringDocConfigProperties.class, SpringDocWebMvcConfiguration.class})
 @DisplayName("행사 만들기 위저드 API 명세")
@@ -38,6 +41,8 @@ class OrganizerEventApiDocsTest {
             "$.paths['/api/organizer/organizers/{organizerId}/events/{eventId}/basic-information']";
     private static final String BOOKING_SETTINGS_PATH =
             "$.paths['/api/organizer/organizers/{organizerId}/events/{eventId}/booking-settings']";
+    private static final String POSTER_PATH = "$.paths['/api/organizer/organizers/{organizerId}/events/{eventId}/poster']";
+    private static final String POSTER_FILE_PATH = "$.paths['/api/public/files/event-posters/{fileKey}']";
     private static final String SCHEMAS = "$.components.schemas";
 
     @Autowired
@@ -54,6 +59,12 @@ class OrganizerEventApiDocsTest {
 
     @MockitoBean
     private SaveEventBookingSettingsUseCase saveEventBookingSettingsUseCase;
+
+    @MockitoBean
+    private UploadEventPosterUseCase uploadEventPosterUseCase;
+
+    @MockitoBean
+    private GetEventPosterFileUseCase getEventPosterFileUseCase;
 
     @MockitoBean
     private GetEventCategoriesUseCase getEventCategoriesUseCase;
@@ -118,5 +129,39 @@ class OrganizerEventApiDocsTest {
                         "AWAITING_OPEN", "ON_SALE", "SALES_PAUSED", "SALES_CLOSED", "ENDED", "SETTLED", "CANCELLED")))
                 .andExpect(jsonPath(SCHEMAS + ".EventBookingSettingsResponse.properties.visibility.enum",
                         containsInAnyOrder("PUBLIC", "LINK_ONLY", "PASSWORD_PROTECTED")));
+    }
+    @Test
+    @DisplayName("포스터 올리기는 multipart/form-data의 poster 칸(파일 하나, 필수)으로 받아 EventWizardResponse를 돌려준다")
+    void posterUploadIsMultipart() throws Exception {
+        String body = POSTER_PATH + ".post.requestBody.content['multipart/form-data'].schema";
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(POSTER_PATH + ".post.parameters[*].name", containsInAnyOrder("organizerId", "eventId")))
+                .andExpect(jsonPath(body + ".properties.poster.type").value("string"))
+                .andExpect(jsonPath(body + ".properties.poster.format").value("binary"))
+                .andExpect(jsonPath(body + ".required", containsInAnyOrder("poster")))
+                .andExpect(jsonPath(POSTER_PATH + ".post.responses['200'].content['application/json'].schema['$ref']")
+                        .value("#/components/schemas/EventWizardResponse"));
+    }
+
+    @Test
+    @DisplayName("위저드 값의 포스터 주소는 올리기 전에 비어 있을 수 있다 — 필수 칸이 아니고 null을 받는다")
+    void posterUrlIsNullable() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(SCHEMAS + ".EventWizardResponse.properties.posterUrl.type",
+                        containsInAnyOrder("string", "null")));
+    }
+
+    @Test
+    @DisplayName("포스터 파일은 포스터 열쇠 경로 하나로 열고, PNG · JPEG 그림을 돌려준다")
+    void posterFileOperation() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(POSTER_FILE_PATH + ".get.parameters[*].name", containsInAnyOrder("fileKey")))
+                .andExpect(jsonPath(POSTER_FILE_PATH + ".get.responses['200'].content['image/png'].schema.format")
+                        .value("binary"))
+                .andExpect(jsonPath(POSTER_FILE_PATH + ".get.responses['200'].content['image/jpeg'].schema.format")
+                        .value("binary"));
     }
 }

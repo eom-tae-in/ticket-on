@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/public/files/organizer-logos")
-@Tag(name = "파일", description = "로그인 없이 여는 공개 파일 — 주최자 로고 (docs/01 \"공개 페이지 — 로고\")")
+@Tag(name = "파일", description = "로그인 없이 여는 공개 파일 — 주최자 로고 · 행사 포스터 (docs/01 \"공개 페이지 — 로고\", docs/03 \"기본 정보\")")
 public class OrganizerLogoFileController {
 
     private final GetOrganizerLogoFileUseCase getOrganizerLogoFileUseCase;

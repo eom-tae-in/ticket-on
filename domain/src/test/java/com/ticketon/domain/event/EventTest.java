@@ -21,6 +21,8 @@ class EventTest {
     private static final EventPublicAddress ADDRESS = new EventPublicAddress("Xb3kQ9-_mN2pL7vR4tY8wZ1aC5dE6fG0");
     private static final EventPasswordHash HASH_OF_0315 = new EventPasswordHash("{test}0315");
     private static final Instant CREATED_AT = Instant.parse("2026-02-01T01:00:00Z");
+    private static final EventPoster FIRST_POSTER = new EventPoster("firstPosterTokenAAAAAAAAAAAAAAAA.jpg");
+    private static final EventPoster SECOND_POSTER = new EventPoster("secondPosterTokenBBBBBBBBBBBBBBB.png");
     private static final CancellationPolicy FULL_REFUND_UNTIL_THREE_DAYS_BEFORE = CancellationPolicy.of(List.of(
             CancellationFeeTier.of(3, 0), CancellationFeeTier.of(1, 30), CancellationFeeTier.of(0, 90)));
 
@@ -80,14 +82,14 @@ class EventTest {
             EventVisibilitySetting protectedSetting = new EventVisibilitySetting(EventVisibility.PASSWORD_PROTECTED, HASH_OF_0315);
 
             Event event = Event.restore(7L, TWELVE_MONTHS_ORGANIZER, ADDRESS, twelveMonthsSpringPlay(),
-                    new EventPoster("poster-key.jpg"), protectedSetting, adjustedBookingSettings(),
+                    FIRST_POSTER, protectedSetting, adjustedBookingSettings(),
                     FULL_REFUND_UNTIL_THREE_DAYS_BEFORE, EventStatus.ON_SALE, Instant.parse("2026-03-01T05:00:00Z"), List.of(),
                     EventWizardStep.ENTRANCES_AND_CHECKIN_ACCOUNTS, Instant.parse("2026-02-10T12:00:00Z"));
 
             assertThat(event.id()).hasValue(7L);
             assertThat(event.status()).isEqualTo(EventStatus.ON_SALE);
             assertThat(event.bookingOpenedAt()).contains(Instant.parse("2026-03-01T05:00:00Z"));
-            assertThat(event.poster()).contains(new EventPoster("poster-key.jpg"));
+            assertThat(event.poster()).contains(FIRST_POSTER);
             assertThat(event.visibility()).isEqualTo(protectedSetting);
             assertThat(event.bookingSettings()).isEqualTo(adjustedBookingSettings());
             assertThat(event.cancellationPolicy()).isEqualTo(FULL_REFUND_UNTIL_THREE_DAYS_BEFORE);
@@ -157,7 +159,7 @@ class EventTest {
             Event event = newSpringPlay();
             assertThat(event.isBasicInformationComplete()).isFalse();
 
-            event.changePoster(new EventPoster("poster-key.jpg"));
+            event.changePoster(FIRST_POSTER, CREATED_AT);
 
             assertThat(event.isBasicInformationComplete()).isTrue();
         }
@@ -167,9 +169,9 @@ class EventTest {
         void changePosterReturnsPrevious() {
             Event event = newSpringPlay();
 
-            assertThat(event.changePoster(new EventPoster("first.jpg"))).isEmpty();
-            assertThat(event.changePoster(new EventPoster("second.jpg"))).contains(new EventPoster("first.jpg"));
-            assertThat(event.poster()).contains(new EventPoster("second.jpg"));
+            assertThat(event.changePoster(FIRST_POSTER, CREATED_AT)).isEmpty();
+            assertThat(event.changePoster(SECOND_POSTER, CREATED_AT)).contains(FIRST_POSTER);
+            assertThat(event.poster()).contains(SECOND_POSTER);
         }
 
         @Test

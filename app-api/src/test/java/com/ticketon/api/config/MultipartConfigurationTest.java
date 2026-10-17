@@ -32,4 +32,11 @@ class MultipartConfigurationTest {
         assertThat(multipartConfig.getMaxFileSize())
                 .isGreaterThan(ProposedPolicy.ORGANIZER_LOGO_MAXIMUM_SIZE.bytes());
     }
+
+    @Test
+    @DisplayName("울타리는 포스터 용량 상한(제안 5MB)보다도 커서, 상한을 넘은 포스터도 끝까지 받아 칸 옆에 까닭을 알려 줄 수 있다 — 확인 필요 #40")
+    void limitIsAbovePosterLimit() {
+        assertThat(multipartConfig.getMaxFileSize())
+                .isGreaterThan(ProposedPolicy.EVENT_POSTER_MAXIMUM_SIZE.bytes());
+    }
 }

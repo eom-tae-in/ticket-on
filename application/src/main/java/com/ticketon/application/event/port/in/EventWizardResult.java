@@ -13,7 +13,7 @@ import java.util.Objects;
 
 /**
  * 행사 위저드 값 — 행사 만들기 · 설정 편집 위저드가 저장된 단계의 칸을 채우고 이어서 할 단계를 아는 데 쓴다(docs/03 "행사 만들기 위저드", docs/04
- * "작성 중 행사 관리"). 지금은 1단계(기본 정보)와 5단계(공개 수준 · 예매 설정 · 취소 규정)를 담는다 — 2 · 3 · 4 · 6단계와 포스터는 그 기능이
+ * "작성 중 행사 관리"). 지금은 1단계(기본 정보 · 포스터)와 5단계(공개 수준 · 예매 설정 · 취소 규정)를 담는다 — 2 · 3 · 4 · 6단계는 그 기능이
  * 더한다.
  * <p>
  * 공개 주소는 링크 전용 행사를 여는 자격이라 문자열로 바꾸면 가린다.
@@ -23,11 +23,12 @@ import java.util.Objects;
  * @param wizardProgress   작성 진행 단계 — 작성 중에 저장한 가장 뒤의 단계
  * @param lastModifiedAt   마지막 수정 시각
  * @param publicAddress    공개 주소 — 관객 링크에 들어가는 추측할 수 없는 값
+ * @param posterUrl        포스터의 공개 주소 — 누구나 로그인 없이 여는 그림의 절대 주소. 아직 올리지 않았으면 null
  * @param basicInformation 1단계 기본 정보
  * @param bookingStep      5단계 공개 수준 · 예매 설정 · 취소 규정
  */
 public record EventWizardResult(long eventId, EventStatus status, EventWizardStep wizardProgress, Instant lastModifiedAt,
-        String publicAddress, BasicInformation basicInformation, BookingStep bookingStep) {
+        String publicAddress, String posterUrl, BasicInformation basicInformation, BookingStep bookingStep) {
 
     public EventWizardResult {
         Objects.requireNonNull(status, "status");
@@ -41,8 +42,8 @@ public record EventWizardResult(long eventId, EventStatus status, EventWizardSte
     @Override
     public String toString() {
         return "EventWizardResult[eventId=" + eventId + ", status=" + status + ", wizardProgress=" + wizardProgress
-                + ", lastModifiedAt=" + lastModifiedAt + ", publicAddress=****, basicInformation=" + basicInformation
-                + ", bookingStep=" + bookingStep + "]";
+                + ", lastModifiedAt=" + lastModifiedAt + ", publicAddress=****, posterUrl=" + posterUrl + ", basicInformation="
+                + basicInformation + ", bookingStep=" + bookingStep + "]";
     }
 
     /**

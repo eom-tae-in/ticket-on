@@ -11,6 +11,8 @@ import com.ticketon.application.event.port.in.CreateEventUseCase;
 import com.ticketon.application.event.port.in.EventBasicInformationItems;
 import com.ticketon.application.event.port.in.SaveEventBasicInformationCommand;
 import com.ticketon.application.event.port.in.SaveEventBasicInformationUseCase;
+import com.ticketon.application.event.port.in.UploadEventPosterCommand;
+import com.ticketon.application.event.port.in.UploadEventPosterUseCase;
 import com.ticketon.application.event.port.out.EventRepository;
 import com.ticketon.application.organizer.port.in.ActingStaff;
 import com.ticketon.application.organizer.port.in.RemoveOperatorCommand;
@@ -19,29 +21,41 @@ import com.ticketon.application.organizer.port.in.RenameOrganizerCommand;
 import com.ticketon.application.organizer.port.in.RenameOrganizerUseCase;
 import com.ticketon.application.organizer.port.out.OrganizerRepository;
 import com.ticketon.application.organizer.service.StaffAccountLocks;
+import com.ticketon.common.TestImages;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.error.DomainException;
 import com.ticketon.domain.error.PermissionDeniedException;
+import com.ticketon.domain.event.EventPosterImage;
 import com.ticketon.domain.event.EventTitle;
 import com.ticketon.domain.event.EventType;
 import com.ticketon.domain.event.Venue;
 import com.ticketon.domain.organizer.OrganizerErrorCode;
 import com.ticketon.domain.organizer.OrganizerName;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Container;
@@ -49,8 +63,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL로 행사를 만들거나 위저드 단계를 저장하는 흐름이 다른 흐름과 가장 나쁜 순간에 엇갈려도 교착(40P01) 없이 차례로 처리되는 것을
- * 고정한다 — 잠금 순서 운영진 계정 줄 → 주최자 줄 → 행사 줄({@link StaffAccountLocks} 표, #195). Docker가 없는 환경에서는 건너뛴다.
+ * 진짜 PostgreSQL로 행사를 만들거나 위저드 단계를 저장하거나 포스터를 올리는 흐름이 다른 흐름과 가장 나쁜 순간에 엇갈려도 교착(40P01) 없이
+ * 차례로 처리되는 것을 고정한다 — 잠금 순서 운영진 계정 줄 → 주최자 줄 → 행사 줄({@link StaffAccountLocks} 표, #195). 포스터 파일은 임시
+ * 디렉터리의 로컬 저장소에 둔다. Docker가 없는 환경에서는 건너뛴다.
  * <p>
  * 가장 나쁜 순간은 한 흐름이 첫 잠금만 쥐고 다음 잠금으로 가기 직전이다. 붙잡을 흐름의 첫 잠금만 한 트랜잭션에서 걸어 둔 채 다른 스레드에서 맞서는
  * 흐름을 부르고, 맞서는 흐름이 잠금을 기다리기 시작한 것을 PostgreSQL의 잠금 표(pg_locks)로 확인한다. 그 순간 맞서는 흐름이 쥐지 않았어야 할 줄을
@@ -60,7 +75,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
-@DisplayName("행사 만들기 · 위저드 단계 저장의 잠금 순서 — 가장 나쁜 순간에 엇갈려도 교착 없이 차례로 (진짜 PostgreSQL)")
+@DisplayName("행사 만들기 · 위저드 단계 저장 · 포스터 올리기의 잠금 순서 — 가장 나쁜 순간에 엇갈려도 교착 없이 차례로 (진짜 PostgreSQL)")
 class EventWizardRaceIntegrationTest {
 
     private static final String SPRING_PLAY_TITLE = "2026 봄 정기공연 〈열두 번째 달〉";
@@ -70,6 +85,15 @@ class EventWizardRaceIntegrationTest {
     @Container
     @ServiceConnection
     private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18");
+
+    @TempDir
+    private static Path storageDirectory;
+
+    @DynamicPropertySource
+    static void localStorage(DynamicPropertyRegistry registry) {
+        registry.add("ticketon.storage.local.directory", () -> storageDirectory.toString());
+        registry.add("ticketon.storage.local.public-base-url", () -> "http://files.ticket-on.test/api/public/files");
+    }
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -91,6 +115,9 @@ class EventWizardRaceIntegrationTest {
 
     @Autowired
     private SaveEventBasicInformationUseCase saveEventBasicInformationUseCase;
+
+    @Autowired
+    private UploadEventPosterUseCase uploadEventPosterUseCase;
 
     @Autowired
     private RemoveOperatorUseCase removeOperatorUseCase;
@@ -185,6 +212,50 @@ class EventWizardRaceIntegrationTest {
         assertThat(eventOperations()).containsExactly("CREATE_EVENT " + junghoon);
     }
 
+    @Test
+    @DisplayName("두 운영진이 같은 행사에 거의 동시에 포스터를 올리면 뒤의 올리기는 행사 줄에서 기다렸다가 앞의 포스터를 바꾸기 전 포스터로 읽어 그 파일을 지운다 — 파일은 뒤의 것 하나만 남는다")
+    void concurrentPosterUploadsAreSerialized() throws Exception {
+        Set<String> filesBefore = posterFiles();
+        Future<?> contender = runInterleaved(
+                () -> {
+                    StaffAccountLocks.lockForReferenceInIdOrder(staffAccountRepository, junghoon);
+                    organizerRepository.findByIdForKeyShare(twelveMonths);
+                    eventRepository.findByIdForUpdate(springPlay);
+                },
+                () -> uploadPoster(junghoon),
+                () -> uploadPoster(planner),
+                () -> {
+                    assertThat(posterFiles()).isEqualTo(filesBefore);
+                    assertThat(posterFileKey()).isNull();
+                });
+
+        contender.get(30, SECONDS);
+        String finalKey = posterFileKey();
+        assertThat(finalKey).isNotNull();
+        assertThat(posterFiles()).containsExactlyInAnyOrderElementsOf(union(filesBefore, finalKey));
+        assertThat(eventOperations()).containsExactly("CREATE_EVENT " + junghoon, "EDIT_EVENT " + junghoon,
+                "EDIT_EVENT " + planner);
+    }
+
+    @Test
+    @DisplayName("운영자 내보내기가 계정 줄을 잠근 순간 들어온 그 운영자의 포스터 올리기는 계정 줄에서 기다렸다가 다시 확인해 403으로 멈춘다 — 행사 줄을 잡지 않고 파일도 남지 않는다")
+    void removedOperatorsPosterUploadWaitsAndStops() throws Exception {
+        Set<String> filesBefore = posterFiles();
+        Future<?> contender = runInterleaved(
+                () -> StaffAccountLocks.lockInIdOrder(staffAccountRepository, junghoon, planner),
+                () -> removeOperatorUseCase.remove(new RemoveOperatorCommand(acting(junghoon), planner)),
+                () -> uploadPoster(planner),
+                () -> {
+                    assertOrganizerRowUnlocked();
+                    assertEventRowFree();
+                });
+
+        assertDeniedWith(contender, OrganizerErrorCode.NOT_ORGANIZER_STAFF);
+        assertThat(posterFiles()).isEqualTo(filesBefore);
+        assertThat(posterFileKey()).isNull();
+        assertThat(eventOperations()).containsExactly("CREATE_EVENT " + junghoon);
+    }
+
     /**
      * 붙잡을 흐름의 첫 잠금만 한 트랜잭션에서 걸어 둔 채 다른 스레드에서 맞서는 흐름을 부른다. 맞서는 흐름이 잠금을 기다리기 시작하면 그 순간의
      * 확인을 하고, 같은 트랜잭션에서 붙잡을 흐름을 끝까지 돌려 커밋한다. 붙잡은 흐름이 실패(교착 40P01 포함)하면 그 예외로 테스트가 실패한다.
@@ -246,6 +317,33 @@ class EventWizardRaceIntegrationTest {
     private void saveTitle(long staffAccountId, String title) {
         saveEventBasicInformationUseCase.save(new SaveEventBasicInformationCommand(acting(staffAccountId), springPlay,
                 items(title)));
+    }
+
+    /** 그 운영진이 봄 정기공연에 3:4 포스터를 올린다. */
+    private void uploadPoster(long staffAccountId) {
+        uploadEventPosterUseCase.upload(new UploadEventPosterCommand(acting(staffAccountId), springPlay,
+                EventPosterImage.of("image/jpeg", TestImages.jpeg(300, 400))));
+    }
+
+    private String posterFileKey() {
+        return jdbcTemplate.queryForObject("SELECT poster_file_key FROM event WHERE id = ?", String.class, springPlay);
+    }
+
+    /** 저장소의 포스터 묶음에 있는 파일 이름들 — 묶음이 아직 없으면 비어 있다. 테스트끼리 저장소를 함께 쓰므로 앞뒤로 견준다. */
+    private static Set<String> posterFiles() {
+        Path bundle = storageDirectory.resolve("event-posters");
+        if (!Files.exists(bundle)) {
+            return Set.of();
+        }
+        try (Stream<Path> files = Files.list(bundle)) {
+            return files.map(file -> file.getFileName().toString()).collect(Collectors.toSet());
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+    }
+
+    private static Set<String> union(Set<String> files, String fileKey) {
+        return Stream.concat(files.stream(), Stream.of(fileKey)).collect(Collectors.toSet());
     }
 
     private String eventTitle() {

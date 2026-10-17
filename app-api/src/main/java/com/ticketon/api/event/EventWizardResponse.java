@@ -14,8 +14,8 @@ import java.util.List;
 
 /**
  * 행사 위저드 값 — 행사 만들기 · 설정 편집 위저드가 저장된 단계의 칸을 채우고, 나갔다 들어왔을 때 이어서 할 단계를 안다(docs/03 "임시저장은
- * 자동으로", docs/04 "작성 중 행사 관리"). 행사 만들기 · 단계 저장 · 조회가 모두 이 모양을 돌려준다. 지금은 1단계(기본 정보)와 5단계(공개 수준 ·
- * 예매 설정 · 취소 규정)를 담는다 — 포스터와 2 · 3 · 4 · 6단계는 그 기능이 칸을 더한다.
+ * 자동으로", docs/04 "작성 중 행사 관리"). 행사 만들기 · 단계 저장 · 포스터 올리기 · 조회가 모두 이 모양을 돌려준다. 지금은 1단계(기본 정보 ·
+ * 포스터)와 5단계(공개 수준 · 예매 설정 · 취소 규정)를 담는다 — 2 · 3 · 4 · 6단계는 그 기능이 칸을 더한다.
  * <p>
  * 공개 주소는 링크 전용 행사를 여는 자격이라 {@link #toString}에 싣지 않는다.
  *
@@ -24,6 +24,7 @@ import java.util.List;
  * @param wizardProgress   작성 진행 단계
  * @param lastModifiedAt   마지막 수정 시각
  * @param publicAddress    공개 주소
+ * @param posterUrl        포스터 주소
  * @param basicInformation 1단계 기본 정보
  * @param bookingSettings  5단계 공개 수준 · 예매 설정 · 취소 규정
  */
@@ -46,6 +47,12 @@ public record EventWizardResponse(
                 + "이 값을 아는 것이 곧 열 자격이라 필요한 곳에만 보인다", example = "Xb3kQ9-_mN2pL7vR4tY8wZ1aC5dE6fG0", requiredMode = REQUIRED)
         String publicAddress,
 
+        @Schema(description = "포스터 주소 — 누구나 로그인 없이 여는 3:4 세로 그림의 절대 주소. 1단계의 필수 항목이지만 행사를 만든 뒤 따로 올리므로 "
+                + "아직 올리지 않았으면 null이다. 판매를 시작하기 전에 올려야 한다",
+                example = "http://localhost:8080/api/public/files/event-posters/Pq7rS2tU9vW4xY6zA1bC3dE5fG8hJ0kL.jpg",
+                requiredMode = NOT_REQUIRED, nullable = true)
+        String posterUrl,
+
         @Schema(description = "1단계 기본 정보", requiredMode = REQUIRED)
         EventBasicInformationResponse basicInformation,
 
@@ -55,7 +62,8 @@ public record EventWizardResponse(
     static EventWizardResponse from(EventWizardResult result) {
         return new EventWizardResponse(result.eventId(), EventStatusCode.from(result.status()),
                 EventWizardProgressResponse.from(result.wizardProgress()), koreanTime(result.lastModifiedAt()), result.publicAddress(),
-                EventBasicInformationResponse.from(result.basicInformation()), EventBookingSettingsResponse.from(result.bookingStep()));
+                result.posterUrl(), EventBasicInformationResponse.from(result.basicInformation()),
+                EventBookingSettingsResponse.from(result.bookingStep()));
     }
 
     @Override

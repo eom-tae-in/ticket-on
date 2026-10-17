@@ -19,8 +19,8 @@ import java.util.Set;
  * <ul>
  *   <li><b>기본 정보</b>({@link EventBasicInformation}) — 제목 · 유형 · 카테고리 · 소개 · 장소 등. 행사를 만들 때 함께 받는다 — 위저드는
  *       단계를 넘길 때마다 저장하므로(docs/03 "임시저장은 자동으로") 1단계를 마쳐야 처음 저장된다.</li>
- *   <li><b>포스터</b>({@link EventPoster}) — 1단계의 필수 항목이지만 행사를 만든 뒤 따로 올린다. 그래서 작성 중에는 없을 수 있고, 판매를
- *       시작하기 전에 갖춰야 한다({@link #isBasicInformationComplete}).</li>
+ *   <li><b>포스터</b>({@link EventPoster}) — 1단계의 필수 항목이지만 행사를 만든 뒤 따로 올린다({@link #changePoster}). 그래서 작성 중에는
+ *       없을 수 있고, 판매를 시작하기 전에 갖춰야 한다({@link #isBasicInformationComplete}).</li>
  *   <li><b>공개 수준</b>({@link EventVisibilitySetting}) — 공개로 시작한다(docs/04 "행사 복제 — 공개 수준은 기본값 공개로 시작").</li>
  *   <li><b>예매 설정</b>({@link BookingSettings}) — 오픈 시각 · 예매 종료 · 검표 시작 · 매수 제한 · 회차 선택 제약 · 재입장 · 연령 제한.
  *       처음 값으로 시작한다 — 위저드 5단계는 전부 처음 값이 있어 건너뛸 수 있다(docs/03 "행사 만들기 위저드").</li>
@@ -47,8 +47,9 @@ import java.util.Set;
  * ({@link #requireEditable}), 회차 시간은 그 회차 시작 1주일 전 잠금까지 본다({@link #requireSessionTimeEditable}). '예매가 열린 뒤'의 범위는
  * 상태 이름이 아니라 <b>예매가 한 번이라도 열렸는지</b>로 정한다({@link #hasBookingOpened}) — 판매 대기에서 관리자 조치로 멈춘 판매 중단은 예매가
  * 열린 적이 없어 판매 대기와 같다. 이 판정은 저장된 상태로 하므로, 시간이 움직이는 상태의 행사는 먼저 {@link #advanceByTime}으로 지금 시각을
- * 반영한다. 위저드 단계 저장({@link #saveBasicInformationStep}, {@link #saveBookingStep})은 바뀐 항목마다 이 판정을 건다. 낱낱의 수정
- * 메서드(기본 정보 · 공개 수준 · 예매 설정 · 취소 규정)에 이 판정을 거는 일과 제목 · 소개 · 포스터의 변경 이력은 수정 유스케이스가 한다(#65, #46).
+ * 반영한다. 위저드 단계 저장({@link #saveBasicInformationStep}, {@link #saveBookingStep})은 바뀐 항목마다, 포스터 바꾸기({@link #changePoster})는
+ * 포스터에 이 판정을 건다. 낱낱의 수정 메서드(기본 정보 · 공개 수준 · 예매 설정 · 취소 규정)에 이 판정을 거는 일과 제목 · 소개 · 포스터의 변경
+ * 이력은 수정 유스케이스가 한다(#65, #46).
  * <p>
  * <b>삭제</b>는 상태가 아니라 팔린 표나 초대권이 있었는지로 정한다({@link #requireDeletable}). 누가 지울 수 있는지는 판매를 시작했는지로 갈린다
  * ({@link #deleteAction}).
@@ -216,14 +217,34 @@ public final class Event {
     }
 
     /**
-     * 포스터를 새로 올린 것으로 바꾼다(처음 올리기 포함). 바꾸기 전 포스터의 파일을 정리하는 일은 유스케이스가 한다.
+     * 포스터를 새로 올린 것으로 바꾼다(처음 올리기 포함) — 위저드 1단계의 항목이다(docs/03 "행사 만들기 위저드").
+     * <ol>
+     *   <li><b>지금 상태의 수정 범위를 확인한다</b>({@link EventEditTarget#TITLE_POSTER_DESCRIPTION}, {@link #requireEditable}) — 예매가 열린 뒤에도
+     *       자유롭게 바꾸고, 판매가 끝나면 고정이다(docs/04 "제목 · 소개 · 포스터를 얼리는 이유"). 막히면 아무것도 바꾸지 않는다.</li>
+     *   <li>포스터를 바꾼다. 바꾸기 전 포스터의 파일을 정리하는 일은 유스케이스가 한다.</li>
+     *   <li>1단계를 저장한 것으로 다룬다 — 작성 중이면 진행 단계를 1단계까지로 올리고(행사가 있으면 이미 1단계 이상이라 그대로다), 마지막 수정 시각을
+     *       지금으로 한다. 새로 올린 포스터는 늘 새 열쇠라 늘 바뀐 것이다.</li>
+     * </ol>
+     * {@link #requireEditable}처럼 저장된 상태로 판정하므로, 시간이 움직이는 상태의 행사는 먼저 {@link #advanceByTime}으로 지금 시각을 반영한다.
+     * 제목 · 소개 · 포스터의 변경 이력은 변경 이력 기능이 남긴다(#46).
      *
+     * @param newPoster 새로 올린 포스터 — 새로 붙인 열쇠({@link EventPoster#issue})
+     * @param now       올린 시각
      * @return 바꾸기 전 포스터. 없었으면 빈 값
+     * @throws RuleViolationException   지금 상태에서 포스터를 고칠 수 없으면({@link #requireEditable}과 같은 오류)
+     * @throws IllegalArgumentException 지금 포스터와 같은 열쇠면 — 새로 올린 포스터는 새 열쇠를 받는다. 같은 열쇠를 받으면 바꾸기 전 포스터의
+     *                                  파일을 정리하다 지금 포스터의 파일을 지운다
      */
-    public Optional<EventPoster> changePoster(EventPoster newPoster) {
+    public Optional<EventPoster> changePoster(EventPoster newPoster, Instant now) {
         Objects.requireNonNull(newPoster, "newPoster");
+        Objects.requireNonNull(now, "now");
+        if (newPoster.equals(poster)) {
+            throw new IllegalArgumentException("지금 포스터와 같은 열쇠입니다 — 새로 올린 포스터는 새 열쇠를 받습니다: 행사 " + id);
+        }
+        requireEditable(EventEditTarget.TITLE_POSTER_DESCRIPTION);
         Optional<EventPoster> previousPoster = Optional.ofNullable(poster);
         poster = newPoster;
+        completeWizardStep(EventWizardStep.BASIC_INFORMATION, true, now);
         return previousPoster;
     }
 

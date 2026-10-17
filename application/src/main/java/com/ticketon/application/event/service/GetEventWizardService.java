@@ -3,6 +3,7 @@ package com.ticketon.application.event.service;
 import com.ticketon.application.event.port.in.EventWizardResult;
 import com.ticketon.application.event.port.in.GetEventWizardQuery;
 import com.ticketon.application.event.port.in.GetEventWizardUseCase;
+import com.ticketon.application.event.port.out.EventPosterStoragePort;
 import com.ticketon.application.event.port.out.EventRepository;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionQuery;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionUseCase;
@@ -22,10 +23,13 @@ public class GetEventWizardService implements GetEventWizardUseCase {
 
     private final CheckStaffPermissionUseCase checkStaffPermissionUseCase;
     private final EventRepository eventRepository;
+    private final EventPosterStoragePort posterStorage;
 
-    public GetEventWizardService(CheckStaffPermissionUseCase checkStaffPermissionUseCase, EventRepository eventRepository) {
+    public GetEventWizardService(CheckStaffPermissionUseCase checkStaffPermissionUseCase, EventRepository eventRepository,
+            EventPosterStoragePort posterStorage) {
         this.checkStaffPermissionUseCase = checkStaffPermissionUseCase;
         this.eventRepository = eventRepository;
+        this.posterStorage = posterStorage;
     }
 
     @Override
@@ -35,7 +39,7 @@ public class GetEventWizardService implements GetEventWizardUseCase {
                 new CheckStaffPermissionQuery(query.actingStaff(), StaffAction.EDIT_EVENT));
         return eventRepository.findById(query.eventId())
                 .filter(event -> permission.covers(event.organizerId()))
-                .map(EventWizardResults::of)
+                .map(event -> EventWizardResults.of(event, posterStorage))
                 .orElseThrow(() -> new NotFoundException(EventErrorCode.EVENT_NOT_FOUND,
                         "행사 " + query.eventId() + ", 주최자 " + permission.organizerId()));
     }

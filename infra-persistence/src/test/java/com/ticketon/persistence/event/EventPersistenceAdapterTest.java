@@ -8,7 +8,6 @@ import static com.ticketon.persistence.jooq.Tables.EVENT_SALES_PAUSE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import com.ticketon.domain.event.AgeRestriction;
 import com.ticketon.domain.event.BookingSettings;
@@ -64,9 +63,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL에 마이그레이션(V19 행사 · 취소 규정 구간 · 판매 중단 이력)을 올리고 새 행사 저장(처음 값 · 공개 주소 · 진행 단계), 다시 읽기,
- * 위저드 단계를 고쳐 저장하기, 판매 중단 이력 저장, 잠그고 읽기, 표의 제약(공개 주소 유일 · 카테고리 유형 일치)을 본다. 극단 열두달(docs/15
- * 박정훈)의 봄 정기공연과 늦여름의 페스티벌이다. Docker가 없는 환경에서는 건너뛴다.
+ * 진짜 PostgreSQL에 마이그레이션(V19 행사 · 취소 규정 구간 · 판매 중단 이력, V21 포스터)을 올리고 새 행사 저장(처음 값 · 공개 주소 · 진행 단계),
+ * 다시 읽기, 위저드 단계를 고쳐 저장하기, 포스터 저장, 판매 중단 이력 저장, 잠그고 읽기, 표의 제약(공개 주소 · 포스터 열쇠 유일 · 카테고리 유형
+ * 일치)을 본다. 극단 열두달(docs/15 박정훈)의 봄 정기공연과 늦여름의 페스티벌이다. Docker가 없는 환경에서는 건너뛴다.
  */
 @Testcontainers(disabledWithoutDocker = true)
 @DisplayName("행사 저장소 (진짜 PostgreSQL)")
@@ -79,6 +78,8 @@ class EventPersistenceAdapterTest {
     private static final EventPublicAddress FESTIVAL_ADDRESS = new EventPublicAddress("aB3kQ9-_mN2pL7vR4tY8wZ1aC5dE6fG9");
     private static final Instant CREATED_AT = Instant.parse("2026-02-01T01:00:00Z");
     private static final Instant SAVED_AT = Instant.parse("2026-02-03T12:00:00Z");
+    private static final EventPoster SPRING_PLAY_POSTER = new EventPoster("Pq7rS2tU9vW4xY6zA1bC3dE5fG8hJ0kL.jpg");
+    private static final EventPoster ENCORE_POSTER = new EventPoster("Nw4pS7tU2vW9xY1zA6bC8dE3fG5hJ0kM.png");
 
     /** "공연 3일 전까지 전액 환불"(docs/08 조정 예시). */
     private static final CancellationPolicy FULL_REFUND_UNTIL_THREE_DAYS_BEFORE = CancellationPolicy.of(List.of(
@@ -334,12 +335,41 @@ class EventPersistenceAdapterTest {
     }
 
     @Test
-    @DisplayName("포스터 칸이 생기기 전(#40)에는 포스터가 있는 행사를 저장하지 않는다 — 말없이 빠뜨리지 않게")
-    void refusesPosterUntilColumnExists() {
-        Event event = adapter.add(newSpringPlay());
-        event.changePoster(new EventPoster("poster-key.jpg"));
+    @DisplayName("포스터를 올려 저장하면 열쇠가 남고 다시 읽으면 그 포스터다 — 바꾸면 새 열쇠로 고친다")
+    void savesPoster() {
+        long id = adapter.add(newSpringPlay()).id().getAsLong();
+        Event event = adapter.findByIdForUpdate(id).orElseThrow();
+        event.changePoster(SPRING_PLAY_POSTER, SAVED_AT);
+        adapter.save(event);
 
-        assertThatIllegalStateException().isThrownBy(() -> adapter.save(event));
+        assertThat(adapter.findById(id).orElseThrow().poster()).contains(SPRING_PLAY_POSTER);
+        assertThat(dsl.select(EVENT.POSTER_FILE_KEY).from(EVENT).where(EVENT.ID.eq(id)).fetchSingle().value1())
+                .isEqualTo(SPRING_PLAY_POSTER.fileKey());
+
+        Event replaced = adapter.findByIdForUpdate(id).orElseThrow();
+        replaced.changePoster(ENCORE_POSTER, SAVED_AT.plusSeconds(60));
+        adapter.save(replaced);
+
+        Event found = adapter.findById(id).orElseThrow();
+        assertThat(found.poster()).contains(ENCORE_POSTER);
+        assertThat(found.isBasicInformationComplete()).isTrue();
+        assertThat(found.lastModifiedAt()).isEqualTo(SAVED_AT.plusSeconds(60));
+    }
+
+    @Test
+    @DisplayName("포스터 열쇠는 두 행사가 함께 쓸 수 없다 — 바꾸기 전 포스터의 파일을 지울 때 다른 행사의 포스터가 함께 지워지지 않게")
+    void posterFileKeyIsUnique() {
+        long springPlayId = adapter.add(newSpringPlay()).id().getAsLong();
+        long festivalId = adapter.add(Event.create(twelveMonths, FESTIVAL_ADDRESS, readingFestival(), CREATED_AT)).id().getAsLong();
+        Event springPlay = adapter.findByIdForUpdate(springPlayId).orElseThrow();
+        springPlay.changePoster(SPRING_PLAY_POSTER, SAVED_AT);
+        adapter.save(springPlay);
+        Event festival = adapter.findByIdForUpdate(festivalId).orElseThrow();
+        festival.changePoster(SPRING_PLAY_POSTER, SAVED_AT);
+
+        assertThatExceptionOfType(DataAccessException.class).isThrownBy(() -> adapter.save(festival))
+                .satisfies(duplicate -> assertThat(duplicate.getMessage()).contains("event_poster_file_key_uk"));
+        assertThat(adapter.findById(festivalId).orElseThrow().poster()).isEmpty();
     }
 
     @Test
