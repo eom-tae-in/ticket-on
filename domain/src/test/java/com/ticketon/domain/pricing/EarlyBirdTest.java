@@ -32,7 +32,7 @@ class EarlyBirdTest {
     }
 
     private static EarlyBird earlyBirdWithClaimed(int claimedCount) {
-        return EarlyBird.restore(10L, EVENT_ID, thirtyTickets(), claimedCount);
+        return EarlyBird.restore(10L, EVENT_ID, thirtyTickets(), claimedCount, EarlyBirdUrgency.NONE);
     }
 
     @Nested
@@ -65,7 +65,7 @@ class EarlyBirdTest {
         @DisplayName("기간만 있는 조기예매는 소진되지 않는다 — 기간이 끝날 때 끝난다")
         void periodOnlyNeverSellsOut() {
             EarlyBird earlyBird = EarlyBird.restore(10L, EVENT_ID,
-                    EarlyBirdTerms.periodOnly(THIRTY_PERCENT, MARCH_1_TO_10, EarlyBirdScope.everything()), 5_000);
+                    EarlyBirdTerms.periodOnly(THIRTY_PERCENT, MARCH_1_TO_10, EarlyBirdScope.everything()), 5_000, EarlyBirdUrgency.NONE);
 
             assertThat(earlyBird.status(MARCH_5)).isEqualTo(EarlyBirdStatus.OPEN);
             assertThat(earlyBird.status(MARCH_10)).isEqualTo(EarlyBirdStatus.ENDED);

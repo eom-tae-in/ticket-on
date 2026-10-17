@@ -60,6 +60,8 @@ import java.util.Set;
  *       {@code domain.pricing.EarlyBirds}.</li>
  *   <li>확인 필요 (#49) — 31번째 사람의 "정가로 진행할지 확인"은 닿는 조기예매가 기간 안인데 몫이 모자라면(일부만 모자라도, 이미 소진된 뒤라도)
  *       묻고, 기간 밖이면 묻지 않는다: {@code domain.pricing.EarlyBirdAllocation#needsRegularPriceConfirmation}.</li>
+ *   <li>확인 필요 (#49) — 조기예매 임박의 "종료일 3일 이내"는 끝 순간에서 한국 달력 3일(72시간)을 거슬러 올라간 순간부터다:
+ *       {@code domain.pricing.EarlyBirdUrgency#byPeriod}.</li>
  * </ul>
  */
 public final class ProposedPolicy {

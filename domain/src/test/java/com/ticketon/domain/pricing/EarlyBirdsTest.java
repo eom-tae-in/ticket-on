@@ -43,7 +43,7 @@ class EarlyBirdsTest {
     }
 
     private static EarlyBird saved(long id, EarlyBirdTerms terms) {
-        return EarlyBird.restore(id, EVENT_ID, terms, 0);
+        return EarlyBird.restore(id, EVENT_ID, terms, 0, EarlyBirdUrgency.NONE);
     }
 
     /** S석 100석에 조기예매 30장 (docs/05 "조기예매 — 재고") */
@@ -101,7 +101,7 @@ class EarlyBirdsTest {
         @Test
         @DisplayName("저장소에서 사용 수 30으로 되살려도 소진 그대로 — 결제 후 취소한 사람이 다시 사도 정가")
         void restoredSoldOutStaysSoldOut() {
-            EarlyBirds earlyBirds = EarlyBirds.of(List.of(EarlyBird.restore(10L, EVENT_ID, thirtyTickets().terms(), 30)));
+            EarlyBirds earlyBirds = EarlyBirds.of(List.of(EarlyBird.restore(10L, EVENT_ID, thirtyTickets().terms(), 30, EarlyBirdUrgency.NONE)));
 
             assertThat(earlyBirds.claim(S_ZONE, SINGLE, REGULAR, 1, MARCH_5).grantedCount()).isZero();
         }
@@ -114,7 +114,7 @@ class EarlyBirdsTest {
         @Test
         @DisplayName("몫이 없으면 확인 필요 — 조용히 가격만 올리지 않는다")
         void noShareNeedsConfirmation() {
-            EarlyBirds earlyBirds = EarlyBirds.of(List.of(EarlyBird.restore(10L, EVENT_ID, thirtyTickets().terms(), 30)));
+            EarlyBirds earlyBirds = EarlyBirds.of(List.of(EarlyBird.restore(10L, EVENT_ID, thirtyTickets().terms(), 30, EarlyBirdUrgency.NONE)));
 
             EarlyBirdAllocation allocation = earlyBirds.claim(S_ZONE, SINGLE, REGULAR, 1, MARCH_5);
 
@@ -127,7 +127,7 @@ class EarlyBirdsTest {
         @Test
         @DisplayName("몫이 2장만 남았는데 4매 → 35,000 · 35,000 · 50,000 · 50,000원, 합계 17만원, 모자란 2장은 확인 필요 (docs/05 \"조기예매가 섞이면\")")
         void twoOfFour() {
-            EarlyBird earlyBird = EarlyBird.restore(10L, EVENT_ID, thirtyTickets().terms(), 28);
+            EarlyBird earlyBird = EarlyBird.restore(10L, EVENT_ID, thirtyTickets().terms(), 28, EarlyBirdUrgency.NONE);
             EarlyBirds earlyBirds = EarlyBirds.of(List.of(earlyBird));
 
             EarlyBirdAllocation allocation = earlyBirds.claim(S_ZONE, SINGLE, REGULAR, 4, MARCH_5);
@@ -289,7 +289,7 @@ class EarlyBirdsTest {
         @Test
         @DisplayName("겹친 기간에는 유리한 쪽부터, 모자라면 다음 것에서 — 30% 2장 남음 + 20% → 35,000 · 35,000 · 40,000 · 40,000원 (확인 필요 #49)")
         void overlappingFavorableFirstThenNext() {
-            EarlyBird almostGone = EarlyBird.restore(10L, EVENT_ID, first.terms(), 28);
+            EarlyBird almostGone = EarlyBird.restore(10L, EVENT_ID, first.terms(), 28, EarlyBirdUrgency.NONE);
             EarlyBird overlapping = saved(20L, EarlyBirdTerms.limited(Discount.rate(Percent.of(20)), DiscountPeriod.of(MARCH_5, MARCH_20),
                     EarlyBirdQuantity.of(50), EarlyBirdScope.everything()));
             EarlyBirds earlyBirds = EarlyBirds.of(List.of(overlapping, almostGone));
@@ -330,7 +330,7 @@ class EarlyBirdsTest {
         @Test
         @DisplayName("다른 행사의 조기예매는 묶지 않는다")
         void sameEventOnly() {
-            EarlyBird otherEvent = EarlyBird.restore(30L, 2L, first.terms(), 0);
+            EarlyBird otherEvent = EarlyBird.restore(30L, 2L, first.terms(), 0, EarlyBirdUrgency.NONE);
 
             assertThatIllegalArgumentException().isThrownBy(() -> EarlyBirds.of(List.of(first, otherEvent)));
         }
