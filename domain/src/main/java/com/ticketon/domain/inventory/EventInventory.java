@@ -77,8 +77,9 @@ public final class EventInventory {
      * 고른 회차들에서 같은 좌석을 판매 제외한다. 이미 판매 제외인 회차는 그대로 둔다.
      *
      * @return 하나라도 바뀌었는지
-     * @throws RuleViolationException 한 회차에서라도 판매 제외할 수 없으면 — 가장 앞 회차의 까닭({@link SeatStock#exclusionRejection}). 어느 회차도
-     *                                바꾸지 않는다
+     * @throws RuleViolationException 한 회차에서라도 판매 제외할 수 없으면({@link SeatStock#exclusionRejection}) — 막힌 회차 중 하나라도 팔렸거나
+     *                                초대권이 나갔으면 {@link InventoryErrorCode#TICKETED_SEAT_NOT_EXCLUDABLE}, 모두 선점 중이면
+     *                                {@link InventoryErrorCode#HELD_SEAT_NOT_EXCLUDABLE}. 어느 회차도 바꾸지 않는다
      * @throws NotFoundException      이 행사에 없는 회차이거나 그 회차에 재고가 없는 좌석이면
      */
     public boolean excludeSeat(long seatId, Collection<Long> sessionIds) {
@@ -284,9 +285,20 @@ public final class EventInventory {
         if (blocked.isEmpty()) {
             return;
         }
-        InventoryErrorCode first = rejectionOf.apply(blocked.getFirst()).orElseThrow();
-        throw new RuleViolationException(first, "행사 " + eventId + ", 좌석 " + seatId + "의 " + change + ", 막힌 회차 "
-                + blocked.stream().map(SeatStock::sessionId).toList());
+        List<InventoryErrorCode> rejections = blocked.stream().map(seat -> rejectionOf.apply(seat).orElseThrow()).toList();
+        throw new RuleViolationException(reportedRejection(rejections), "행사 " + eventId + ", 좌석 " + seatId + "의 " + change
+                + ", 막힌 회차 " + blocked.stream().map(SeatStock::sessionId).toList() + " " + rejections);
+    }
+
+    /**
+     * 여러 회차가 막혔을 때 알릴 까닭 — 기다려도 풀리지 않는 까닭(팔림 · 초대권)을 먼저 알린다. 한 회차는 선점 중이고 다른 회차는 팔렸는데 "잠시 뒤
+     * 다시 시도해 주세요"를 띄우면, 선점이 풀린 뒤 다시 해도 팔린 회차 때문에 또 막힌다. 막힌 까닭이 모두 선점이면 그것을 알린다.
+     */
+    private static InventoryErrorCode reportedRejection(List<InventoryErrorCode> rejections) {
+        return rejections.stream()
+                .filter(code -> code != InventoryErrorCode.HELD_SEAT_NOT_EXCLUDABLE)
+                .findFirst()
+                .orElse(rejections.getFirst());
     }
 
     private static List<Long> blockingSessions(List<SeatStock> seats, Function<SeatStock, Optional<InventoryErrorCode>> rejectionOf) {

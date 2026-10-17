@@ -100,6 +100,30 @@ class EventInventoryTest {
         }
 
         @Test
+        @DisplayName("한 회차는 선점 중이고 다른 회차는 팔렸으면 기다려도 풀리지 않는 '팔림'을 먼저 알린다")
+        void permanentRejectionIsReportedFirst() {
+            EventInventory inventory = eightSessions();
+            inventory.session(FIRST_SESSION).holdSeats(Set.of(PRESS_SEAT), HOLD);
+            SeatStock soldOnThird = inventory.session(THIRD_SESSION).seat(PRESS_SEAT);
+            soldOnThird.hold(HOLD + 1);
+            soldOnThird.sell(HOLD + 1, TICKET);
+
+            assertThat(inventory.sessionsBlockingExclusion(PRESS_SEAT)).containsExactly(FIRST_SESSION, THIRD_SESSION);
+            assertRejected(() -> inventory.excludeSeatInAllSessions(PRESS_SEAT), InventoryErrorCode.TICKETED_SEAT_NOT_EXCLUDABLE);
+            assertThat(statusesOf(inventory, PRESS_SEAT)).doesNotContain(SeatSaleStatus.EXCLUDED);
+        }
+
+        @Test
+        @DisplayName("막힌 회차가 모두 선점 중이면 선점을 알린다 — 잠시 뒤 다시 하면 된다")
+        void onlyHeldRejectionIsReported() {
+            EventInventory inventory = eightSessions();
+            inventory.session(FIRST_SESSION).holdSeats(Set.of(PRESS_SEAT), HOLD);
+            inventory.session(THIRD_SESSION).holdSeats(Set.of(PRESS_SEAT), HOLD + 1);
+
+            assertRejected(() -> inventory.excludeSeatInAllSessions(PRESS_SEAT), InventoryErrorCode.HELD_SEAT_NOT_EXCLUDABLE);
+        }
+
+        @Test
         @DisplayName("막힌 회차를 빼고 고르면 나머지 회차를 뺀다")
         void selectSessionsAroundBlocked() {
             EventInventory inventory = eightSessions();
