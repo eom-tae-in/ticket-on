@@ -27,8 +27,8 @@ import org.springframework.web.bind.annotation.RestController;
  * 행사 도면의 구역 — 위저드 3단계(docs/03 "행사 만들기 위저드", docs/02 "구역"). 주최 관리 경로 규약({@code /api/organizer/organizers/{organizerId}/**},
  * {@link CurrentStaff})을 따른다. 운영진 누구나 하고, 소속 · 주최자 상태 · 행사가 그 주최자의 것인지는 유스케이스가 본다.
  * <p>
- * 구역은 가격이 붙는 재고 묶음이다 — 지정형은 블록 · 좌석 배정이 이어지고(#43), 수량형은 정원 입력만으로 끝난다. 블록 · 좌석과 무대 위치는 배치도
- * 편집(#43)이 더한다.
+ * 구역은 가격이 붙는 재고 묶음이다 — 지정형은 블록 · 좌석 배정이 이어지고, 수량형은 정원 입력만으로 끝난다. 블록 · 좌석과 무대 위치는 배치도
+ * 에디터({@link EventSeatBlockController}, {@link EventSeatController}, {@link EventFloorPlanController})가 다룬다.
  */
 @RestController
 @RequestMapping("/api/organizer/organizers/{organizerId}/events/{eventId}/zones")
