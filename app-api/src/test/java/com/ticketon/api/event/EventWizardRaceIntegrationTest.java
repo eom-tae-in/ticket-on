@@ -10,6 +10,10 @@ import com.ticketon.application.event.port.in.AddEntranceCommand;
 import com.ticketon.application.event.port.in.AddEntranceUseCase;
 import com.ticketon.application.event.port.in.AddSeatBlockCommand;
 import com.ticketon.application.event.port.in.AddSeatBlockUseCase;
+import com.ticketon.application.event.port.in.AddTimedSessionCommand;
+import com.ticketon.application.event.port.in.AddTimedSessionUseCase;
+import com.ticketon.application.event.port.in.ChooseSessionModeCommand;
+import com.ticketon.application.event.port.in.ChooseSessionModeUseCase;
 import com.ticketon.application.event.port.in.AddZoneCommand;
 import com.ticketon.application.event.port.in.AddZoneUseCase;
 import com.ticketon.application.event.port.in.CreateEventCommand;
@@ -42,6 +46,8 @@ import com.ticketon.domain.event.EventErrorCode;
 import com.ticketon.domain.event.EventPosterImage;
 import com.ticketon.domain.event.EventTitle;
 import com.ticketon.domain.event.EventType;
+import com.ticketon.domain.event.SessionMode;
+import com.ticketon.domain.event.TimedSessionTime;
 import com.ticketon.domain.event.Venue;
 import com.ticketon.domain.event.ZoneBasePrice;
 import com.ticketon.domain.event.ZoneCapacity;
@@ -55,6 +61,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -82,7 +90,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL로 행사를 만들거나 위저드 단계를 저장하거나 포스터를 올리거나 구역 · 입구 · 블록을 더하는 흐름이 다른 흐름과 가장 나쁜 순간에 엇갈려도
+ * 진짜 PostgreSQL로 행사를 만들거나 위저드 단계를 저장하거나 포스터를 올리거나 회차 방식 · 회차 · 구역 · 입구 · 블록을 더하는 흐름이 다른 흐름과 가장 나쁜 순간에 엇갈려도
  * 교착(40P01) 없이 차례로 처리되는 것을 고정한다 — 잠금 순서 운영진 계정 줄 → 주최자 줄 → 행사 줄({@link StaffAccountLocks} 표, #195). 포스터 파일은 임시
  * 디렉터리의 로컬 저장소에 둔다. Docker가 없는 환경에서는 건너뛴다.
  * <p>
@@ -94,7 +102,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
-@DisplayName("행사 만들기 · 위저드 단계 저장 · 포스터 올리기 · 구역 · 입구 · 블록 추가의 잠금 순서 — 가장 나쁜 순간에 엇갈려도 교착 없이 차례로 (진짜 PostgreSQL)")
+@DisplayName("행사 만들기 · 위저드 단계 저장 · 포스터 올리기 · 일정 · 구역 · 입구 · 블록 추가의 잠금 순서 — 가장 나쁜 순간에 엇갈려도 교착 없이 차례로 (진짜 PostgreSQL)")
 class EventWizardRaceIntegrationTest {
 
     private static final String SPRING_PLAY_TITLE = "2026 봄 정기공연 〈열두 번째 달〉";
@@ -146,6 +154,12 @@ class EventWizardRaceIntegrationTest {
 
     @Autowired
     private AddSeatBlockUseCase addSeatBlockUseCase;
+
+    @Autowired
+    private ChooseSessionModeUseCase chooseSessionModeUseCase;
+
+    @Autowired
+    private AddTimedSessionUseCase addTimedSessionUseCase;
 
     @Autowired
     private RemoveOperatorUseCase removeOperatorUseCase;
@@ -394,6 +408,62 @@ class EventWizardRaceIntegrationTest {
         assertThat(eventOperations()).containsExactly("CREATE_EVENT " + junghoon);
     }
 
+    @Test
+    @DisplayName("두 운영진이 같은 행사에 거의 동시에 처음 회차 방식을 고르면 뒤의 선택은 행사 줄에서 기다렸다가 앞의 일정을 읽는다 — 같은 값이라 일정 줄도 기록도 하나 (#41)")
+    void concurrentFirstSessionModeChoicesAreSerialized() throws Exception {
+        Future<?> contender = runInterleaved(
+                () -> {
+                    StaffAccountLocks.lockForReferenceInIdOrder(staffAccountRepository, junghoon);
+                    organizerRepository.findByIdForKeyShare(twelveMonths);
+                    eventRepository.findByIdForUpdate(springPlay);
+                },
+                () -> chooseTimed(junghoon),
+                () -> chooseTimed(planner),
+                () -> assertThat(scheduleRows()).isZero());
+
+        contender.get(30, SECONDS);
+        assertThat(scheduleRows()).isEqualTo(1);
+        assertThat(eventOperations()).containsExactly("CREATE_EVENT " + junghoon, "EDIT_EVENT " + junghoon);
+    }
+
+    @Test
+    @DisplayName("두 운영진이 같은 행사에 같은 날짜 · 시각의 회차를 거의 동시에 더하면 뒤의 추가는 행사 줄에서 기다렸다가 앞의 회차를 읽어 409로 멈춘다 — 회차는 하나만 남는다 (#41)")
+    void concurrentSessionAdditionsAreSerialized() throws Exception {
+        chooseTimed(junghoon);
+        Future<?> contender = runInterleaved(
+                () -> {
+                    StaffAccountLocks.lockForReferenceInIdOrder(staffAccountRepository, planner);
+                    organizerRepository.findByIdForKeyShare(twelveMonths);
+                    eventRepository.findByIdForUpdate(springPlay);
+                },
+                () -> addMarch14Evening(planner),
+                () -> addMarch14Evening(junghoon),
+                () -> assertThat(liveRows("event_session")).isZero());
+
+        assertRejectedWith(contender, EventErrorCode.SESSION_START_TIME_TAKEN);
+        assertThat(liveRows("event_session")).isEqualTo(1);
+        assertThat(liveRows("event_date")).isEqualTo(1);
+        assertThat(eventOperations()).containsExactly("CREATE_EVENT " + junghoon, "EDIT_EVENT " + junghoon, "EDIT_EVENT " + planner);
+    }
+
+    @Test
+    @DisplayName("운영자 내보내기가 계정 줄을 잠근 순간 들어온 그 운영자의 회차 추가는 계정 줄에서 기다렸다가 다시 확인해 403으로 멈춘다 — 행사 줄을 잡지 않고 회차가 생기지 않는다 (#41)")
+    void removedOperatorsSessionAdditionWaitsAndStops() throws Exception {
+        chooseTimed(junghoon);
+        Future<?> contender = runInterleaved(
+                () -> StaffAccountLocks.lockInIdOrder(staffAccountRepository, junghoon, planner),
+                () -> removeOperatorUseCase.remove(new RemoveOperatorCommand(acting(junghoon), planner)),
+                () -> addMarch14Evening(planner),
+                () -> {
+                    assertOrganizerRowUnlocked();
+                    assertEventRowFree();
+                });
+
+        assertDeniedWith(contender, OrganizerErrorCode.NOT_ORGANIZER_STAFF);
+        assertThat(liveRows("event_session")).isZero();
+        assertThat(eventOperations()).containsExactly("CREATE_EVENT " + junghoon, "EDIT_EVENT " + junghoon);
+    }
+
     /**
      * 붙잡을 흐름의 첫 잠금만 한 트랜잭션에서 걸어 둔 채 다른 스레드에서 맞서는 흐름을 부른다. 맞서는 흐름이 잠금을 기다리기 시작하면 그 순간의
      * 확인을 하고, 같은 트랜잭션에서 붙잡을 흐름을 끝까지 돌려 커밋한다. 붙잡은 흐름이 실패(교착 40P01 포함)하면 그 예외로 테스트가 실패한다.
@@ -473,12 +543,30 @@ class EventWizardRaceIntegrationTest {
                 CanvasPoint.ORIGIN, BlockAngle.NONE));
     }
 
+    /** 그 운영진이 봄 정기공연의 회차 방식을 회차형으로 고른다. */
+    private void chooseTimed(long staffAccountId) {
+        chooseSessionModeUseCase.choose(new ChooseSessionModeCommand(acting(staffAccountId), springPlay, SessionMode.TIMED, null));
+    }
+
+    /** 그 운영진이 봄 정기공연에 3/14 19:00~21:00 회차를 더한다. */
+    private void addMarch14Evening(long staffAccountId) {
+        addTimedSessionUseCase.add(new AddTimedSessionCommand(acting(staffAccountId), springPlay, LocalDate.of(2026, 3, 14),
+                TimedSessionTime.of(LocalTime.of(19, 0), LocalTime.of(21, 0))));
+    }
+
+    /** 봄 정기공연의 일정 줄 수 — 행사에 하나다. */
+    private long scheduleRows() {
+        Long count = jdbcTemplate.queryForObject("SELECT count(*) FROM event_schedule WHERE event_id = ?", Long.class, springPlay);
+        assertThat(count).isNotNull();
+        return count;
+    }
+
     /** 그 운영진이 봄 정기공연에 입구 "정문"을 더한다. */
     private void addMainGate(long staffAccountId) {
         addEntranceUseCase.add(new AddEntranceCommand(acting(staffAccountId), springPlay, EntranceName.of("정문")));
     }
 
-    /** 봄 정기공연의 그 표(event_zone · event_entrance · event_block · event_seat)에서 지우지 않은 줄 수. */
+    /** 봄 정기공연의 그 표(event_zone · event_entrance · event_block · event_seat · event_date · event_session)에서 지우지 않은 줄 수. */
     private long liveRows(String table) {
         Long count = jdbcTemplate.queryForObject("SELECT count(*) FROM " + table + " WHERE event_id = ? AND deleted_at IS NULL",
                 Long.class, springPlay);

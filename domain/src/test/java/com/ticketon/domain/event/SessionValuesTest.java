@@ -51,6 +51,22 @@ class SessionValuesTest {
             assertThat(TimedSessionTime.isValid(LocalTime.of(19, 0), LocalTime.of(19, 1))).isTrue();
             assertThat(TimedSessionTime.isValid(LocalTime.of(19, 0), null)).isTrue();
         }
+
+        @Test
+        @DisplayName("시각은 분 단위만 받는다 — 19:00:30 시작이나 21:00:00.5 종료는 자르지 않고 받지 않는다 (확인 필요 #41)")
+        void wholeMinutesOnly() {
+            LocalTime halfMinutePast = LocalTime.of(19, 0, 30);
+            LocalTime halfSecondPast = LocalTime.of(21, 0, 0, 500_000_000);
+
+            assertThatIllegalArgumentException().isThrownBy(() -> TimedSessionTime.startingAt(halfMinutePast));
+            assertThatIllegalArgumentException().isThrownBy(() -> TimedSessionTime.of(LocalTime.of(19, 0), halfSecondPast));
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> TimedSessionTime.startingAt(LocalTime.of(19, 0)).withEndTime(LocalTime.of(21, 0, 1)));
+            assertThat(TimedSessionTime.isValid(halfMinutePast, null)).isFalse();
+            assertThat(TimedSessionTime.isValid(LocalTime.of(19, 0), halfSecondPast)).isFalse();
+            assertThat(MinutePrecision.isWholeMinute(LocalTime.of(19, 0))).isTrue();
+            assertThat(MinutePrecision.isWholeMinute(LocalTime.of(19, 0, 0, 1))).isFalse();
+        }
     }
 
     @Nested
@@ -104,6 +120,20 @@ class SessionValuesTest {
             assertThat(OperatingHours.isValid(open, close, LocalTime.of(10, 1))).isTrue();
             assertThat(OperatingHours.isValid(open, close, LocalTime.of(18, 0))).isTrue();
             assertThat(OperatingHours.isValid(open, close, LocalTime.of(18, 1))).isFalse();
+        }
+
+        @Test
+        @DisplayName("운영 시작 · 종료 · 마지막 입장도 분 단위만 받는다 (확인 필요 #41)")
+        void wholeMinutesOnly() {
+            LocalTime open = LocalTime.of(10, 0);
+            LocalTime close = LocalTime.of(18, 0);
+
+            assertThatIllegalArgumentException().isThrownBy(() -> OperatingHours.of(LocalTime.of(10, 0, 1), close));
+            assertThatIllegalArgumentException().isThrownBy(() -> OperatingHours.of(open, LocalTime.of(18, 0, 0, 1_000)));
+            assertThatIllegalArgumentException().isThrownBy(() -> OperatingHours.of(open, close, LocalTime.of(17, 30, 30)));
+            assertThat(OperatingHours.isValid(LocalTime.of(10, 0, 1), close, null)).isFalse();
+            assertThat(OperatingHours.isValid(open, close, LocalTime.of(17, 30, 30))).isFalse();
+            assertThat(OperatingHours.isValid(open, close, LocalTime.of(17, 30))).isTrue();
         }
     }
 
@@ -164,6 +194,14 @@ class SessionValuesTest {
             assertThat(SessionPriceAdjustment.none()).isInstanceOf(SessionPriceAdjustment.None.class);
             assertThat(SessionPriceAdjustment.amount(10_000)).isEqualTo(new SessionPriceAdjustment.Amount(10_000));
             assertThat(SessionPriceAdjustment.percent(-20)).isEqualTo(new SessionPriceAdjustment.Rate(-20));
+        }
+
+        @Test
+        @DisplayName("조정의 종류 — 조정 없음 · 금액 · 퍼센트")
+        void kinds() {
+            assertThat(SessionPriceAdjustment.none().kind()).isEqualTo(SessionPriceAdjustmentKind.NONE);
+            assertThat(SessionPriceAdjustment.amount(10_000).kind()).isEqualTo(SessionPriceAdjustmentKind.AMOUNT);
+            assertThat(SessionPriceAdjustment.percent(-20).kind()).isEqualTo(SessionPriceAdjustmentKind.PERCENT);
         }
 
         @Test

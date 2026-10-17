@@ -217,6 +217,63 @@ public final class EventSchedule {
     }
 
     /**
+     * 회차형 회차의 일시(날짜 · 시간)를 바꾼다 — 회차 일시는 날짜까지다(docs/04 "예매가 열린 뒤(판매 중) 수정 범위 — 회차 일시"). 같은 날짜면
+     * 시간만 바꾼다({@link #changeSessionTime}). 다른 날짜면 회차가 그 날짜로 옮겨 간다 — 그 날짜가 없으면 날짜가 생기고, 옮겨 나온 날짜에 회차가
+     * 남지 않으면 그 날짜는 빠진다. 회차는 그대로라(같은 id) 회차를 가리키는 재고 · 티켓도 그대로 따라간다(docs/04 "기존 회차의 날짜를 고칩니다").
+     * 언제까지 바꿀 수 있는지는 부르는 쪽이 본다({@link Event#changeSessionDateTime}).
+     *
+     * @return 바뀌었는지 — 날짜 · 시간이 지금과 같으면 false
+     * @throws NotFoundException      일정에 없는 회차면({@link EventErrorCode#SESSION_NOT_FOUND})
+     * @throws RuleViolationException 옮겨 갈 날짜에 같은 시각에 시작하는 다른 회차가 있으면({@link EventErrorCode#SESSION_START_TIME_TAKEN})
+     */
+    public boolean changeTimedSessionDateTime(long sessionId, LocalDate newDate, TimedSessionTime newTime) {
+        Objects.requireNonNull(newDate, "newDate");
+        Objects.requireNonNull(newTime, "newTime");
+        requireMode(SessionMode.TIMED, "종일형 회차는 날짜만 바꾼다");
+        EventDate currentDate = dateOf(sessionId);
+        if (currentDate.date().equals(newDate)) {
+            return changeSessionTime(sessionId, newTime);
+        }
+        EventSession session = session(sessionId);
+        Optional<EventDate> existingTarget = findDate(newDate);
+        existingTarget.ifPresent(eventDate -> requireStartTimeAvailable(eventDate, newTime.startTime(), null));
+        session.changeTime(newTime);
+        currentDate.removeSession(session);
+        if (currentDate.hasNoSessions()) {
+            dates.remove(currentDate);
+        }
+        EventDate target = existingTarget.orElseGet(() -> insertDate(EventDate.newDate(newDate)));
+        target.addSession(session);
+        return true;
+    }
+
+    /**
+     * 종일형 회차의 날짜를 바꾼다 — 종일형은 날짜가 곧 회차 하나라 날짜를 옮기면 회차가 함께 옮겨 간다. 그날만 덮어쓴 운영 시간도 함께 옮겨 간다
+     * (확인 필요 #41 — 주최자가 목록의 날짜 칸만 고쳤으므로 그 줄의 운영 시간은 그대로 둔다). 회차는 그대로라(같은 id) 재고 · 티켓도 따라간다.
+     * 언제까지 바꿀 수 있는지는 부르는 쪽이 본다({@link Event#changeSessionDateTime}).
+     *
+     * @return 바뀌었는지 — 날짜가 지금과 같으면 false
+     * @throws NotFoundException      일정에 없는 회차면({@link EventErrorCode#SESSION_NOT_FOUND})
+     * @throws RuleViolationException 옮겨 갈 날짜가 이미 있으면({@link EventErrorCode#SCHEDULE_DATE_ALREADY_EXISTS})
+     */
+    public boolean changeAllDaySessionDate(long sessionId, LocalDate newDate) {
+        Objects.requireNonNull(newDate, "newDate");
+        requireMode(SessionMode.ALL_DAY, "회차형 회차는 날짜와 시간을 함께 바꾼다");
+        EventDate currentDate = dateOf(sessionId);
+        if (currentDate.date().equals(newDate)) {
+            return false;
+        }
+        if (findDate(newDate).isPresent()) {
+            throw new RuleViolationException(EventErrorCode.SCHEDULE_DATE_ALREADY_EXISTS, "행사 " + eventId + ", 날짜 " + newDate);
+        }
+        EventSession session = session(sessionId);
+        dates.remove(currentDate);
+        EventDate moved = insertDate(EventDate.newDate(newDate, currentDate.operatingHoursOverride().orElse(null)));
+        moved.addSession(session);
+        return true;
+    }
+
+    /**
      * 회차형 회차의 비어 있던 종료 시각을 채운다. <b>그 회차의 시간 수정이 잠긴 뒤에도 할 수 있다</b> — 잠기는 시점에 종료 시각 입력을 요구하므로
      * (docs/02 "회차의 시간 정보", {@link SessionTimes#needsEndTimeInput}) 입력할 길이 열려 있어야 한다. 이미 있는 종료 시각을 바꾸는 것은
      * 회차 시간 수정이다({@link #changeSessionTime}).
@@ -452,17 +509,27 @@ public final class EventSchedule {
         }
     }
 
-    private Optional<EventDate> findDate(LocalDate date) {
+    Optional<EventDate> findDate(LocalDate date) {
         return dates.stream().filter(eventDate -> eventDate.date().equals(date)).findFirst();
     }
 
-    private EventDate requireDate(LocalDate date) {
+    /**
+     * 일정의 그 날짜.
+     *
+     * @throws NotFoundException 일정에 없는 날짜면({@link EventErrorCode#SCHEDULE_DATE_NOT_FOUND})
+     */
+    public EventDate requireDate(LocalDate date) {
         Objects.requireNonNull(date, "date");
         return findDate(date).orElseThrow(
                 () -> new NotFoundException(EventErrorCode.SCHEDULE_DATE_NOT_FOUND, "행사 " + eventId + ", 날짜 " + date));
     }
 
-    private EventDate dateOf(long sessionId) {
+    /**
+     * 그 회차가 놓인 날짜.
+     *
+     * @throws NotFoundException 일정에 없는 회차면({@link EventErrorCode#SESSION_NOT_FOUND})
+     */
+    public EventDate dateOf(long sessionId) {
         return dates.stream()
                 .filter(eventDate -> eventDate.findSession(sessionId).isPresent())
                 .findFirst()

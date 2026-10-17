@@ -44,7 +44,16 @@ public final class EventDate {
 
     /** 회차가 아직 없는 새 날짜 — 일정이 곧바로 회차를 붙인다. */
     static EventDate newDate(LocalDate date) {
-        return new EventDate(null, date, null, List.of());
+        return newDate(date, null);
+    }
+
+    /**
+     * 회차가 아직 없고 그날의 운영 시간을 덮어쓴 새 날짜 — 종일형 회차의 날짜를 옮길 때 운영 시간을 함께 옮긴다.
+     *
+     * @param operatingHoursOverride 그날만 덮어쓴 운영 시간. 기본 운영 시간을 따르면 null
+     */
+    static EventDate newDate(LocalDate date, OperatingHours operatingHoursOverride) {
+        return new EventDate(null, date, operatingHoursOverride, List.of());
     }
 
     /**

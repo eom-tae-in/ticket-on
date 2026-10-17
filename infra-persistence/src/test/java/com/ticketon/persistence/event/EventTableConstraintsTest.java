@@ -5,9 +5,12 @@ import static com.ticketon.persistence.jooq.Tables.EVENT;
 import static com.ticketon.persistence.jooq.Tables.EVENT_BLOCK;
 import static com.ticketon.persistence.jooq.Tables.EVENT_CANCELLATION_FEE_TIER;
 import static com.ticketon.persistence.jooq.Tables.EVENT_CATEGORY;
+import static com.ticketon.persistence.jooq.Tables.EVENT_DATE;
 import static com.ticketon.persistence.jooq.Tables.EVENT_ENTRANCE;
 import static com.ticketon.persistence.jooq.Tables.EVENT_SALES_PAUSE;
+import static com.ticketon.persistence.jooq.Tables.EVENT_SCHEDULE;
 import static com.ticketon.persistence.jooq.Tables.EVENT_SEAT;
+import static com.ticketon.persistence.jooq.Tables.EVENT_SESSION;
 import static com.ticketon.persistence.jooq.Tables.EVENT_ZONE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -15,6 +18,8 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
 
 import com.ticketon.domain.organizer.OrganizerStatus;
 import com.ticketon.persistence.organizer.OrganizerRows;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -39,8 +44,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL에 마이그레이션(V19 · V22 · V23)을 올리고, 행사 · 정식 카테고리 · 취소 규정 구간 · 판매 중단 이력 · 구역 · 입구 · 블록 ·
- * 좌석 표의 CHECK가 도메인이 만들 수 없는 줄을 막는지 하나씩 본다 — 맞는 줄에서 칸 하나(또는 둘)만 어긋나게 바꿔 표에 바로 넣으면 그 CHECK의 이름으로 거부된다.
+ * 진짜 PostgreSQL에 마이그레이션(V19 · V22 · V23 · V24)을 올리고, 행사 · 정식 카테고리 · 취소 규정 구간 · 판매 중단 이력 · 구역 · 입구 · 블록 ·
+ * 좌석 · 일정 · 날짜 · 회차 표의 CHECK가 도메인이 만들 수 없는 줄을 막는지 하나씩 본다 — 맞는 줄에서 칸 하나(또는 둘)만 어긋나게 바꿔 표에 바로 넣으면 그 CHECK의 이름으로 거부된다.
  * <p>
  * <b>PostgreSQL CHECK는 식이 NULL이면 통과한다.</b> 그래서 NULL이 될 수 있는 칸끼리 맞물리는 CHECK(1인 총 매수의 한도 · 세는 범위 등)는 NULL
  * 조합을 일부러 넣어 본다. 저장소가 읽다가 말없이 다른 값으로 되살리거나(한도 없는 줄 → 제한 없음) 실패하는(세는 범위 없는 줄) 일이 없게.
@@ -334,6 +339,176 @@ class EventTableConstraintsTest {
                 });
     }
 
+    // ── 일정(event_schedule) · 날짜(event_date) · 회차(event_session) — V24
+
+    static Stream<Arguments> scheduleRowsBreakingChecks() {
+        return Stream.of(
+                breaking("2종 밖의 회차 방식", "event_schedule_session_mode_ck", values(EVENT_SCHEDULE.SESSION_MODE, "MIXED")),
+                breaking("종일형인데 운영 시작이 없다", "event_schedule_default_hours_ck", values(EVENT_SCHEDULE.DEFAULT_OPEN_TIME, null)),
+                breaking("종일형인데 운영 종료가 없다", "event_schedule_default_hours_ck", values(EVENT_SCHEDULE.DEFAULT_CLOSE_TIME, null)),
+                breaking("회차형인데 기본 운영 시간이 있다", "event_schedule_default_hours_ck", values(EVENT_SCHEDULE.SESSION_MODE, "TIMED")),
+                breaking("회차형인데 마지막 입장만 있다", "event_schedule_default_hours_ck", values(EVENT_SCHEDULE.SESSION_MODE, "TIMED",
+                        EVENT_SCHEDULE.DEFAULT_OPEN_TIME, null, EVENT_SCHEDULE.DEFAULT_CLOSE_TIME, null,
+                        EVENT_SCHEDULE.DEFAULT_LAST_ENTRY_TIME, LocalTime.of(17, 0))),
+                breaking("운영 종료가 운영 시작과 같다", "event_schedule_default_close_ck",
+                        values(EVENT_SCHEDULE.DEFAULT_CLOSE_TIME, LocalTime.of(10, 0))),
+                breaking("자정을 넘겨 운영한다 — 18:00 ~ 02:00", "event_schedule_default_close_ck",
+                        values(EVENT_SCHEDULE.DEFAULT_OPEN_TIME, LocalTime.of(18, 0), EVENT_SCHEDULE.DEFAULT_CLOSE_TIME, LocalTime.of(2, 0))),
+                breaking("마지막 입장이 운영 시작과 같다", "event_schedule_default_last_entry_ck",
+                        values(EVENT_SCHEDULE.DEFAULT_LAST_ENTRY_TIME, LocalTime.of(10, 0))),
+                breaking("마지막 입장이 운영 종료보다 늦다", "event_schedule_default_last_entry_ck",
+                        values(EVENT_SCHEDULE.DEFAULT_LAST_ENTRY_TIME, LocalTime.of(18, 30))),
+                breaking("운영 시작에 초가 붙었다", "event_schedule_default_minute_ck",
+                        values(EVENT_SCHEDULE.DEFAULT_OPEN_TIME, LocalTime.of(10, 0, 30))),
+                breaking("마지막 입장에 마이크로초가 붙었다", "event_schedule_default_minute_ck",
+                        values(EVENT_SCHEDULE.DEFAULT_LAST_ENTRY_TIME, LocalTime.of(17, 0, 0, 1_000))));
+    }
+
+    @ParameterizedTest(name = "{0} → {1}")
+    @MethodSource("scheduleRowsBreakingChecks")
+    @DisplayName("일정 줄의 칸이 서로 어긋나면 그 CHECK로 거부된다")
+    void scheduleRowBreakingCheckIsRejected(String description, String constraint, Map<Field<?>, Object> overrides) {
+        long event = insertEvent(Map.of());
+        assertRejectedBy(constraint, () -> insertSchedule(event, overrides));
+    }
+
+    @Test
+    @DisplayName("도메인이 만드는 일정은 받는다 — 종일형 + 기본 운영 시간(마지막 입장 비움 · 운영 종료와 같음), 회차형 + 운영 시간 없음")
+    void consistentSchedulesAreAccepted() {
+        assertThatNoException().isThrownBy(() -> {
+            insertSchedule(insertEvent(Map.of()), Map.of());
+            insertSchedule(insertEvent(Map.of()), values(EVENT_SCHEDULE.DEFAULT_LAST_ENTRY_TIME, LocalTime.of(18, 0)));
+            insertSchedule(insertEvent(Map.of()), timedSchedule());
+        });
+    }
+
+    static Stream<Arguments> dateRowsBreakingChecks() {
+        return Stream.of(
+                breaking("덮어쓴 운영 시작만 있다", "event_date_override_hours_ck", values(EVENT_DATE.OVERRIDE_OPEN_TIME, LocalTime.of(10, 0))),
+                breaking("덮어쓴 마지막 입장만 있다", "event_date_override_hours_ck",
+                        values(EVENT_DATE.OVERRIDE_LAST_ENTRY_TIME, LocalTime.of(17, 0))),
+                breaking("덮어쓴 운영 시간이 자정을 넘긴다", "event_date_override_close_ck",
+                        values(EVENT_DATE.OVERRIDE_OPEN_TIME, LocalTime.of(18, 0), EVENT_DATE.OVERRIDE_CLOSE_TIME, LocalTime.of(2, 0))),
+                breaking("덮어쓴 마지막 입장이 운영 종료보다 늦다", "event_date_override_last_entry_ck",
+                        values(EVENT_DATE.OVERRIDE_OPEN_TIME, LocalTime.of(10, 0), EVENT_DATE.OVERRIDE_CLOSE_TIME, LocalTime.of(20, 0),
+                                EVENT_DATE.OVERRIDE_LAST_ENTRY_TIME, LocalTime.of(20, 30))),
+                breaking("덮어쓴 운영 종료에 초가 붙었다", "event_date_override_minute_ck",
+                        values(EVENT_DATE.OVERRIDE_OPEN_TIME, LocalTime.of(10, 0), EVENT_DATE.OVERRIDE_CLOSE_TIME, LocalTime.of(20, 0, 1))));
+    }
+
+    @ParameterizedTest(name = "{0} → {1}")
+    @MethodSource("dateRowsBreakingChecks")
+    @DisplayName("날짜 줄의 칸이 서로 어긋나면 그 CHECK로 거부된다")
+    void dateRowBreakingCheckIsRejected(String description, String constraint, Map<Field<?>, Object> overrides) {
+        insertSchedule(springPlay, Map.of());
+        assertRejectedBy(constraint, () -> insertDate(overrides));
+    }
+
+    @Test
+    @DisplayName("도메인이 만드는 날짜는 받는다 — 기본 운영 시간을 따르는 날, 마지막 입장까지 덮어쓴 날, 지운 날짜와 같은 날짜 값")
+    void consistentDatesAreAccepted() {
+        insertSchedule(springPlay, Map.of());
+        assertThatNoException().isThrownBy(() -> {
+            insertDate(Map.of());
+            insertDate(values(EVENT_DATE.CALENDAR_DATE, LocalDate.of(2026, 5, 4), EVENT_DATE.OVERRIDE_OPEN_TIME, LocalTime.of(10, 0),
+                    EVENT_DATE.OVERRIDE_CLOSE_TIME, LocalTime.of(20, 0), EVENT_DATE.OVERRIDE_LAST_ENTRY_TIME, LocalTime.of(19, 0)));
+            insertDate(values(EVENT_DATE.CALENDAR_DATE, LocalDate.of(2026, 5, 5), EVENT_DATE.DELETED_AT, PAUSED_AT));
+            insertDate(values(EVENT_DATE.CALENDAR_DATE, LocalDate.of(2026, 5, 5)));
+        });
+    }
+
+    @Test
+    @DisplayName("지우지 않은 날짜끼리는 날짜 값이 겹치지 않고, 일정이 없는 행사에는 날짜를 넣지 않는다")
+    void dateUniqueAndNeedsSchedule() {
+        insertSchedule(springPlay, Map.of());
+        insertDate(Map.of());
+
+        assertUniqueRejected("event_date_event_calendar_date_ux", () -> insertDate(Map.of()));
+        long eventWithoutSchedule = insertEvent(Map.of());
+        assertForeignKeyRejected("event_date_schedule_fk", () -> insertDate(values(EVENT_DATE.EVENT_ID, eventWithoutSchedule)));
+    }
+
+    static Stream<Arguments> sessionRowsBreakingChecks() {
+        return Stream.of(
+                breaking("종료 시각만 있다", "event_session_time_ck", values(EVENT_SESSION.START_TIME, null)),
+                breaking("종료가 시작과 같다", "event_session_end_after_start_ck", values(EVENT_SESSION.END_TIME, LocalTime.of(19, 0))),
+                breaking("자정을 넘겨 끝난다 — 22:00 ~ 00:30", "event_session_end_after_start_ck",
+                        values(EVENT_SESSION.START_TIME, LocalTime.of(22, 0), EVENT_SESSION.END_TIME, LocalTime.of(0, 30))),
+                breaking("시작에 초가 붙었다", "event_session_minute_ck", values(EVENT_SESSION.START_TIME, LocalTime.of(19, 0, 30))),
+                breaking("빈 출연", "event_session_performers_ck", values(EVENT_SESSION.PERFORMERS, "")),
+                breaking("3종 밖의 가격 조정 종류", "event_session_price_adjustment_kind_ck",
+                        values(EVENT_SESSION.PRICE_ADJUSTMENT_KIND, "COUPON")),
+                breaking("조정 없음인데 값이 있다", "event_session_price_adjustment_value_ck", values(EVENT_SESSION.PRICE_ADJUSTMENT_VALUE, 1_000L)),
+                breaking("금액 조정인데 값이 없다", "event_session_price_adjustment_value_ck",
+                        values(EVENT_SESSION.PRICE_ADJUSTMENT_KIND, "AMOUNT")),
+                breaking("금액 조정이 0원", "event_session_price_adjustment_value_ck",
+                        values(EVENT_SESSION.PRICE_ADJUSTMENT_KIND, "AMOUNT", EVENT_SESSION.PRICE_ADJUSTMENT_VALUE, 0L)),
+                breaking("퍼센트 조정인데 값이 없다", "event_session_price_adjustment_value_ck",
+                        values(EVENT_SESSION.PRICE_ADJUSTMENT_KIND, "PERCENT")),
+                breaking("퍼센트 조정이 0%", "event_session_price_adjustment_value_ck",
+                        values(EVENT_SESSION.PRICE_ADJUSTMENT_KIND, "PERCENT", EVENT_SESSION.PRICE_ADJUSTMENT_VALUE, 0L)),
+                breaking("퍼센트 조정이 -100%", "event_session_price_adjustment_value_ck",
+                        values(EVENT_SESSION.PRICE_ADJUSTMENT_KIND, "PERCENT", EVENT_SESSION.PRICE_ADJUSTMENT_VALUE, -100L)),
+                breaking("퍼센트 조정이 정수 범위를 넘는다", "event_session_price_adjustment_value_ck",
+                        values(EVENT_SESSION.PRICE_ADJUSTMENT_KIND, "PERCENT", EVENT_SESSION.PRICE_ADJUSTMENT_VALUE, 2_147_483_648L)));
+    }
+
+    @ParameterizedTest(name = "{0} → {1}")
+    @MethodSource("sessionRowsBreakingChecks")
+    @DisplayName("회차 줄의 칸이 서로 어긋나면 그 CHECK로 거부된다")
+    void sessionRowBreakingCheckIsRejected(String description, String constraint, Map<Field<?>, Object> overrides) {
+        insertSchedule(springPlay, timedSchedule());
+        long date = insertDate(Map.of());
+        assertRejectedBy(constraint, () -> insertSession(date, overrides));
+    }
+
+    @Test
+    @DisplayName("도메인이 만드는 회차는 받는다 — 종료를 비운 회차, 출연 · 금액 · 퍼센트 조정, 취소된 회차, 지운 회차, 시간 없는 종일형 회차")
+    void consistentSessionsAreAccepted() {
+        insertSchedule(springPlay, timedSchedule());
+        long march14 = insertDate(values(EVENT_DATE.CALENDAR_DATE, LocalDate.of(2026, 3, 14)));
+        long may3 = insertDate(Map.of());
+        assertThatNoException().isThrownBy(() -> {
+            insertSession(march14, values(EVENT_SESSION.START_TIME, LocalTime.of(15, 0), EVENT_SESSION.END_TIME, null,
+                    EVENT_SESSION.PERFORMERS, "김배우 · 박배우"));
+            insertSession(march14, values(EVENT_SESSION.PRICE_ADJUSTMENT_KIND, "AMOUNT", EVENT_SESSION.PRICE_ADJUSTMENT_VALUE, -5_000L,
+                    EVENT_SESSION.CANCELLED_AT, PAUSED_AT));
+            insertSession(march14, values(EVENT_SESSION.START_TIME, LocalTime.of(12, 0), EVENT_SESSION.END_TIME, LocalTime.of(14, 0),
+                    EVENT_SESSION.PRICE_ADJUSTMENT_KIND, "PERCENT", EVENT_SESSION.PRICE_ADJUSTMENT_VALUE, -20L));
+            insertSession(march14, values(EVENT_SESSION.START_TIME, LocalTime.of(12, 0), EVENT_SESSION.END_TIME, LocalTime.of(14, 0),
+                    EVENT_SESSION.DELETED_AT, PAUSED_AT));
+            insertSession(may3, values(EVENT_SESSION.START_TIME, null, EVENT_SESSION.END_TIME, null));
+        });
+    }
+
+    @Test
+    @DisplayName("같은 날짜에 시작 시각이 같은 회차는 둘일 수 없다 — 취소된 회차도 자리를 차지하고, 지운 회차는 빠진다. 시간 없는 회차는 날짜마다 하나다")
+    void sessionUniqueness() {
+        insertSchedule(springPlay, timedSchedule());
+        long march14 = insertDate(values(EVENT_DATE.CALENDAR_DATE, LocalDate.of(2026, 3, 14)));
+        long may3 = insertDate(Map.of());
+        insertSession(march14, values(EVENT_SESSION.CANCELLED_AT, PAUSED_AT));
+        insertSession(march14, values(EVENT_SESSION.START_TIME, LocalTime.of(15, 0), EVENT_SESSION.END_TIME, null,
+                EVENT_SESSION.DELETED_AT, PAUSED_AT));
+        insertSession(may3, values(EVENT_SESSION.START_TIME, null, EVENT_SESSION.END_TIME, null));
+
+        assertUniqueRejected("event_session_date_start_time_ux", () -> insertSession(march14, Map.of()));
+        assertThatNoException().isThrownBy(() -> insertSession(march14, values(EVENT_SESSION.START_TIME, LocalTime.of(15, 0),
+                EVENT_SESSION.END_TIME, null)));
+        assertUniqueRejected("event_session_date_all_day_ux",
+                () -> insertSession(may3, values(EVENT_SESSION.START_TIME, null, EVENT_SESSION.END_TIME, null)));
+    }
+
+    @Test
+    @DisplayName("회차는 같은 행사의 날짜만 가리킨다 — 다른 행사의 날짜면 그 외래 키로 거부된다")
+    void sessionPointsOnlyToSameEventsDate() {
+        long otherEvent = insertEvent(Map.of());
+        insertSchedule(otherEvent, Map.of());
+        long otherEventsDate = insertDate(values(EVENT_DATE.EVENT_ID, otherEvent));
+
+        assertForeignKeyRejected("event_session_date_fk", () -> insertSession(otherEventsDate, values(EVENT_SESSION.EVENT_ID, springPlay)));
+    }
+
     // ── 취소 규정 구간 · 정식 카테고리
 
     @Test
@@ -479,6 +654,61 @@ class EventTableConstraintsTest {
                 .returningResult(EVENT_ZONE.ID)
                 .fetchSingle()
                 .value1();
+    }
+
+    private static void assertUniqueRejected(String index, Runnable insert) {
+        assertThatExceptionOfType(DataAccessException.class)
+                .isThrownBy(insert::run)
+                .satisfies(rejected -> {
+                    assertThat(rejected.sqlState()).isEqualTo("23505");
+                    assertThat(rejected.getMessage()).contains("\"" + index + "\"");
+                });
+    }
+
+    /** 회차형 일정 — 운영 시간 칸이 모두 비어 있다. */
+    private static Map<Field<?>, Object> timedSchedule() {
+        return values(EVENT_SCHEDULE.SESSION_MODE, "TIMED", EVENT_SCHEDULE.DEFAULT_OPEN_TIME, null, EVENT_SCHEDULE.DEFAULT_CLOSE_TIME, null);
+    }
+
+    /** 그 행사의 종일형 일정(기본 운영 시간 10:00~18:00, 마지막 입장 비움) 한 줄에 그 칸들만 덮어써 넣는다. */
+    private void insertSchedule(long eventId, Map<Field<?>, Object> overrides) {
+        Map<Field<?>, Object> row = new HashMap<>();
+        row.put(EVENT_SCHEDULE.EVENT_ID, eventId);
+        row.put(EVENT_SCHEDULE.SESSION_MODE, "ALL_DAY");
+        row.put(EVENT_SCHEDULE.DEFAULT_OPEN_TIME, LocalTime.of(10, 0));
+        row.put(EVENT_SCHEDULE.DEFAULT_CLOSE_TIME, LocalTime.of(18, 0));
+        row.put(EVENT_SCHEDULE.DEFAULT_LAST_ENTRY_TIME, null);
+        row.putAll(overrides);
+        dsl.insertInto(EVENT_SCHEDULE).set(row).execute();
+    }
+
+    /** 봄 정기공연 일정의 날짜 5/3 — 운영 시간을 덮어쓰지 않음 — 한 줄에 그 칸들만 덮어써 넣고 id를 돌려준다. */
+    private long insertDate(Map<Field<?>, Object> overrides) {
+        Map<Field<?>, Object> row = new HashMap<>();
+        row.put(EVENT_DATE.EVENT_ID, springPlay);
+        row.put(EVENT_DATE.CALENDAR_DATE, LocalDate.of(2026, 5, 3));
+        row.put(EVENT_DATE.OVERRIDE_OPEN_TIME, null);
+        row.put(EVENT_DATE.OVERRIDE_CLOSE_TIME, null);
+        row.put(EVENT_DATE.OVERRIDE_LAST_ENTRY_TIME, null);
+        row.put(EVENT_DATE.DELETED_AT, null);
+        row.putAll(overrides);
+        return dsl.insertInto(EVENT_DATE).set(row).returningResult(EVENT_DATE.ID).fetchSingle().value1();
+    }
+
+    /** 그 날짜의 19:00~21:00 회차 — 출연 없음 · 조정 없음 — 한 줄에 그 칸들만 덮어써 넣는다. 행사는 그 날짜의 행사다. */
+    private void insertSession(long dateId, Map<Field<?>, Object> overrides) {
+        Map<Field<?>, Object> row = new HashMap<>();
+        row.put(EVENT_SESSION.EVENT_ID, dsl.select(EVENT_DATE.EVENT_ID).from(EVENT_DATE).where(EVENT_DATE.ID.eq(dateId)).fetchSingle().value1());
+        row.put(EVENT_SESSION.DATE_ID, dateId);
+        row.put(EVENT_SESSION.START_TIME, LocalTime.of(19, 0));
+        row.put(EVENT_SESSION.END_TIME, LocalTime.of(21, 0));
+        row.put(EVENT_SESSION.PERFORMERS, null);
+        row.put(EVENT_SESSION.PRICE_ADJUSTMENT_KIND, "NONE");
+        row.put(EVENT_SESSION.PRICE_ADJUSTMENT_VALUE, null);
+        row.put(EVENT_SESSION.CANCELLED_AT, null);
+        row.put(EVENT_SESSION.DELETED_AT, null);
+        row.putAll(overrides);
+        dsl.insertInto(EVENT_SESSION).set(row).execute();
     }
 
     private static void assertForeignKeyRejected(String constraint, Runnable insert) {

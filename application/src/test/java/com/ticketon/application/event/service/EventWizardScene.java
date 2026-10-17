@@ -62,6 +62,7 @@ final class EventWizardScene {
     final FakeEventPosterStorage posterStorage = new FakeEventPosterStorage();
     final FakeFloorPlanRepository floorPlanRepository = new FakeFloorPlanRepository();
     final FakeEventEntranceRepository entranceRepository = new FakeEventEntranceRepository();
+    final FakeEventScheduleRepository scheduleRepository = new FakeEventScheduleRepository();
     final RecordingEventPublisher eventPublisher = new RecordingEventPublisher();
     final RecordingStaffOperationRecordRepository recordRepository = new RecordingStaffOperationRecordRepository();
     final FixedTokenGenerator tokenGenerator = new FixedTokenGenerator(FIRST_ADDRESS, SECOND_ADDRESS);
@@ -141,6 +142,52 @@ final class EventWizardScene {
     UploadEventPosterService uploadEventPosterService(TokenGenerator posterTokenGenerator) {
         return new UploadEventPosterService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
                 organizerRepository, eventRepository, posterStorage, posterTokenGenerator, clock);
+    }
+
+    /** 일정 편집 유스케이스들이 함께 쓰는 차례 — 권한 · 잠금 · 저장 · 알림 · 조작 기록. */
+    EventScheduleEditing scheduleEditing() {
+        return new EventScheduleEditing(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, scheduleRepository, eventPublisher, clock);
+    }
+
+    ChooseSessionModeService chooseSessionModeService() {
+        return new ChooseSessionModeService(scheduleEditing());
+    }
+
+    AddTimedSessionService addTimedSessionService() {
+        return new AddTimedSessionService(scheduleEditing());
+    }
+
+    AddAllDayDateService addAllDayDateService() {
+        return new AddAllDayDateService(scheduleEditing());
+    }
+
+    ChangeSessionDateTimeService changeSessionDateTimeService() {
+        return new ChangeSessionDateTimeService(scheduleEditing());
+    }
+
+    ChangeDateOperatingHoursService changeDateOperatingHoursService() {
+        return new ChangeDateOperatingHoursService(scheduleEditing());
+    }
+
+    ChangeSessionPerformersService changeSessionPerformersService() {
+        return new ChangeSessionPerformersService(scheduleEditing());
+    }
+
+    ChangeSessionPriceAdjustmentService changeSessionPriceAdjustmentService() {
+        return new ChangeSessionPriceAdjustmentService(scheduleEditing());
+    }
+
+    RemoveSessionService removeSessionService() {
+        return new RemoveSessionService(scheduleEditing());
+    }
+
+    RemoveScheduleDateService removeScheduleDateService() {
+        return new RemoveScheduleDateService(scheduleEditing());
+    }
+
+    GetEventScheduleService getEventScheduleService() {
+        return new GetEventScheduleService(checkStaffPermissionService, eventRepository, scheduleRepository);
     }
 
     AddZoneService addZoneService() {
