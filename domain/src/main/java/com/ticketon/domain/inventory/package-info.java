@@ -12,6 +12,8 @@
  *       잡고, 도면과 함께 구역별 잔여를 센다.</li>
  *   <li><b>행사 재고</b>({@link com.ticketon.domain.inventory.EventInventory}) — 한 행사의 회차 재고 전부. 판매 제외 전 회차 일괄 적용과,
  *       회차 · 좌석 · 수량형 구역이 생기고 지워질 때 회차마다 재고를 만들고 빼는 일을 한다.</li>
+ *   <li><b>묶음권 판매 가능 여부</b>({@link com.ticketon.domain.inventory.BundleAvailability}) — 한 날짜라도 들어갈 회차가 없으면 판매가
+ *       멈춘다(docs/05 "재고가 엮입니다").</li>
  * </ul>
  * '매진'은 상태가 아니라 잔여가 0인 순간의 표시라 저장하지 않는다(docs/04 "'매진'은 상태가 아닙니다"). 매진 · 매진 임박은
  * {@link com.ticketon.domain.inventory.RemainingSeats}가 계산한다.
