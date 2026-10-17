@@ -55,7 +55,8 @@ public record BookingPrice(List<TicketPrice> tickets) {
      * 할인 전 티켓마다 조기예매 또는 쿠폰 중 유리한 하나를 적용한다.
      *
      * @param tickets 할인 전 티켓, 티켓 순번대로. 하나 이상
-     * @param coupon  예매 건에 입력한 쿠폰의 할인. 입력하지 않았으면 비어 있다. 쓸 수 있는 쿠폰인지(기간 · 횟수 · 1인 1회)는 쿠폰 규칙(#49)이 먼저 본다
+     * @param coupon  예매 건에 입력한 쿠폰의 할인({@link Coupon#discount}). 입력하지 않았으면 비어 있다. 쓸 수 있는 쿠폰인지(행사 · 기간 · 횟수 ·
+     *                1인 1회)는 쿠폰이 먼저 본다({@link Coupon#requireUsableIn}, {@link Coupon#checkAvailableTo})
      */
     public static BookingPrice calculate(List<TicketBeforeDiscount> tickets, Optional<Discount> coupon) {
         List<TicketBeforeDiscount> orderedTickets = List.copyOf(tickets);
@@ -80,7 +81,8 @@ public record BookingPrice(List<TicketPrice> tickets) {
     }
 
     /**
-     * 한 장이라도 쿠폰을 골랐는지. 어느 장도 고르지 않았으면 쿠폰은 쓰지 않은 것이다 — 전체 사용 횟수 · 1인 1회를 차지하지 않는다(#49).
+     * 한 장이라도 쿠폰을 골랐는지. 어느 장도 고르지 않았으면 쿠폰은 쓰지 않은 것이다 — 전체 사용 횟수 · 1인 1회를 차지하지 않는다. 골랐을 때만
+     * 쿠폰을 쓴다({@link Coupon#use}).
      */
     public boolean usesCoupon() {
         return tickets.stream().anyMatch(ticket -> ticket.discountKind() == DiscountKind.COUPON);

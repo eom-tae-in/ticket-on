@@ -48,6 +48,28 @@ import java.util.Set;
  *       방식). 같으면 쿠폰을 쓰지 않는 쪽(조기예매 또는 정가): {@code domain.pricing.BookingPrice#calculate}.</li>
  *   <li>확인 필요 (#48) — 정액 할인이 가격보다 크면 0원까지만 깎고, 정액 쿠폰은 예매 건 합계까지만 나눈다:
  *       {@code domain.pricing.Discount.FixedAmount}, {@code domain.pricing.BookingPrice}.</li>
+ *   <li>확인 필요 (#49) — 0원 결제를 막는 조기예매 · 쿠폰 할인 값의 범위: 값 자체는 정액 1원 이상 · 정률 1% 이상 100% 미만이고, 할인이 닿는 가장
+ *       낮은 가격에 적용해도 1원 이상 남아야 한다(절대 상한은 두지 않음): {@code domain.pricing.Discount#requireOfferable},
+ *       {@code domain.pricing.Discount#requireLeavesPositivePrice}.</li>
+ *   <li>확인 필요 (#49) — 할인 기간(조기예매 기간 · 쿠폰 유효 기간)은 시작과 끝을 모두 받고, 시작 순간부터 끝 순간 직전까지다:
+ *       {@code domain.pricing.DiscountPeriod}.</li>
+ *   <li>확인 필요 (#49) — 끝난(소진 · 기간 종료) 조기예매는 설정을 바꿀 수 없고, 수량은 사용 수 아래로 줄일 수 없다:
+ *       {@code domain.pricing.EarlyBird#reconfigure}.</li>
+ *   <li>확인 필요 (#49) — 조기예매 기간 겹침 경고는 적용 범위를 보지 않고 기간만 본다(1일권 전용 · 3일권 전용이 같은 기간이어도 경고). 한 티켓에
+ *       닿는 조기예매가 여럿이면 유리한 쪽 → 먼저 끝나는 쪽 → 만든 순서로 고르고, 앞의 것에서 모자란 몫은 다음 것에서 채운다:
+ *       {@code domain.pricing.EarlyBirds}.</li>
+ *   <li>확인 필요 (#49) — 31번째 사람의 "정가로 진행할지 확인"은 닿는 조기예매가 기간 안인데 몫이 모자라면(일부만 모자라도, 이미 소진된 뒤라도)
+ *       묻고, 기간 밖이면 묻지 않는다: {@code domain.pricing.EarlyBirdAllocation#needsRegularPriceConfirmation}.</li>
+ *   <li>확인 필요 (#49) — 조기예매 임박의 "종료일 3일 이내"는 끝 순간에서 한국 달력 3일(72시간)을 거슬러 올라간 순간부터다:
+ *       {@code domain.pricing.EarlyBirdUrgency#byPeriod}.</li>
+ *   <li>확인 필요 (#49) — 쿠폰 코드는 앞뒤 공백을 걷고 NFC · 영문 대문자로 맞춰 대소문자 구분 없이 비교하고, 안에 공백을 둘 수 없다. 발급한 뒤
+ *       코드는 바꾸지 않는다: {@code domain.pricing.CouponCode}, {@code domain.pricing.Coupon}.</li>
+ *   <li>확인 필요 (#49) — 쿠폰 전체 사용 가능 횟수는 꼭 받고(제한 없는 쿠폰 없음), 이미 쓴 횟수 아래로 줄일 수 없다:
+ *       {@code domain.pricing.CouponTerms}, {@code domain.pricing.Coupon#reconfigure}.</li>
+ *   <li>확인 필요 (#49) — 쿠폰 소진과 1인 1회 위반은 "이 행사에서 사용할 수 없는 코드입니다"와 다른 문구로 답한다(이 행사의 코드임을 확인한 뒤라
+ *       다른 행사의 쿠폰은 드러나지 않음): {@code domain.pricing.Coupon#checkAvailableTo}.</li>
+ *   <li>확인 필요 (#49) — 부분 취소가 이어져 마지막 티켓까지 취소되면 그 취소를 전체 취소로 보고 쿠폰을 돌려준다:
+ *       {@code domain.pricing.TicketCancellationKind#ofCancellation}.</li>
  *   <li>확인 필요 (#53) — 선점 중인 좌석과 예매 마감 뒤 일반 좌석에 건 초대권 좌석은 판매 제외하지 않는다(결제 중일 수 있음 · 초대권 좌석도 팔린
  *       좌석과 똑같이 지킴): {@code domain.inventory.SeatStock#exclude}.</li>
  *   <li>확인 필요 (#53) — 판매 제외가 아닌 좌석의 판매 제외 해제는 막지 않고 그대로 둔다(초대권이 걸린 판매 제외만 막음):
@@ -331,6 +353,15 @@ public final class ProposedPolicy {
      * 않았다. 문서에는 "30일 미수정 — 알림"만 있고 언제 보내는지가 없다(docs/04 "작성 중 행사 관리").
      */
     public static final LocalTime DRAFT_EVENT_IDLE_NOTICE_RUN_TIME = LocalTime.of(10, 0);
+
+    /**
+     * 확인 필요 (#49, 문서에 없음) — 쿠폰 코드 최대 길이(글자 수). 이보다 긴 코드는 받지 않는다({@code domain.pricing.CouponCode}).
+     * 글자 수는 앞뒤 공백을 걷고 NFC로 맞춘 뒤 사람이 세는 대로 센다(유니코드 code point).
+     * 20자를 제안한다: 문서 예시 {@code SPRING20}(8자)처럼 코드는 관객이 인스타 게시물에서 찾아 손으로 옮겨 적는 짧은 말이고(docs/05 "쿠폰",
+     * docs/15 한서윤 — 찾느라 1~2분), 길면 잘못 적기 쉽다. 아티스트 이름을 넣은 팬 쿠폰(docs/15 이도현)도 넉넉히 들어가고, 한 줄 이름의 상한
+     * ({@link #ZONE_NAME_MAXIMUM_LENGTH} 등)과 같다. 상한이 없으면 행사 안 코드 유일 색인(#51)에 아주 긴 값이 들어온다.
+     */
+    public static final int COUPON_CODE_MAXIMUM_LENGTH = 20;
 
     private ProposedPolicy() {
     }
