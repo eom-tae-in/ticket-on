@@ -1,6 +1,7 @@
 package com.ticketon.domain.ticket;
 
 import com.ticketon.domain.error.RuleViolationException;
+import com.ticketon.domain.event.EventStatus;
 import com.ticketon.domain.pricing.DiscountKind;
 import com.ticketon.domain.pricing.Money;
 import com.ticketon.domain.pricing.SessionPrice;
@@ -62,7 +63,7 @@ public final class Ticket {
     private final Set<DeductionExemptionCause> deductionExemptionCauses;
     private final boolean compensatedOnCancel;
     private TicketCancellation cancellation;
-    private final QrKey qrKey;
+    private QrKey qrKey;
 
     private Ticket(Long id, TicketParent parent, int sequence, List<TicketSession> sessions, long zoneId, Long seatId,
             TicketPrice price, Money partiallyRefundedAmount, Set<DeductionExemptionCause> deductionExemptionCauses,
@@ -189,6 +190,57 @@ public final class Ticket {
         }
         requireNotCancelled();
         cancellation = new TicketCancellation(now, reason);
+    }
+
+    /**
+     * QR 열쇠를 새로 바꾼다 — <b>열쇠만 바뀌고 티켓은 그대로</b>다(docs/07 "QR 재발행"). 밖에 돌아다니는 옛 QR과 옛 열쇠로 만든 공유 링크가 즉시
+     * 무효가 된다. 관객이 직접 재발행하지 않는다 — 신청은 관객, 처리는 관리자다(docs/99 B "관객의 QR 직접 재발행", 흐름은 #128).
+     *
+     * @param newKey 추측할 수 없는 새 열쇠 — 서비스가 TokenGenerator로 만들어 넘긴다
+     * @return 바뀌기 전 열쇠와 바뀐 시각 — 재발행 이력에 보관한다. 옛 캡처를 위조로 오해하지 않게 하려는 것이다
+     * @throws RuleViolationException   이미 취소된 티켓이면({@link TicketErrorCode#TICKET_ALREADY_CANCELLED}) — 취소된 티켓의 QR은 이미 무효다
+     * @throws IllegalArgumentException 새 열쇠가 지금 열쇠와 같으면
+     */
+    public PreviousQrKey reissueKey(QrKey newKey, Instant now) {
+        Objects.requireNonNull(newKey, "newKey");
+        Objects.requireNonNull(now, "now");
+        requireNotCancelled();
+        if (newKey.equals(qrKey)) {
+            throw new IllegalArgumentException("새 QR 열쇠가 지금 열쇠와 같습니다: 티켓 " + describe());
+        }
+        PreviousQrKey previous = new PreviousQrKey(qrKey, now);
+        qrKey = newKey;
+        return previous;
+    }
+
+    /** 그 열쇠가 이 티켓의 지금 열쇠인지 — 아니면 재발행 전 열쇠다(검표 · 공유 링크가 옛 열쇠 이력으로 이 티켓을 찾았을 때). */
+    public boolean isCurrentKey(QrKey key) {
+        Objects.requireNonNull(key, "key");
+        return qrKey.equals(key);
+    }
+
+    /**
+     * 그 열쇠로 만든 공유 링크가 무효인 이유 — 유효하면 비어 있다(docs/07 "공유 링크의 수명"). 링크는 로그인 없이 열리고 그 티켓의 QR만 보여 준다.
+     * <p>
+     * 이유가 겹치면 <b>취소 → 행사 종료 → 재발행</b> 순으로 하나를 고른다. 취소된 티켓은 새 링크를 받아도 들어갈 수 없으므로 "취소된 티켓입니다"가,
+     * 끝난 행사는 새 링크가 소용없으므로 "종료된 행사입니다"가 재발행 안내보다 앞선다. 확인 필요 (#56) — 겹칠 때의 순서는 문서에 없다.
+     *
+     * @param linkKey     링크에 담긴 열쇠 — 지금 열쇠이거나, 옛 열쇠 이력으로 이 티켓을 찾은 재발행 전 열쇠
+     * @param eventStatus 그 행사의 지금 상태. 행사 종료 · 정산 완료 · 취소됨이면 행사가 끝난 것이다({@link EventStatus#isFinished})
+     */
+    public Optional<ShareLinkInvalidReason> shareLinkInvalidReason(QrKey linkKey, EventStatus eventStatus) {
+        Objects.requireNonNull(linkKey, "linkKey");
+        Objects.requireNonNull(eventStatus, "eventStatus");
+        if (isCancelled()) {
+            return Optional.of(ShareLinkInvalidReason.CANCELLED);
+        }
+        if (eventStatus.isFinished()) {
+            return Optional.of(ShareLinkInvalidReason.EVENT_ENDED);
+        }
+        if (!isCurrentKey(linkKey)) {
+            return Optional.of(ShareLinkInvalidReason.REISSUED);
+        }
+        return Optional.empty();
     }
 
     /** 저장 전이면 비어 있다. */
