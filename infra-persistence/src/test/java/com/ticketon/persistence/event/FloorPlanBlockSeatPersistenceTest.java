@@ -51,8 +51,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 진짜 PostgreSQL에 마이그레이션(V23 블록 · 좌석)을 올리고 도면의 블록 · 좌석 저장을 본다 — 10행 × 20열 블록을 얹으면 좌석 200줄, 다시 읽으면
- * 그대로, 블록을 옮기고 돌리고 이름을 고쳐도 좌석 줄과 id는 그대로, 좌석 구역 배정 · 속성 · 끄기는 바뀐 칸만, 블록을 지우면 블록 · 좌석에 같은
- * 지운 시각, 구역을 지우면 같은 저장에서 좌석 배정이 풀림, 묵은 · 다른 행사의 블록 · 좌석은 아무것도 쓰지 않고 거부, 50행 × 50열 2,500석.
+ * 그대로, 블록을 옮기고 돌리고 이름을 고쳐도 · 구역의 이름 · 색 · 기본가를 고쳐도 좌석 줄과 id는 그대로, 좌석 구역 배정 · 속성 · 끄기는 바뀐 칸만,
+ * 블록을 지우면 블록 · 좌석에 같은 지운 시각, 구역을 지우면 같은 저장에서 좌석 배정만 풀림(좌석 id · 번호 · 속성 · 활성은 그대로), 묵은 · 다른 행사의 블록 · 좌석은 아무것도 쓰지 않고 거부, 50행 × 50열 2,500석.
  * 극단 열두달(docs/15 박정훈)의 봄 정기공연 — 200석 소극장(docs/02 "200석짜리 소극장이 5분 안에"), "R석, 5만원"(docs/02 "두 개의 축").
  * Docker가 없는 환경에서는 건너뛴다.
  */
@@ -243,20 +243,62 @@ class FloorPlanBlockSeatPersistenceTest {
     }
 
     @Test
-    @DisplayName("구역을 지우면 같은 저장에서 그 구역의 좌석 배정이 풀린다 — 지운 구역을 가리키는 지우지 않은 좌석이 남지 않는다 (#42)")
+    @DisplayName("좌석을 칠한 R석의 이름 · 색 · 기본가를 고쳐 저장해도 좌석 줄과 id는 그대로이고 그 구역에 배정된 채다")
+    void zoneEditsKeepSeatRows() {
+        FloorPlan floorPlan = saveRSeatAndFirstFloor();
+        long rSeat = rSeatId(floorPlan);
+        Set<Long> frontRow = seatIdsInRow(floorPlan, 1, 20);
+        floorPlan.assignSeatsToZone(frontRow, rSeat);
+        adapter.save(floorPlan, CREATED_AT);
+        FloorPlan reread = adapter.findByEventId(springPlay);
+        List<Long> seatIdsBefore = seatIdsOf(reread);
+        ZoneSettings vip = ZoneSettings.designated(ZoneName.of("VIP석"), ZoneColor.of("#3E63DD"), ZoneBasePrice.of(70_000));
+
+        reread.changeZone(rSeat, vip);
+        adapter.save(reread, CREATED_AT.plusSeconds(60));
+
+        FloorPlan found = adapter.findByEventId(springPlay);
+        assertThat(found.zone(rSeat).settings()).isEqualTo(vip);
+        assertThat(seatIdsOf(found)).containsExactlyElementsOf(seatIdsBefore);
+        assertThat(found.seatsIn(rSeat)).extracting(seat -> seat.id().getAsLong()).containsExactlyInAnyOrderElementsOf(frontRow);
+        assertThat(dsl.fetchCount(EVENT_SEAT, EVENT_SEAT.EVENT_ID.eq(springPlay))).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("구역을 지우면 같은 저장에서 그 구역의 좌석 배정만 풀린다 — 좌석 줄 · id · 번호 · 속성 · 활성은 그대로이고, 지운 구역을 가리키는 지우지 않은 좌석이 남지 않는다 (#42)")
     void removingZoneUnassignsSeatsInSameSave() {
         FloorPlan floorPlan = saveRSeatAndFirstFloor();
         long rSeat = rSeatId(floorPlan);
-        floorPlan.assignSeatsToZone(seatIdsInRow(floorPlan, 1, 20), rSeat);
+        Set<Long> frontRow = seatIdsInRow(floorPlan, 1, 20);
+        Set<Long> wheelchair = seatIdsInRow(floorPlan, 1, 2);
+        Set<Long> aisle = Set.copyOf(seatIdsInRow(floorPlan, 1, 5).stream().filter(seatId -> !wheelchair.contains(seatId)).toList());
+        floorPlan.assignSeatsToZone(frontRow, rSeat);
+        floorPlan.changeSeatAttribute(wheelchair, SeatAttribute.WHEELCHAIR);
+        floorPlan.deactivateSeats(aisle);
         adapter.save(floorPlan, CREATED_AT);
-
         FloorPlan reread = adapter.findByEventId(springPlay);
+        List<Long> seatIdsBefore = seatIdsOf(reread);
+        List<SeatNumber> numbersBefore = reread.blocks().getFirst().seats().stream().map(Seat::number).toList();
+
         reread.removeZone(rSeat);
         adapter.save(reread, REMOVED_AT);
 
         assertThat(dsl.select(EVENT_ZONE.DELETED_AT).from(EVENT_ZONE).where(EVENT_ZONE.ID.eq(rSeat)).fetchSingle().value1()).isNotNull();
         assertThat(dsl.fetchCount(EVENT_SEAT, EVENT_SEAT.ZONE_ID.eq(rSeat))).isZero();
-        assertThat(adapter.findByEventId(springPlay).blocks().getFirst().seats()).allSatisfy(seat -> assertThat(seat.zoneId()).isEmpty());
+        assertThat(dsl.fetchCount(EVENT_SEAT, EVENT_SEAT.EVENT_ID.eq(springPlay))).isEqualTo(200);
+        FloorPlan found = adapter.findByEventId(springPlay);
+        assertThat(found.zones()).isEmpty();
+        assertThat(seatIdsOf(found)).containsExactlyElementsOf(seatIdsBefore);
+        assertThat(found.blocks().getFirst().seats()).extracting(Seat::number).containsExactlyElementsOf(numbersBefore);
+        assertThat(found.blocks().getFirst().seats()).allSatisfy(seat -> assertThat(seat.zoneId()).isEmpty());
+        assertThat(wheelchair).allSatisfy(seatId -> {
+            assertThat(found.seat(seatId).attribute()).isEqualTo(SeatAttribute.WHEELCHAIR);
+            assertThat(found.seat(seatId).isActive()).isTrue();
+        });
+        assertThat(aisle).hasSize(3).allSatisfy(seatId -> {
+            assertThat(found.seat(seatId).isActive()).isFalse();
+            assertThat(found.seat(seatId).attribute()).isEqualTo(SeatAttribute.GENERAL);
+        });
     }
 
     @Test
