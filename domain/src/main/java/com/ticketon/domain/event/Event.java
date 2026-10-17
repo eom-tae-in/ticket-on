@@ -1327,7 +1327,7 @@ public final class Event {
         if (currentDate.equals(newDate)) {
             return false;
         }
-        requireSessionTimeEditable(schedule, session, now);
+        requireSessionTimeEditable(schedule, sessionId, now);
         return schedule.changeAllDaySessionDate(sessionId, newDate);
     }
 
@@ -1350,26 +1350,24 @@ public final class Event {
             schedule.enterSessionEndTime(sessionId, newTime.endTime());
             return true;
         }
-        requireSessionTimeEditable(schedule, session, now);
+        requireSessionTimeEditable(schedule, sessionId, now);
         return schedule.changeTimedSessionDateTime(sessionId, newDate, newTime);
     }
 
-    /** 운영 시간을 바꾸면 시간이 따라 바뀌는 회차마다 시간 수정을 확인한다. 따라 바뀌는 회차가 없으면 회차 일시의 수정 범위만 본다. */
+    /**
+     * 운영 시간을 바꾸면 시간이 따라 바뀌는 회차마다 시간 수정을 확인한다 — 판정은 {@link #requireSessionTimeEditable} 하나다. 따라 바뀌는 회차가 없으면
+     * 회차 일시의 수정 범위만 본다. 저장소에서 읽은 일정의 회차(id 있음)를 넘긴다.
+     *
+     * @throws IllegalArgumentException 저장 전(id 없는) 회차가 있으면
+     */
     private void requireSessionTimesEditable(EventSchedule schedule, List<EventSession> affectedSessions, Instant now) {
         if (affectedSessions.isEmpty()) {
             requireEditable(EventEditTarget.SESSION_DATE_TIME);
             return;
         }
-        affectedSessions.forEach(session -> requireSessionTimeEditable(schedule, session, now));
-    }
-
-    /** {@link #requireSessionTimeEditable(EventSchedule, long, Instant)}와 같은 판정 — 회차를 직접 받는다. */
-    private void requireSessionTimeEditable(EventSchedule schedule, EventSession session, Instant now) {
-        requireEditable(EventEditTarget.SESSION_DATE_TIME);
-        if (editScope() == EventEditScope.AFTER_BOOKING_OPENED && schedule.timesOf(session).isTimeEditLocked(now)) {
-            throw new RuleViolationException(EventErrorCode.SESSION_TIME_EDIT_LOCKED,
-                    detail() + ", 회차 " + (session.id().isPresent() ? session.id().getAsLong() : "저장 전"));
-        }
+        affectedSessions.forEach(session -> requireSessionTimeEditable(schedule, session.id().orElseThrow(
+                () -> new IllegalArgumentException("저장 전 회차의 시간 수정은 판정하지 않습니다 — 저장소에서 읽은 일정을 넘깁니다: 행사 " + id)),
+                now));
     }
 
     /** 기본 운영 시간을 따르는 회차 — 운영 시간을 덮어쓰지 않은 날짜의 회차(종일형). */

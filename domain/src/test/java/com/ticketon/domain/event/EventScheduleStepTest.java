@@ -14,22 +14,30 @@ import static com.ticketon.domain.event.EventStatusFixtures.eightPerformances;
 import static com.ticketon.domain.event.EventStatusFixtures.korean;
 import static com.ticketon.domain.event.EventStatusFixtures.singlePerformance;
 import static com.ticketon.domain.event.EventStatusFixtures.singlePerformanceWithoutEndTime;
+import static com.ticketon.domain.event.EventStatusFixtures.springPlayHeldBeforeOpening;
 import static com.ticketon.domain.event.EventStatusFixtures.springPlayIn;
+import static com.ticketon.domain.event.EventStatusFixtures.withOpensAt;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import com.ticketon.domain.error.NotFoundException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * 위저드 2단계의 일정 저장 — 회차 방식을 고르고 날짜 · 회차를 만든다(docs/03 "행사 만들기 위저드"). 저장할 때마다 바뀌는 항목의 수정 범위를 보고,
@@ -404,6 +412,89 @@ class EventScheduleStepTest {
             assertRejected(() -> event.changeDateOperatingHours(festival, MAY_4, TEN_TO_EIGHT, april27Noon),
                     EventErrorCode.SESSION_TIME_EDIT_LOCKED);
             assertThat(event.changeDateOperatingHours(festival, MAY_5, TEN_TO_EIGHT, april27Noon)).isTrue();
+        }
+    }
+
+    /**
+     * 예매가 한 번도 열리지 않은 행사 — 그 시각에 아직 오픈 전인 판매 대기, 판매 대기에서 관리자 조치로 멈춰 예매가 열린 적 없는 판매 중단. 지금
+     * 시각을 받아 그 시각에 맞는 행사를 만든다.
+     */
+    static Stream<Arguments> bookingNeverOpened() {
+        return Stream.of(
+                Arguments.of(Named.<Function<Instant, Event>>of("판매 대기 — 다음 날 오픈",
+                        now -> springPlayIn(EventStatus.AWAITING_OPEN, withOpensAt(now.plus(Duration.ofDays(1)))))),
+                Arguments.of(Named.<Function<Instant, Event>>of("판매 대기에서 관리자 조치로 멈춘 판매 중단 — 예매가 열린 적 없음",
+                        now -> springPlayHeldBeforeOpening())));
+    }
+
+    /** 예매가 열린 뒤의 행사 — 판매 중, 예매가 열린 뒤 주최자가 멈춘 판매 중단. */
+    static Stream<Arguments> bookingOpened() {
+        return Stream.of(
+                Arguments.of(Named.of("판매 중", springPlayIn(EventStatus.ON_SALE))),
+                Arguments.of(Named.of("예매가 열린 뒤의 판매 중단", springPlayIn(EventStatus.SALES_PAUSED))));
+    }
+
+    @Nested
+    @DisplayName("판매 대기는 예매가 없어 시작 1주일 전 잠금이 없다 — 회차 일시 · 날짜별 운영 시간 · 기본 운영 시간 (docs/04 \"판매 대기는 예매가 없어 전부 고칠 수 있습니다\")")
+    class BeforeBookingOpened {
+
+        /** 3/10 12:00 — 8회차 공연의 3/14 15:00 회차는 시작까지 1주일이 안 남았다. */
+        private static final Instant MARCH_10_NOON = DURING_SALES;
+
+        /** 4/27 12:00 — 페스티벌 5/3 · 5/4 회차는 시작까지 1주일이 안 남았다(5/4는 4/27 10:00부터 잠기는 자리). */
+        private static final Instant APRIL_27_NOON = korean(LocalDate.of(2026, 4, 27), 12, 0);
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("com.ticketon.domain.event.EventScheduleStepTest#bookingNeverOpened")
+        @DisplayName("시작 1주일 안으로 남은 3/14 15:00 회차의 일시를 바꾼다")
+        void changesSessionDateTimeWithinAWeek(Function<Instant, Event> eventAt) {
+            Event event = eventAt.apply(MARCH_10_NOON);
+            EventSchedule schedule = eightPerformances(Set.of());
+
+            assertThat(event.changeSessionDateTime(schedule, MARCH_14_MATINEE, MARCH_14, LocalTime.of(14, 0), LocalTime.of(16, 0),
+                    MARCH_10_NOON)).isTrue();
+            assertThat(schedule.session(MARCH_14_MATINEE).time()).contains(time(14, 16));
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("com.ticketon.domain.event.EventScheduleStepTest#bookingNeverOpened")
+        @DisplayName("시작 1주일 안으로 남은 5/4의 운영 시간을 덮어쓴다")
+        void overridesOperatingHoursWithinAWeek(Function<Instant, Event> eventAt) {
+            Event event = eventAt.apply(APRIL_27_NOON);
+            EventSchedule festival = lateSummerFestival();
+
+            assertThat(event.changeDateOperatingHours(festival, MAY_4, TEN_TO_EIGHT, APRIL_27_NOON)).isTrue();
+            assertThat(festival.operatingHoursOn(MAY_4)).isEqualTo(TEN_TO_EIGHT);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("com.ticketon.domain.event.EventScheduleStepTest#bookingNeverOpened")
+        @DisplayName("기본 운영 시간을 바꿔 시작 1주일 안으로 남은 5/3 · 5/4가 따라 바뀌어도 막지 않는다")
+        void changesDefaultOperatingHoursWithinAWeek(Function<Instant, Event> eventAt) {
+            Event event = eventAt.apply(APRIL_27_NOON);
+            EventSchedule festival = lateSummerFestival();
+
+            assertThat(event.changeSessionMode(festival, SessionMode.ALL_DAY, TEN_TO_EIGHT, APRIL_27_NOON)).isTrue();
+            assertThat(festival.operatingHoursOn(MAY_3)).isEqualTo(TEN_TO_EIGHT);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("com.ticketon.domain.event.EventScheduleStepTest#bookingOpened")
+        @DisplayName("대조 — 예매가 열린 뒤에는 세 경로 모두 시작 1주일 전 잠금으로 막히고 아무것도 바뀌지 않는다")
+        void allThreeLockedAfterBookingOpened(Event event) {
+            EventSchedule performances = eightPerformances(Set.of());
+            EventSchedule festival = lateSummerFestival();
+
+            assertRejected(() -> event.changeSessionDateTime(performances, MARCH_14_MATINEE, MARCH_14, LocalTime.of(14, 0),
+                    LocalTime.of(16, 0), MARCH_10_NOON), EventErrorCode.SESSION_TIME_EDIT_LOCKED);
+            assertRejected(() -> event.changeDateOperatingHours(festival, MAY_4, TEN_TO_EIGHT, APRIL_27_NOON),
+                    EventErrorCode.SESSION_TIME_EDIT_LOCKED);
+            assertRejected(() -> event.changeSessionMode(festival, SessionMode.ALL_DAY, TEN_TO_EIGHT, APRIL_27_NOON),
+                    EventErrorCode.SESSION_TIME_EDIT_LOCKED);
+
+            assertThat(performances.session(MARCH_14_MATINEE).time()).contains(time(15, 17));
+            assertThat(festival.operatingHoursOn(MAY_4)).isEqualTo(TEN_TO_SIX);
+            assertThat(festival.defaultOperatingHours()).contains(TEN_TO_SIX);
         }
     }
 
