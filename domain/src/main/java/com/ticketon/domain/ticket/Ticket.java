@@ -1,9 +1,11 @@
 package com.ticketon.domain.ticket;
 
+import com.ticketon.domain.error.RuleViolationException;
 import com.ticketon.domain.pricing.DiscountKind;
 import com.ticketon.domain.pricing.Money;
 import com.ticketon.domain.pricing.SessionPrice;
 import com.ticketon.domain.pricing.TicketPrice;
+import java.time.Instant;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -59,7 +61,7 @@ public final class Ticket {
     private final Money partiallyRefundedAmount;
     private final Set<DeductionExemptionCause> deductionExemptionCauses;
     private final boolean compensatedOnCancel;
-    private final TicketCancellation cancellation;
+    private TicketCancellation cancellation;
     private final QrKey qrKey;
 
     private Ticket(Long id, TicketParent parent, int sequence, List<TicketSession> sessions, long zoneId, Long seatId,
@@ -167,6 +169,28 @@ public final class Ticket {
                 deductionExemptionCauses, compensatedOnCancel, cancellation, qrKey);
     }
 
+    /**
+     * 티켓을 취소한다 — 취소 시각과 사유를 남긴다(docs/07 "티켓은 '취소됐나'만 기록합니다"). "유효 / 취소됨" 칸을 고르는 setter는 없다. 취소된
+     * 티켓도 지우지 않고 예매 카드에 회색으로 남는다 — 관객이 직접 하지 않은 취소(회차 취소 · 관리자 정지)를 예매 내역만 열어도 알 수 있게 한다
+     * (docs/07 "취소된 티켓도 예매 카드에 남습니다"). 변경도 기존 티켓을 '좌석 변경'으로 취소하고 새 티켓을 발급한다 — "변경됨" 상태는 없다
+     * (docs/14 "변경은 티켓을 바꿔치웁니다").
+     * <p>
+     * 취소할 수 있는지(취소 마감 · 입장 기록 · 묶음권 전체 취소)와 환불액은 환불 계산(#78)이, 좌석 · 쿠폰을 돌려놓는 일은 각 흐름이 한다.
+     *
+     * @param reason 취소 사유 — 이 티켓의 부모에 붙을 수 있는 사유
+     * @throws RuleViolationException   이미 취소된 티켓이면({@link TicketErrorCode#TICKET_ALREADY_CANCELLED})
+     * @throws IllegalArgumentException 이 티켓의 부모에 붙을 수 없는 사유면 — 예매 티켓에 '초대권 회수', 초대권 티켓에 '관객 취소'
+     */
+    public void cancel(TicketCancellationReason reason, Instant now) {
+        Objects.requireNonNull(reason, "reason");
+        Objects.requireNonNull(now, "now");
+        if (!reason.appliesTo(parent.kind())) {
+            throw new IllegalArgumentException(parent.kind() + " 티켓에 붙을 수 없는 취소 사유입니다: " + reason);
+        }
+        requireNotCancelled();
+        cancellation = new TicketCancellation(now, reason);
+    }
+
     /** 저장 전이면 비어 있다. */
     public OptionalLong id() {
         return id == null ? OptionalLong.empty() : OptionalLong.of(id);
@@ -264,6 +288,17 @@ public final class Ticket {
     /** 지금 QR 열쇠. */
     public QrKey qrKey() {
         return qrKey;
+    }
+
+    private void requireNotCancelled() {
+        if (cancellation != null) {
+            throw new RuleViolationException(TicketErrorCode.TICKET_ALREADY_CANCELLED,
+                    "티켓 " + describe() + ", " + cancellation.cancelledAt() + " " + cancellation.reason());
+        }
+    }
+
+    private String describe() {
+        return (id == null ? "(저장 전)" : id) + " " + number();
     }
 
     private static void requireSessions(List<TicketSession> sessions, Long seatId) {
