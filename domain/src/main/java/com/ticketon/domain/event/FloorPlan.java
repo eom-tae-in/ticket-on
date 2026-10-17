@@ -45,11 +45,12 @@ import java.util.Set;
  * 블록 이름을 고치면 표기만 따라 바뀌고(티켓은 하나도 손대지 않는다, docs/07 "티켓이 직접 갖는 것과 가리키기만 하는 것"), 블록을 옮기거나 돌려도,
  * 다른 좌석을 비활성화해도 번호는 그대로다.
  * <p>
- * 언제 무엇을 고칠 수 있는지는 아직 보지 않는다 — 판매 시작 뒤 티켓(예매 · 초대권, 취소 · 회수되지 않은 것)이 걸린 좌석은 옮기거나 지울 수 없고
- * 티켓이 있는 구역은 지울 수 없다(docs/04 "예매가 열린 뒤(판매 중) 수정 범위", #64). 판매가 끝나면 도면은 고정된다
- * ({@link EventEditTarget#FLOOR_PLAN}, {@link Event#requireEditable}). 팔린 좌석이 있는 블록의
- * 이름을 바꾸면 "예매자에게 알릴까요?" 창을 띄운다(#110). 이 확인은 부르는 쪽이 한다. 지운 블록 · 좌석 · 구역을 기록으로 남기는 일은 저장소가 한다
- * (#42, #43 — 취소 · 회수된 티켓은 원래 좌석을 그대로 가리킨다).
+ * 언제 무엇을 고칠 수 있는지는 도면이 아니라 행사 상태가 정한다 — 구역을 더하고 고치고 지우는 위저드 3단계 저장은 행사가 바뀌는 항목마다 수정 범위를
+ * 확인한 뒤 도면을 고친다({@link Event#addZone}, {@link Event#changeZone}, {@link Event#removeZone}). 판매가 끝나면 도면은 고정된다
+ * ({@link EventEditTarget#FLOOR_PLAN}, {@link Event#requireEditable}). 판매 시작 뒤 티켓(예매 · 초대권, 취소 · 회수되지 않은 것)이 걸린 좌석은
+ * 옮기거나 지울 수 없고 티켓이 있는 구역은 지울 수 없는 규칙은 아직 보지 않는다(docs/04 "예매가 열린 뒤(판매 중) 수정 범위", #64). 팔린 좌석이 있는
+ * 블록의 이름을 바꾸면 "예매자에게 알릴까요?" 창을 띄운다(#110). 이 확인은 부르는 쪽이 한다. 지운 블록 · 좌석 · 구역을 기록으로 남기는 일은 저장소가
+ * 한다 — 구역은 지운 시각을 적고 줄을 남긴다(#42, 블록 · 좌석은 #43 — 취소 · 회수된 티켓은 원래 좌석 · 구역을 그대로 가리킨다).
  * <p>
  * 입구 목록은 같은 도면에 속하지만 판매가 끝난 뒤에도 고칠 수 있어 따로 둔다({@link EventEntrances}).
  * <p>
@@ -121,6 +122,67 @@ public final class FloorPlan {
         Zone zone = Zone.newQuantity(name, color, basePrice, capacity);
         zones.add(zone);
         return zone;
+    }
+
+    /**
+     * 그 종류의 구역을 더한다 — 위저드 3단계의 "구역 추가"(docs/02 "설정 흐름"). 지정형은 블록 배치 · 좌석 생성 · 구역 배정이 이어지고, 수량형은
+     * 정원 입력만으로 끝난다.
+     *
+     * @return 더한 구역(아직 id 없음)
+     * @throws RuleViolationException 수량형인데 정원이 없거나({@link EventErrorCode#ZONE_CAPACITY_REQUIRED}), 지정형인데 정원이 있거나
+     *                                ({@link EventErrorCode#ZONE_CAPACITY_ONLY_FOR_QUANTITY}), 같은 이름의 구역이 있거나
+     *                                ({@link EventErrorCode#ZONE_NAME_ALREADY_TAKEN}), 블록 이름으로 쓰고 있으면
+     *                                ({@link EventErrorCode#ZONE_NAME_TAKEN_BY_BLOCK})
+     */
+    public Zone addZone(ZoneKind kind, ZoneSettings settings) {
+        Objects.requireNonNull(kind, "kind");
+        Objects.requireNonNull(settings, "settings");
+        requireCapacityFits(kind, settings, null);
+        if (kind == ZoneKind.QUANTITY) {
+            return addQuantityZone(settings.name(), settings.color(), settings.basePrice(), settings.capacity());
+        }
+        return addDesignatedZone(settings.name(), settings.color(), settings.basePrice());
+    }
+
+    /**
+     * 구역 한 줄을 새 칸으로 고치면 바뀌는 항목 — 상태별 수정 범위 표의 단위로 나눈다({@link ZoneSettings#changedEditTargets}). 아무것도 바꾸지
+     * 않는다 — 부르는 쪽이 바뀌는 항목마다 수정 범위를 확인한 뒤 {@link #changeZone}을 부른다.
+     *
+     * @return 바뀌는 항목. 바뀌는 것이 없으면 비어 있다
+     * @throws NotFoundException      도면에 없는 구역이면({@link EventErrorCode#ZONE_NOT_FOUND})
+     * @throws RuleViolationException 수량형인데 정원이 없거나({@link EventErrorCode#ZONE_CAPACITY_REQUIRED}), 지정형인데 정원이 있으면
+     *                                ({@link EventErrorCode#ZONE_CAPACITY_ONLY_FOR_QUANTITY})
+     */
+    public Set<EventEditTarget> changedEditTargets(long zoneId, ZoneSettings newSettings) {
+        Objects.requireNonNull(newSettings, "newSettings");
+        Zone zone = zone(zoneId);
+        requireCapacityFits(zone.kind(), newSettings, zoneId);
+        return zone.settings().changedEditTargets(newSettings);
+    }
+
+    /**
+     * 구역 한 줄을 새 칸으로 고친다 — 위저드 3단계에서 구역 한 줄을 저장할 때 칸을 모두 보낸다. 종류는 바꾸지 않는다({@link Zone}). 하나라도
+     * 막히면 아무것도 바꾸지 않는다.
+     *
+     * @return 바뀌었는지 — 지금과 같으면 false
+     * @throws NotFoundException      도면에 없는 구역이면({@link EventErrorCode#ZONE_NOT_FOUND})
+     * @throws RuleViolationException 수량형인데 정원이 없거나({@link EventErrorCode#ZONE_CAPACITY_REQUIRED}), 지정형인데 정원이 있거나
+     *                                ({@link EventErrorCode#ZONE_CAPACITY_ONLY_FOR_QUANTITY}), 다른 구역이 쓰는 이름이거나
+     *                                ({@link EventErrorCode#ZONE_NAME_ALREADY_TAKEN}), 블록 이름으로 쓰고 있으면
+     *                                ({@link EventErrorCode#ZONE_NAME_TAKEN_BY_BLOCK})
+     */
+    public boolean changeZone(long zoneId, ZoneSettings newSettings) {
+        Objects.requireNonNull(newSettings, "newSettings");
+        Zone zone = zone(zoneId);
+        requireCapacityFits(zone.kind(), newSettings, zoneId);
+        requireZoneNameAvailable(newSettings.name(), zone);
+        boolean changed = zone.rename(newSettings.name());
+        changed |= zone.changeColor(newSettings.color());
+        changed |= zone.changeBasePrice(newSettings.basePrice());
+        if (newSettings.capacity() != null) {
+            changed |= zone.changeCapacity(newSettings.capacity());
+        }
+        return changed;
     }
 
     /**
@@ -422,6 +484,17 @@ public final class FloorPlan {
         }
         if (isTakenByOtherBlock(name.value(), null)) {
             throw new RuleViolationException(EventErrorCode.ZONE_NAME_TAKEN_BY_BLOCK, "행사 " + eventId + ", 구역 이름 " + name.value());
+        }
+    }
+
+    /** 수량형은 정원이 있고 지정형은 없다 — 지정형의 자리는 배정한 좌석이다(docs/02 "설정 흐름"). */
+    private void requireCapacityFits(ZoneKind kind, ZoneSettings settings, Long zoneId) {
+        String detail = "행사 " + eventId + (zoneId == null ? ", 새 구역" : ", 구역 " + zoneId);
+        if (kind == ZoneKind.QUANTITY && settings.capacity() == null) {
+            throw new RuleViolationException(EventErrorCode.ZONE_CAPACITY_REQUIRED, detail);
+        }
+        if (kind == ZoneKind.DESIGNATED && settings.capacity() != null) {
+            throw new RuleViolationException(EventErrorCode.ZONE_CAPACITY_ONLY_FOR_QUANTITY, detail);
         }
     }
 

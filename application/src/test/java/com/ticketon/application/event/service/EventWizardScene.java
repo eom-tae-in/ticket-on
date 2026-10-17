@@ -10,7 +10,9 @@ import com.ticketon.common.KoreanTime;
 import com.ticketon.common.MutableClock;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
+import com.ticketon.domain.event.Event;
 import com.ticketon.domain.event.EventPublicContact;
+import com.ticketon.domain.event.EventStatus;
 import com.ticketon.domain.event.EventTitle;
 import com.ticketon.domain.event.EventType;
 import com.ticketon.domain.event.Venue;
@@ -19,6 +21,7 @@ import com.ticketon.domain.organizer.OrganizerStaff;
 import com.ticketon.domain.organizer.OrganizerStatus;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 행사 만들기 · 위저드 단계 저장 · 조회 유스케이스 테스트가 함께 쓰는 장면 — docs/15의 두 주최자와 세 사람.
@@ -57,6 +60,9 @@ final class EventWizardScene {
     final FakeEventCategoryRepository categoryRepository = new FakeEventCategoryRepository();
     final FakeEventPasswordHashPort passwordHashPort = new FakeEventPasswordHashPort();
     final FakeEventPosterStorage posterStorage = new FakeEventPosterStorage();
+    final FakeFloorPlanRepository floorPlanRepository = new FakeFloorPlanRepository();
+    final FakeEventEntranceRepository entranceRepository = new FakeEventEntranceRepository();
+    final RecordingEventPublisher eventPublisher = new RecordingEventPublisher();
     final RecordingStaffOperationRecordRepository recordRepository = new RecordingStaffOperationRecordRepository();
     final FixedTokenGenerator tokenGenerator = new FixedTokenGenerator(FIRST_ADDRESS, SECOND_ADDRESS);
     final CheckStaffPermissionService checkStaffPermissionService =
@@ -135,6 +141,53 @@ final class EventWizardScene {
     UploadEventPosterService uploadEventPosterService(TokenGenerator posterTokenGenerator) {
         return new UploadEventPosterService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
                 organizerRepository, eventRepository, posterStorage, posterTokenGenerator, clock);
+    }
+
+    AddZoneService addZoneService() {
+        return new AddZoneService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, floorPlanRepository, eventPublisher, clock);
+    }
+
+    ChangeZoneService changeZoneService() {
+        return new ChangeZoneService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, floorPlanRepository, eventPublisher, clock);
+    }
+
+    RemoveZoneService removeZoneService() {
+        return new RemoveZoneService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, floorPlanRepository, eventPublisher, clock);
+    }
+
+    GetEventZonesService getEventZonesService() {
+        return new GetEventZonesService(checkStaffPermissionService, eventRepository, floorPlanRepository);
+    }
+
+    AddEntranceService addEntranceService() {
+        return new AddEntranceService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, entranceRepository, clock);
+    }
+
+    RenameEntranceService renameEntranceService() {
+        return new RenameEntranceService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, entranceRepository, clock);
+    }
+
+    RemoveEntranceService removeEntranceService() {
+        return new RemoveEntranceService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, entranceRepository, clock);
+    }
+
+    GetEventEntrancesService getEventEntrancesService() {
+        return new GetEventEntrancesService(checkStaffPermissionService, eventRepository, entranceRepository);
+    }
+
+    /** 저장된 그 행사를 그 상태로 바꿔 둔다 — 판매를 시작한 뒤의 수정 범위를 보려고. 작성 중 · 판매 대기가 아니면 예매가 열렸던 것으로 둔다. */
+    void moveEventTo(long eventId, EventStatus status) {
+        Event event = eventRepository.findById(eventId).orElseThrow();
+        boolean beforeOpening = status == EventStatus.DRAFT || status == EventStatus.AWAITING_OPEN;
+        eventRepository.store(Event.restore(eventId, event.organizerId(), event.publicAddress(), event.basicInformation(),
+                event.poster().orElse(null), event.visibility(), event.bookingSettings(), event.cancellationPolicy(), status,
+                beforeOpening ? null : APPROVED_AT, List.of(), event.wizardProgress(), event.lastModifiedAt()));
     }
 
     GetEventPosterFileService getEventPosterFileService() {
