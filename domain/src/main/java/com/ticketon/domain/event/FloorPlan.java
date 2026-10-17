@@ -4,11 +4,15 @@ import com.ticketon.domain.error.NotFoundException;
 import com.ticketon.domain.error.RuleViolationException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * 도면 — 극장이 어떻게 생겼는가(docs/02 "두 개의 축", docs/14 "1층 — 도면"). 구역({@link Zone}), 블록({@link SeatBlock})과 그 안의 좌석
@@ -45,18 +49,22 @@ import java.util.Set;
  * 블록 이름을 고치면 표기만 따라 바뀌고(티켓은 하나도 손대지 않는다, docs/07 "티켓이 직접 갖는 것과 가리키기만 하는 것"), 블록을 옮기거나 돌려도,
  * 다른 좌석을 비활성화해도 번호는 그대로다.
  * <p>
- * 언제 무엇을 고칠 수 있는지는 도면이 아니라 행사 상태가 정한다 — 구역을 더하고 고치고 지우는 위저드 3단계 저장은 행사가 바뀌는 항목마다 수정 범위를
- * 확인한 뒤 도면을 고친다({@link Event#addZone}, {@link Event#changeZone}, {@link Event#removeZone}). 판매가 끝나면 도면은 고정된다
- * ({@link EventEditTarget#FLOOR_PLAN}, {@link Event#requireEditable}). 판매 시작 뒤 티켓(예매 · 초대권, 취소 · 회수되지 않은 것)이 걸린 좌석은
+ * 언제 무엇을 고칠 수 있는지는 도면이 아니라 행사 상태가 정한다 — 구역 · 블록 · 좌석 · 무대를 고치는 위저드 3단계 저장은 행사가 바뀌는 항목마다
+ * 수정 범위를 확인한 뒤 도면을 고친다({@link Event#addZone}, {@link Event#addBlock}, {@link Event#assignSeatsToZone} 등). 이름을 바꾸고 옮기고
+ * 돌리고 좌석을 고치고 무대를 옮기는 일은 바뀌는 것이 있을 때만 그 확인을 부른다 — 확인을 받는 고치기는 같은 이름의 package-private 메서드다.
+ * 판매가 끝나면 도면은 고정된다({@link EventEditTarget#FLOOR_PLAN}, {@link Event#requireEditable}). 판매 시작 뒤 티켓(예매 · 초대권, 취소 · 회수되지 않은 것)이 걸린 좌석은
  * 옮기거나 지울 수 없고 티켓이 있는 구역은 지울 수 없는 규칙은 아직 보지 않는다(docs/04 "예매가 열린 뒤(판매 중) 수정 범위", #64). 팔린 좌석이 있는
  * 블록의 이름을 바꾸면 "예매자에게 알릴까요?" 창을 띄운다(#110). 이 확인은 부르는 쪽이 한다. 지운 블록 · 좌석 · 구역을 기록으로 남기는 일은 저장소가
- * 한다 — 구역은 지운 시각을 적고 줄을 남긴다(#42, 블록 · 좌석은 #43 — 취소 · 회수된 티켓은 원래 좌석 · 구역을 그대로 가리킨다).
+ * 한다 — 구역 · 블록 · 좌석은 지운 시각을 적고 줄을 남긴다(취소 · 회수된 티켓은 원래 좌석 · 구역을 그대로 가리킨다).
  * <p>
  * 입구 목록은 같은 도면에 속하지만 판매가 끝난 뒤에도 고칠 수 있어 따로 둔다({@link EventEntrances}).
  * <p>
  * 저장소에서 다시 읽을 때는 {@link #restore}를 쓴다. 구역 · 블록 · 좌석을 id로 고치는 일은 저장한 뒤에 한다.
  */
 public final class FloorPlan {
+
+    /** 바꾸기 전 확인이 없는 고치기 — 도면만 다룰 때(행사의 수정 범위를 보지 않을 때) 쓴다. */
+    private static final Runnable NO_CHECK = () -> { };
 
     private final long eventId;
     private final List<Zone> zones;
@@ -268,8 +276,22 @@ public final class FloorPlan {
      *                                ({@link EventErrorCode#BLOCK_NAME_TAKEN_BY_ZONE})
      */
     public boolean renameBlock(long blockId, BlockName requestedName) {
+        return renameBlock(blockId, requestedName, NO_CHECK);
+    }
+
+    /**
+     * {@link #renameBlock(long, BlockName)}와 같되, 이름이 바뀔 때만 바꾸기 전에 {@code beforeChange}를 부른다 — 행사가 수정 범위를 확인하는 자리다
+     * ({@link Event#renameBlock}). 지금과 같은 이름이면 부르지 않는다. 확인이 막으면 아무것도 바꾸지 않는다.
+     */
+    boolean renameBlock(long blockId, BlockName requestedName, Runnable beforeChange) {
         SeatBlock block = block(blockId);
-        return block.rename(resolveBlockName(requestedName, block));
+        BlockName newName = requestedName == null ? automaticBlockName(block) : requestedName;
+        if (newName.equals(block.name())) {
+            return false;
+        }
+        beforeChange.run();
+        requireBlockNameAvailable(newName, block);
+        return block.rename(newName);
     }
 
     /**
@@ -279,7 +301,18 @@ public final class FloorPlan {
      * @throws NotFoundException 도면에 없는 블록이면({@link EventErrorCode#BLOCK_NOT_FOUND})
      */
     public boolean moveBlock(long blockId, CanvasPoint newPosition) {
-        return block(blockId).moveTo(newPosition);
+        return moveBlock(blockId, newPosition, NO_CHECK);
+    }
+
+    /** {@link #moveBlock(long, CanvasPoint)}와 같되, 위치가 바뀔 때만 바꾸기 전에 {@code beforeChange}를 부른다({@link Event#moveBlock}). */
+    boolean moveBlock(long blockId, CanvasPoint newPosition, Runnable beforeChange) {
+        Objects.requireNonNull(newPosition, "newPosition");
+        SeatBlock block = block(blockId);
+        if (newPosition.equals(block.position())) {
+            return false;
+        }
+        beforeChange.run();
+        return block.moveTo(newPosition);
     }
 
     /**
@@ -289,13 +322,24 @@ public final class FloorPlan {
      * @throws NotFoundException 도면에 없는 블록이면({@link EventErrorCode#BLOCK_NOT_FOUND})
      */
     public boolean rotateBlock(long blockId, BlockAngle newAngle) {
-        return block(blockId).rotateTo(newAngle);
+        return rotateBlock(blockId, newAngle, NO_CHECK);
+    }
+
+    /** {@link #rotateBlock(long, BlockAngle)}와 같되, 각도가 바뀔 때만 바꾸기 전에 {@code beforeChange}를 부른다({@link Event#rotateBlock}). */
+    boolean rotateBlock(long blockId, BlockAngle newAngle, Runnable beforeChange) {
+        Objects.requireNonNull(newAngle, "newAngle");
+        SeatBlock block = block(blockId);
+        if (newAngle.equals(block.angle())) {
+            return false;
+        }
+        beforeChange.run();
+        return block.rotateTo(newAngle);
     }
 
     /**
      * 블록을 그 안의 좌석과 함께 지운다. 티켓이 걸린 좌석이 있는 블록을 지울 수 있는지는 부르는 쪽이 본다(#64).
      *
-     * @return 지운 블록 — 좌석이 함께 빠졌음을 재고에 알리는 데 쓴다(#43)
+     * @return 지운 블록 — 좌석이 함께 빠졌음을 재고에 알리는 데 쓴다({@link SeatBlockRemoved})
      * @throws NotFoundException 도면에 없는 블록이면({@link EventErrorCode#BLOCK_NOT_FOUND})
      */
     public SeatBlock removeBlock(long blockId) {
@@ -312,11 +356,21 @@ public final class FloorPlan {
      * @throws RuleViolationException 수량형 구역이면({@link EventErrorCode#QUANTITY_ZONE_HAS_NO_SEATS})
      */
     public boolean assignSeatsToZone(Set<Long> seatIds, long zoneId) {
+        return assignSeatsToZone(seatIds, zoneId, NO_CHECK);
+    }
+
+    /**
+     * {@link #assignSeatsToZone(Set, long)}와 같되, 하나라도 바뀔 때만 바꾸기 전에 {@code beforeChange}를 부른다({@link Event#assignSeatsToZone}).
+     * 없는 구역 · 좌석은 그 전에 막는다.
+     */
+    boolean assignSeatsToZone(Set<Long> seatIds, long zoneId, Runnable beforeChange) {
         Zone zone = zone(zoneId);
-        if (!zone.takesSeats()) {
-            throw new RuleViolationException(EventErrorCode.QUANTITY_ZONE_HAS_NO_SEATS, "행사 " + eventId + ", 구역 " + zoneId);
-        }
-        return changeEach(requireSeats(seatIds), seat -> seat.assignTo(zoneId));
+        return changeEach(requireSeats(seatIds), seat -> !seat.isIn(zoneId), () -> {
+            beforeChange.run();
+            if (!zone.takesSeats()) {
+                throw new RuleViolationException(EventErrorCode.QUANTITY_ZONE_HAS_NO_SEATS, "행사 " + eventId + ", 구역 " + zoneId);
+            }
+        }, seat -> seat.assignTo(zoneId));
     }
 
     /**
@@ -326,7 +380,12 @@ public final class FloorPlan {
      * @throws NotFoundException 도면에 없는 좌석이면({@link EventErrorCode#SEAT_NOT_FOUND})
      */
     public boolean unassignSeats(Set<Long> seatIds) {
-        return changeEach(requireSeats(seatIds), Seat::unassign);
+        return unassignSeats(seatIds, NO_CHECK);
+    }
+
+    /** {@link #unassignSeats(Set)}와 같되, 하나라도 바뀔 때만 바꾸기 전에 {@code beforeChange}를 부른다({@link Event#unassignSeats}). */
+    boolean unassignSeats(Set<Long> seatIds, Runnable beforeChange) {
+        return changeEach(requireSeats(seatIds), seat -> seat.zoneId().isPresent(), beforeChange, Seat::unassign);
     }
 
     /**
@@ -336,8 +395,14 @@ public final class FloorPlan {
      * @throws NotFoundException 도면에 없는 좌석이면({@link EventErrorCode#SEAT_NOT_FOUND})
      */
     public boolean changeSeatAttribute(Set<Long> seatIds, SeatAttribute attribute) {
+        return changeSeatAttribute(seatIds, attribute, NO_CHECK);
+    }
+
+    /** {@link #changeSeatAttribute(Set, SeatAttribute)}와 같되, 하나라도 바뀔 때만 바꾸기 전에 {@code beforeChange}를 부른다({@link Event#changeSeatAttribute}). */
+    boolean changeSeatAttribute(Set<Long> seatIds, SeatAttribute attribute, Runnable beforeChange) {
         Objects.requireNonNull(attribute, "attribute");
-        return changeEach(requireSeats(seatIds), seat -> seat.changeAttribute(attribute));
+        return changeEach(requireSeats(seatIds), seat -> seat.attribute() != attribute, beforeChange,
+                seat -> seat.changeAttribute(attribute));
     }
 
     /**
@@ -348,7 +413,7 @@ public final class FloorPlan {
      * @throws NotFoundException 도면에 없는 좌석이면({@link EventErrorCode#SEAT_NOT_FOUND})
      */
     public boolean deactivateSeats(Set<Long> seatIds) {
-        return changeEach(requireSeats(seatIds), seat -> seat.changeActive(false));
+        return changeSeatActivation(seatIds, false, NO_CHECK);
     }
 
     /**
@@ -358,7 +423,15 @@ public final class FloorPlan {
      * @throws NotFoundException 도면에 없는 좌석이면({@link EventErrorCode#SEAT_NOT_FOUND})
      */
     public boolean activateSeats(Set<Long> seatIds) {
-        return changeEach(requireSeats(seatIds), seat -> seat.changeActive(true));
+        return changeSeatActivation(seatIds, true, NO_CHECK);
+    }
+
+    /**
+     * 좌석들을 켜거나 끈다({@link #activateSeats}, {@link #deactivateSeats}). 하나라도 바뀔 때만 바꾸기 전에 {@code beforeChange}를 부른다
+     * ({@link Event#changeSeatActivation}).
+     */
+    boolean changeSeatActivation(Set<Long> seatIds, boolean active, Runnable beforeChange) {
+        return changeEach(requireSeats(seatIds), seat -> seat.isActive() != active, beforeChange, seat -> seat.changeActive(active));
     }
 
     /**
@@ -367,10 +440,16 @@ public final class FloorPlan {
      * @return 바뀌었는지 — 지금과 같으면 false
      */
     public boolean placeStage(CanvasPoint position) {
+        return placeStage(position, NO_CHECK);
+    }
+
+    /** {@link #placeStage(CanvasPoint)}와 같되, 위치가 바뀔 때만 바꾸기 전에 {@code beforeChange}를 부른다({@link Event#placeStage}). */
+    boolean placeStage(CanvasPoint position, Runnable beforeChange) {
         Objects.requireNonNull(position, "position");
         if (position.equals(stagePosition)) {
             return false;
         }
+        beforeChange.run();
         stagePosition = position;
         return true;
     }
@@ -506,17 +585,40 @@ public final class FloorPlan {
         return zones.stream().filter(zone -> zone != excluded).anyMatch(zone -> zone.name().value().equals(name));
     }
 
+    /**
+     * 그 좌석들 — 하나라도 도면에 없으면 막는다. 좌석 id로 찾는 표를 한 번 만들어 쓴다 — 블록 하나가 2,500석까지라 좌석마다 도면 전체를 훑으면
+     * 묶음이 커질수록 느려진다.
+     */
     private List<Seat> requireSeats(Set<Long> seatIds) {
         Objects.requireNonNull(seatIds, "seatIds");
-        return seatIds.stream().map(seatId -> seat(Objects.requireNonNull(seatId, "seatId"))).toList();
+        Map<Long, Seat> seatsById = new HashMap<>();
+        for (Seat seat : allSeats()) {
+            seat.id().ifPresent(seatId -> seatsById.put(seatId, seat));
+        }
+        List<Seat> seats = new ArrayList<>(seatIds.size());
+        for (Long seatId : seatIds) {
+            Seat seat = seatsById.get(Objects.requireNonNull(seatId, "seatId"));
+            if (seat == null) {
+                throw new NotFoundException(EventErrorCode.SEAT_NOT_FOUND, "행사 " + eventId + ", 좌석 " + seatId);
+            }
+            seats.add(seat);
+        }
+        return seats;
     }
 
-    private static boolean changeEach(List<Seat> seats, SeatChange change) {
-        boolean changed = false;
-        for (Seat seat : seats) {
-            changed |= change.apply(seat);
+    /**
+     * 좌석마다 바뀌는지 보고, 하나라도 바뀌면 {@code beforeChange}를 부른 뒤 바뀌는 좌석만 바꾼다. 확인이 막으면 아무것도 바꾸지 않는다.
+     *
+     * @return 하나라도 바뀌었는지
+     */
+    private static boolean changeEach(List<Seat> seats, Predicate<Seat> changes, Runnable beforeChange, Consumer<Seat> change) {
+        List<Seat> changing = seats.stream().filter(changes).toList();
+        if (changing.isEmpty()) {
+            return false;
         }
-        return changed;
+        beforeChange.run();
+        changing.forEach(change);
+        return true;
     }
 
     private List<Seat> allSeats() {
@@ -571,12 +673,5 @@ public final class FloorPlan {
         if (!saved) {
             throw new IllegalArgumentException("저장소에서 읽은 도면의 " + what + "에 id가 없습니다");
         }
-    }
-
-    @FunctionalInterface
-    private interface SeatChange {
-
-        /** @return 바뀌었는지 */
-        boolean apply(Seat seat);
     }
 }

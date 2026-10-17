@@ -162,6 +162,55 @@ final class EventWizardScene {
         return new GetEventZonesService(checkStaffPermissionService, eventRepository, floorPlanRepository);
     }
 
+    GetEventFloorPlanService getEventFloorPlanService() {
+        return new GetEventFloorPlanService(checkStaffPermissionService, eventRepository, floorPlanRepository);
+    }
+
+    AddSeatBlockService addSeatBlockService() {
+        return new AddSeatBlockService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, floorPlanRepository, eventPublisher, clock);
+    }
+
+    RenameSeatBlockService renameSeatBlockService() {
+        return new RenameSeatBlockService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, floorPlanRepository, clock);
+    }
+
+    MoveSeatBlockService moveSeatBlockService() {
+        return new MoveSeatBlockService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, floorPlanRepository, clock);
+    }
+
+    RotateSeatBlockService rotateSeatBlockService() {
+        return new RotateSeatBlockService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, floorPlanRepository, clock);
+    }
+
+    RemoveSeatBlockService removeSeatBlockService() {
+        return new RemoveSeatBlockService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, floorPlanRepository, eventPublisher, clock);
+    }
+
+    AssignSeatsToZoneService assignSeatsToZoneService() {
+        return new AssignSeatsToZoneService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, floorPlanRepository, clock);
+    }
+
+    ChangeSeatAttributeService changeSeatAttributeService() {
+        return new ChangeSeatAttributeService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, floorPlanRepository, clock);
+    }
+
+    ChangeSeatActivationService changeSeatActivationService() {
+        return new ChangeSeatActivationService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, floorPlanRepository, clock);
+    }
+
+    PlaceStageService placeStageService() {
+        return new PlaceStageService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, floorPlanRepository, clock);
+    }
+
     AddEntranceService addEntranceService() {
         return new AddEntranceService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
                 organizerRepository, eventRepository, entranceRepository, clock);

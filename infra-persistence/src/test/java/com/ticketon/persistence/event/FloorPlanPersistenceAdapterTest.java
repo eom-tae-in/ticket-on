@@ -6,9 +6,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
-import com.ticketon.domain.event.BlockAngle;
-import com.ticketon.domain.event.BlockName;
-import com.ticketon.domain.event.BlockSize;
 import com.ticketon.domain.event.CanvasPoint;
 import com.ticketon.domain.event.Event;
 import com.ticketon.domain.event.EventBasicInformation;
@@ -45,8 +42,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 진짜 PostgreSQL에 마이그레이션(V22 구역 · 무대 위치)을 올리고 도면의 구역 저장(새 구역 id · 더한 순서), 다시 읽기, 고쳐 저장하기, 지운 시각을
- * 적어 남기기, 지운 구역의 이름 다시 쓰기, 무대 위치, 행사끼리 나뉘는지, 지우지 않은 구역끼리의 이름 유일 색인을 본다. 극단 열두달(docs/15
- * 박정훈)의 봄 정기공연 — "R석, 5만원"(docs/02 "두 개의 축")과 "스탠딩A 300"(docs/02 "구역"). Docker가 없는 환경에서는 건너뛴다.
+ * 적어 남기기, 지운 구역의 이름 다시 쓰기, 무대 위치, 행사끼리 나뉘는지, 지우지 않은 구역끼리의 이름 유일 색인을 본다. 블록 · 좌석(V23)은
+ * {@link FloorPlanBlockSeatPersistenceTest}가 본다. 극단 열두달(docs/15 박정훈)의 봄 정기공연 — "R석, 5만원"(docs/02 "두 개의 축")과 "스탠딩A
+ * 300"(docs/02 "구역"). Docker가 없는 환경에서는 건너뛴다.
  */
 @Testcontainers(disabledWithoutDocker = true)
 @DisplayName("행사 도면 저장소 — 구역 · 무대 위치 (진짜 PostgreSQL)")
@@ -250,16 +248,6 @@ class FloorPlanPersistenceAdapterTest {
 
         assertThat(adapter.findByEventId(springPlay).zones()).extracting(zone -> zone.name().value()).containsExactly("R석");
         assertThat(adapter.findByEventId(encore).zones()).isEmpty();
-    }
-
-    @Test
-    @DisplayName("블록이 있는 도면은 아직 저장하지 않는다 (#43)")
-    void rejectsBlocks() {
-        FloorPlan floorPlan = adapter.findByEventId(springPlay);
-        floorPlan.addBlock(BlockName.of("1층"), BlockSize.of(5, 10), CanvasPoint.ORIGIN, BlockAngle.NONE);
-
-        assertThatIllegalArgumentException().isThrownBy(() -> adapter.save(floorPlan, CREATED_AT));
-        assertThat(dsl.fetchCount(EVENT_ZONE)).isZero();
     }
 
     @Test
