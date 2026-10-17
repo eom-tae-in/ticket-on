@@ -6,8 +6,11 @@
  * <ul>
  *   <li><b>지정형</b> — 회차 × 좌석 판매 상태({@link com.ticketon.domain.inventory.SeatStock}). 상태 다섯 가지와 바뀌는 길은
  *       {@link com.ticketon.domain.inventory.SeatSaleStatus}의 표 하나에 있다.</li>
+ *   <li><b>수량형</b> — 회차 × 구역 정원 · 판매 수 · 선점 수 · 관계자 확보 수 · 초대 발권 수({@link com.ticketon.domain.inventory.QuantityZoneStock}).
+ *       수량형의 판매 제외는 "관계자용 10석 확보"다(docs/09).</li>
  * </ul>
- * '매진'은 상태가 아니라 잔여가 0인 순간의 표시라 저장하지 않는다(docs/04 "'매진'은 상태가 아닙니다").
+ * '매진'은 상태가 아니라 잔여가 0인 순간의 표시라 저장하지 않는다(docs/04 "'매진'은 상태가 아닙니다"). 매진 · 매진 임박은
+ * {@link com.ticketon.domain.inventory.RemainingSeats}가 계산한다.
  * <p>
  * 순수 자바만 쓴다 (Spring·jOOQ 금지). 규칙은 이 패키지의 객체가 가진다. 층 ②라 event(①)의 회차 상태 · 도면을 쓸 수 있고, event는 이 패키지를
  * 부르지 않는다 — 도면 · 일정이 바뀌면 event가 알리고(#41 · #42 · #43) 재고가 듣는다(#54). 같은 층의 pricing과는 서로 부르지 않는다.
