@@ -39,6 +39,15 @@ import java.util.Set;
  *       때)이고, 날짜가 없으면 접지 않는다: {@code domain.event.DraftEventNudges#isFolded}.</li>
  *   <li>확인 필요 (#45) — 판매 중단 행사는 내 행사 목록의 진행 중 구역에 둔다(docs/13의 진행 중 목록에 이름이 없음):
  *       {@code domain.event.EventListSection}.</li>
+ *   <li>확인 필요 (#48) — 정액 쿠폰처럼 한 금액을 티켓마다 비례로 나누고 남은 원을 주는 순서(버린 끝자리가 큰 티켓부터 1원씩, 같으면 앞 순번부터):
+ *       {@code domain.pricing.Money#splitProportionally}.</li>
+ *   <li>확인 필요 (#48) — 금액이 바뀌지 않는 퍼센트(0% 할인)는 100원 단위로 내리지 않는다: {@code domain.pricing.Money#percentRoundedDown}.</li>
+ *   <li>확인 필요 (#48) — 조기예매와 쿠폰 중 유리한 하나는 티켓마다 고른다(docs/08 "새 티켓에 쿠폰을 적용하는 법"의 "평소처럼 유리한 하나", "부분
+ *       변경"에서 한 예매 건에 쿠폰 티켓과 조기예매 티켓이 함께 남음). 문서에 없는 부분: 정액 쿠폰은 먼저 예매 건의 모든 티켓에 기본 가격 비례로 나누고
+ *       그 몫으로 장마다 비교하며, 조기예매를 고른 장의 몫은 다른 장으로 옮기지 않고 쓰지 않는다(docs/08 "기존 티켓에 나눠 둔 금액 그대로"와 같은
+ *       방식). 같으면 쿠폰을 쓰지 않는 쪽(조기예매 또는 정가): {@code domain.pricing.BookingPrice#calculate}.</li>
+ *   <li>확인 필요 (#48) — 정액 할인이 가격보다 크면 0원까지만 깎고, 정액 쿠폰은 예매 건 합계까지만 나눈다:
+ *       {@code domain.pricing.Discount.FixedAmount}, {@code domain.pricing.BookingPrice}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
