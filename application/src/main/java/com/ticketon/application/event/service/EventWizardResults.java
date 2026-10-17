@@ -1,6 +1,7 @@
 package com.ticketon.application.event.service;
 
 import com.ticketon.application.event.port.in.EventWizardResult;
+import com.ticketon.application.event.port.out.EventPosterStoragePort;
 import com.ticketon.domain.event.BookingSettings;
 import com.ticketon.domain.event.CancellationPolicy;
 import com.ticketon.domain.event.Event;
@@ -8,15 +9,16 @@ import com.ticketon.domain.event.EventBasicInformation;
 import com.ticketon.domain.event.EventVisibilitySetting;
 import com.ticketon.domain.event.TicketsPerPersonLimit;
 
-/** 행사를 위저드 값(Result)으로 옮긴다 — 도메인 객체를 포트 밖으로 그대로 내보내지 않는다. */
+/** 행사를 위저드 값(Result)으로 옮긴다 — 도메인 객체를 포트 밖으로 그대로 내보내지 않는다. 포스터는 파일 저장소의 공개 주소로 옮긴다. */
 final class EventWizardResults {
 
     private EventWizardResults() {
     }
 
-    static EventWizardResult of(Event event) {
+    static EventWizardResult of(Event event, EventPosterStoragePort posterStorage) {
         return new EventWizardResult(event.id().orElseThrow(), event.status(), event.wizardProgress(), event.lastModifiedAt(),
-                event.publicAddress().value(), basicInformationOf(event.basicInformation()),
+                event.publicAddress().value(), event.poster().map(posterStorage::publicUrlOf).orElse(null),
+                basicInformationOf(event.basicInformation()),
                 bookingStepOf(event.visibility(), event.bookingSettings(), event.cancellationPolicy()));
     }
 

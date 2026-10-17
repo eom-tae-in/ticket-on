@@ -5,6 +5,7 @@ import com.ticketon.application.event.port.in.EventWizardResult;
 import com.ticketon.application.event.port.in.SaveEventBookingSettingsCommand;
 import com.ticketon.application.event.port.in.SaveEventBookingSettingsUseCase;
 import com.ticketon.application.event.port.out.EventPasswordHashPort;
+import com.ticketon.application.event.port.out.EventPosterStoragePort;
 import com.ticketon.application.event.port.out.EventRepository;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionQuery;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionUseCase;
@@ -42,18 +43,20 @@ public class SaveEventBookingSettingsService implements SaveEventBookingSettings
     private final OrganizerRepository organizerRepository;
     private final EventRepository eventRepository;
     private final EventPasswordHashPort passwordHashPort;
+    private final EventPosterStoragePort posterStorage;
     private final Clock clock;
 
     public SaveEventBookingSettingsService(CheckStaffPermissionUseCase checkStaffPermissionUseCase,
             RecordStaffOperationUseCase recordStaffOperationUseCase, StaffAccountRepository staffAccountRepository,
             OrganizerRepository organizerRepository, EventRepository eventRepository, EventPasswordHashPort passwordHashPort,
-            Clock clock) {
+            EventPosterStoragePort posterStorage, Clock clock) {
         this.checkStaffPermissionUseCase = checkStaffPermissionUseCase;
         this.recordStaffOperationUseCase = recordStaffOperationUseCase;
         this.staffAccountRepository = staffAccountRepository;
         this.organizerRepository = organizerRepository;
         this.eventRepository = eventRepository;
         this.passwordHashPort = passwordHashPort;
+        this.posterStorage = posterStorage;
         this.clock = clock;
     }
 
@@ -73,7 +76,7 @@ public class SaveEventBookingSettingsService implements SaveEventBookingSettings
             recordStaffOperationUseCase.record(new RecordStaffOperationCommand(permission, StaffOperationTargetKind.EVENT,
                     command.eventId(), OPERATION_SUMMARY, now));
         }
-        return EventWizardResults.of(event);
+        return EventWizardResults.of(event, posterStorage);
     }
 
     /** 새로 정한 암호의 해시 — 적지 않았거나 걸려 있던 암호를 다시 적었으면 null(걸려 있던 암호를 그대로 쓴다). */

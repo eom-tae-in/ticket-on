@@ -5,6 +5,7 @@ import com.ticketon.application.organizer.port.in.ActingStaff;
 import com.ticketon.application.organizer.service.CheckStaffPermissionService;
 import com.ticketon.application.organizer.service.RecordStaffOperationService;
 import com.ticketon.common.FixedTokenGenerator;
+import com.ticketon.common.TokenGenerator;
 import com.ticketon.common.KoreanTime;
 import com.ticketon.common.MutableClock;
 import com.ticketon.domain.account.AccountKind;
@@ -55,6 +56,7 @@ final class EventWizardScene {
     final FakeEventRepository eventRepository = new FakeEventRepository(rowLockLog);
     final FakeEventCategoryRepository categoryRepository = new FakeEventCategoryRepository();
     final FakeEventPasswordHashPort passwordHashPort = new FakeEventPasswordHashPort();
+    final FakeEventPosterStorage posterStorage = new FakeEventPosterStorage();
     final RecordingStaffOperationRecordRepository recordRepository = new RecordingStaffOperationRecordRepository();
     final FixedTokenGenerator tokenGenerator = new FixedTokenGenerator(FIRST_ADDRESS, SECOND_ADDRESS);
     final CheckStaffPermissionService checkStaffPermissionService =
@@ -112,21 +114,31 @@ final class EventWizardScene {
 
     CreateEventService createEventService() {
         return new CreateEventService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
-                organizerRepository, eventRepository, categoryRepository, tokenGenerator, clock);
+                organizerRepository, eventRepository, categoryRepository, posterStorage, tokenGenerator, clock);
     }
 
     SaveEventBasicInformationService saveEventBasicInformationService() {
         return new SaveEventBasicInformationService(checkStaffPermissionService, recordStaffOperationService,
-                staffAccountRepository, organizerRepository, eventRepository, categoryRepository, clock);
+                staffAccountRepository, organizerRepository, eventRepository, categoryRepository, posterStorage, clock);
     }
 
     SaveEventBookingSettingsService saveEventBookingSettingsService() {
         return new SaveEventBookingSettingsService(checkStaffPermissionService, recordStaffOperationService,
-                staffAccountRepository, organizerRepository, eventRepository, passwordHashPort, clock);
+                staffAccountRepository, organizerRepository, eventRepository, passwordHashPort, posterStorage, clock);
     }
 
     GetEventWizardService getEventWizardService() {
-        return new GetEventWizardService(checkStaffPermissionService, eventRepository);
+        return new GetEventWizardService(checkStaffPermissionService, eventRepository, posterStorage);
+    }
+
+    /** 포스터 열쇠는 넘긴 생성기로 붙인다 — 행사 공개 주소의 생성기와 따로 둔다. */
+    UploadEventPosterService uploadEventPosterService(TokenGenerator posterTokenGenerator) {
+        return new UploadEventPosterService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, posterStorage, posterTokenGenerator, clock);
+    }
+
+    GetEventPosterFileService getEventPosterFileService() {
+        return new GetEventPosterFileService(posterStorage);
     }
 
     GetEventCategoriesService getEventCategoriesService() {

@@ -8,7 +8,7 @@ import java.util.Optional;
 
 /**
  * 메모리 행사 저장소 — 표처럼 저장한 때의 값만 갖고, 읽을 때마다 새 객체로 되살린다(읽은 행사를 고쳐도 저장하지 않으면 남지 않는다). 행사 줄
- * 잠금을 잠금 기록에 남기고, 저장한 횟수를 센다.
+ * 잠금을 잠금 기록에 남기고, 저장한 횟수를 센다. 고쳐 저장하기를 실패하게 할 수 있다 — 저장이 되돌려질 때의 뒷정리를 보려고.
  */
 final class FakeEventRepository implements EventRepository {
 
@@ -16,6 +16,7 @@ final class FakeEventRepository implements EventRepository {
     private final RowLockLog rowLockLog;
     private long nextId = 1;
     private int saves;
+    private boolean failingSaves;
 
     FakeEventRepository(RowLockLog rowLockLog) {
         this.rowLockLog = rowLockLog;
@@ -54,8 +55,16 @@ final class FakeEventRepository implements EventRepository {
         if (!events.containsKey(id)) {
             throw new IllegalArgumentException("없는 행사입니다: " + id);
         }
+        if (failingSaves) {
+            throw new IllegalStateException("저장하지 못했습니다(테스트가 실패하게 함): 행사 " + id);
+        }
         events.put(id, copyOf(event, id));
         saves++;
+    }
+
+    /** 이후의 고쳐 저장하기를 실패하게 한다 — 트랜잭션이 되돌려지는 것을 흉내 낸다. */
+    void failSaves() {
+        failingSaves = true;
     }
 
     /** 고쳐 저장한 횟수 — 같은 값을 다시 저장하면 늘지 않아야 한다. */

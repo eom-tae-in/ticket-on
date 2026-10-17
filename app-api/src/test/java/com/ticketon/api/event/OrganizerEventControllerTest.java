@@ -129,7 +129,7 @@ class OrganizerEventControllerTest {
     /** 처음 값 그대로인 봄 정기공연의 위저드 값 — 행사 7, 2026-10-15 10:00(한국 시각)에 만들었다. */
     private static EventWizardResult springPlayResult() {
         return new EventWizardResult(7, EventStatus.DRAFT, EventWizardStep.BASIC_INFORMATION,
-                Instant.parse("2026-10-15T01:00:00Z"), "Xb3kQ9-_mN2pL7vR4tY8wZ1aC5dE6fG0",
+                Instant.parse("2026-10-15T01:00:00Z"), "Xb3kQ9-_mN2pL7vR4tY8wZ1aC5dE6fG0", null,
                 new EventWizardResult.BasicInformation("2026 봄 정기공연 〈열두 번째 달〉", EventType.PERFORMANCE, "연극", null,
                         "극단 열두달이 2019년부터 해마다 올리는 봄 정기공연입니다.", "○○아트홀", "서울특별시 종로구 대학로 12",
                         "지하 1층, 주차 불가", "https://map.example/place/12", "twelve-months@example.com"),
@@ -144,7 +144,7 @@ class OrganizerEventControllerTest {
     private static final String SPRING_PLAY_RESPONSE = """
             {"eventId": 7, "status": "DRAFT",
              "wizardProgress": {"step": "BASIC_INFORMATION", "stepNumber": 1, "stepCount": 7},
-             "lastModifiedAt": "2026-10-15T10:00:00+09:00", "publicAddress": "Xb3kQ9-_mN2pL7vR4tY8wZ1aC5dE6fG0",
+             "lastModifiedAt": "2026-10-15T10:00:00+09:00", "publicAddress": "Xb3kQ9-_mN2pL7vR4tY8wZ1aC5dE6fG0", "posterUrl": null,
              "basicInformation": {"title": "2026 봄 정기공연 〈열두 번째 달〉", "type": "PERFORMANCE", "categoryName": "연극",
                                   "genreName": null, "introduction": "극단 열두달이 2019년부터 해마다 올리는 봄 정기공연입니다.",
                                   "venueName": "○○아트홀", "venueAddress": "서울특별시 종로구 대학로 12",

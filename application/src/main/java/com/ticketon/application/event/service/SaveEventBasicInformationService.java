@@ -5,6 +5,7 @@ import com.ticketon.application.event.port.in.EventWizardResult;
 import com.ticketon.application.event.port.in.SaveEventBasicInformationCommand;
 import com.ticketon.application.event.port.in.SaveEventBasicInformationUseCase;
 import com.ticketon.application.event.port.out.EventCategoryRepository;
+import com.ticketon.application.event.port.out.EventPosterStoragePort;
 import com.ticketon.application.event.port.out.EventRepository;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionQuery;
 import com.ticketon.application.organizer.port.in.CheckStaffPermissionUseCase;
@@ -44,18 +45,20 @@ public class SaveEventBasicInformationService implements SaveEventBasicInformati
     private final OrganizerRepository organizerRepository;
     private final EventRepository eventRepository;
     private final EventCategoryRepository categoryRepository;
+    private final EventPosterStoragePort posterStorage;
     private final Clock clock;
 
     public SaveEventBasicInformationService(CheckStaffPermissionUseCase checkStaffPermissionUseCase,
             RecordStaffOperationUseCase recordStaffOperationUseCase, StaffAccountRepository staffAccountRepository,
             OrganizerRepository organizerRepository, EventRepository eventRepository, EventCategoryRepository categoryRepository,
-            Clock clock) {
+            EventPosterStoragePort posterStorage, Clock clock) {
         this.checkStaffPermissionUseCase = checkStaffPermissionUseCase;
         this.recordStaffOperationUseCase = recordStaffOperationUseCase;
         this.staffAccountRepository = staffAccountRepository;
         this.organizerRepository = organizerRepository;
         this.eventRepository = eventRepository;
         this.categoryRepository = categoryRepository;
+        this.posterStorage = posterStorage;
         this.clock = clock;
     }
 
@@ -74,6 +77,6 @@ public class SaveEventBasicInformationService implements SaveEventBasicInformati
             recordStaffOperationUseCase.record(new RecordStaffOperationCommand(permission, StaffOperationTargetKind.EVENT,
                     command.eventId(), OPERATION_SUMMARY, now));
         }
-        return EventWizardResults.of(event);
+        return EventWizardResults.of(event, posterStorage);
     }
 }

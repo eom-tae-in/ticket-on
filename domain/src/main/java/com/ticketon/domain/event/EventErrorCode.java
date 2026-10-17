@@ -67,6 +67,12 @@ public enum EventErrorCode implements ErrorCode {
      */
     EVENT_NOT_FOUND("행사를 찾을 수 없습니다."),
 
+    /**
+     * 없는 포스터 파일이다 — 포스터 열쇠의 꼴이 아니거나(경로를 거스르는 이름 등), 그 열쇠의 파일이 없다(바꾼 포스터의 파일은 바꾼 뒤 지운다).
+     * 공개 주소로 포스터를 열 때 쓴다.
+     */
+    EVENT_POSTER_NOT_FOUND("포스터를 찾을 수 없습니다."),
+
     /** 이 행사의 일정에 없는 회차다. */
     SESSION_NOT_FOUND("회차를 찾을 수 없습니다."),
 
