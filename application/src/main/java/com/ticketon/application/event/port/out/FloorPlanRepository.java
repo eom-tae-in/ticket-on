@@ -17,12 +17,16 @@ import java.time.Instant;
  * <p>
  * <b>잠금 — 행사 줄 다음이다.</b> 도면을 읽고 고쳐 저장하는 흐름은 먼저 행사 줄을 FOR UPDATE로 잠근다({@link EventRepository#findByIdForUpdate}).
  * 같은 행사의 도면 저장은 행사 줄에서 차례로 처리되므로 도면의 줄은 따로 잠그지 않는다.
+ * <p>
+ * <b>도면은 여러 문장으로 읽는다.</b> 행사 줄을 잠그지 않고 읽는 조회는 트랜잭션 전체를 스냅숏 하나로 읽어야 한다(REPEATABLE READ) — 문장마다 새
+ * 스냅숏을 잡으면(READ COMMITTED) 그 사이에 커밋된 편집을 반쯤만 읽어 도면을 되살리지 못한다(좌석 없는 블록, 도면에 없는 구역을 가리키는 좌석).
  */
 public interface FloorPlanRepository {
 
     /**
      * 그 행사의 도면을 읽는다 — 지우지 않은 구역(더한 순서) · 블록(얹은 순서)과 그 좌석(행 · 번호 순서), 무대 위치. 아무것도 없으면 빈 도면이다.
-     * 행사가 있는지는 보지 않는다 — 부르는 쪽이 행사를 먼저 찾는다.
+     * 행사가 있는지는 보지 않는다 — 부르는 쪽이 행사를 먼저 찾는다. 행사 줄을 잠근 뒤에 부르거나, 스냅숏 하나(REPEATABLE READ)인 트랜잭션에서
+     * 부른다.
      */
     FloorPlan findByEventId(long eventId);
 
