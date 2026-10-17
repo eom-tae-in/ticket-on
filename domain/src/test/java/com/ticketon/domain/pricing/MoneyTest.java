@@ -186,6 +186,13 @@ class MoneyTest {
         }
 
         @Test
+        @DisplayName("비중이 0원인 몫은 남은 원도 받지 않는다 — 1원을 0 · 5원에 → 0 · 1원")
+        void zeroWeightGetsNothing() {
+            assertThat(won(1).splitProportionally(wons(0, 5))).containsExactly(Money.ZERO, won(1));
+            assertThat(won(7).splitProportionally(wons(5, 0, 5))).containsExactly(won(4), Money.ZERO, won(3));
+        }
+
+        @Test
         @DisplayName("한 장이면 그 장이 전부 받는다")
         void singleTicket() {
             assertThat(won(5_000).splitProportionally(wons(94_500))).containsExactly(won(5_000));
