@@ -3,6 +3,8 @@ package com.ticketon.domain.event;
 import com.ticketon.domain.error.RuleViolationException;
 import com.ticketon.domain.organizer.StaffAction;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -34,7 +36,8 @@ import java.util.Set;
  * <p>
  * 위저드 2단계의 회차 방식 · 날짜 · 회차는 행사가 아니라 행사의 일정({@link EventSchedule})이 따로 갖는다 — 날짜와 회차가 많고 따로 고친다.
  * 위저드 3단계의 구역 · 블록 · 좌석은 도면({@link FloorPlan})이, 6단계의 입구는 입구 목록({@link EventEntrances})이 따로 갖는다. 행사는 그
- * 단계를 저장할 때 수정 범위를 확인하고 진행 단계 · 마지막 수정 시각을 맡는다({@link #addZone}, {@link #addEntrance} 등).
+ * 단계를 저장할 때 수정 범위를 확인하고 진행 단계 · 마지막 수정 시각을 맡는다({@link #addTimedSession}, {@link #addZone},
+ * {@link #addEntrance} 등).
  * <p>
  * <b>행사 상태</b>({@link EventStatus}) — 작성 중으로 시작한다. 사람이 누르는 전환(판매 시작 · 정산 완료 · 남은 회차 전부 취소)은 의도가 드러나는
  * 메서드로, 시간이 정하는 전환(오픈 · 판매 종료 · 행사 종료)은 {@link #advanceByTime}으로 한다. 시간이 정하는 전환은 일정이 알려 주는 마지막 회차의
@@ -248,6 +251,276 @@ public final class Event {
         poster = newPoster;
         completeWizardStep(EventWizardStep.BASIC_INFORMATION, true, now);
         return previousPoster;
+    }
+
+    /**
+     * 위저드 2단계에서 회차 방식을 처음 고른다 — 이 행사의 일정이 생긴다(docs/02 "회차형과 종일형 — 회차 방식", docs/03 "기본 정보 — 회차 방식은
+     * 회차를 만드는 2단계에서"). 종일형은 행사 단위의 기본 운영 시간을 함께 넣는다 — 30일짜리 전시에 30번 입력하지 않게 한 번 넣고 다른 날만
+     * 덮어쓴다(docs/02 "날짜마다 운영 시간이 다를 수 있습니다").
+     * <ol>
+     *   <li><b>지금 상태의 수정 범위를 확인한다</b> — 회차 일시({@link EventEditTarget#SESSION_DATE_TIME}).</li>
+     *   <li>일정을 만들고, 작성 중이면 진행 단계를 2단계까지로 올리고, 마지막 수정 시각을 지금으로 한다. 만들면 늘 바뀐 것이다.</li>
+     * </ol>
+     * 이미 일정이 있으면 {@link #changeSessionMode}를 쓴다. {@link #requireEditable}처럼 저장된 상태로 판정한다.
+     *
+     * @param defaultOperatingHours 종일형의 기본 운영 시간. 회차형이면 null
+     * @return 새 일정 — 날짜가 아직 없다
+     * @throws RuleViolationException   지금 상태에서 회차 일시를 고칠 수 없으면({@link #requireEditable}과 같은 오류)
+     * @throws IllegalArgumentException 종일형인데 기본 운영 시간이 없거나 회차형인데 있으면
+     * @throws IllegalStateException    저장 전 행사면
+     */
+    public EventSchedule startSchedule(SessionMode mode, OperatingHours defaultOperatingHours, Instant now) {
+        Objects.requireNonNull(mode, "mode");
+        Objects.requireNonNull(now, "now");
+        requireSaved("일정");
+        requireOperatingHoursMatchMode(mode, defaultOperatingHours);
+        requireEditable(EventEditTarget.SESSION_DATE_TIME);
+        EventSchedule schedule = mode == SessionMode.TIMED ? EventSchedule.timed(id) : EventSchedule.allDay(id, defaultOperatingHours);
+        completeWizardStep(EventWizardStep.SCHEDULE, true, now);
+        return schedule;
+    }
+
+    /**
+     * 위저드 2단계에서 회차 방식 · 기본 운영 시간을 다시 저장한다 — 화면은 회차 방식과 (종일형이면) 기본 운영 시간을 함께 보낸다.
+     * <ul>
+     *   <li><b>회차 방식이 바뀌면</b> 회차 일시({@link EventEditTarget#SESSION_DATE_TIME})의 수정 범위를 확인하고 바꾼다. 날짜가 있으면 바꿀 수
+     *       없다({@link EventSchedule#changeToTimed}, {@link EventSchedule#changeToAllDay}).</li>
+     *   <li><b>종일형 그대로 기본 운영 시간이 바뀌면</b> 덮어쓰지 않은 날짜의 회차 시간이 모두 따라 바뀌므로, 그 회차마다 주최자가 혼자 시간을
+     *       바꿀 수 있는지 확인한다 — 예매가 열린 뒤면 그 회차 시작 1주일 전 잠금까지 본다({@link #requireSessionTimeEditable}). 따라 바뀌는 회차가
+     *       없으면 회차 일시의 수정 범위만 본다.</li>
+     * </ul>
+     * 작성 중이면 진행 단계를 2단계까지로 올리고, 무엇이든 바뀌었으면 마지막 수정 시각을 지금으로 한다. 같은 값을 몇 번 저장해도 안전하다 — 바뀐 것이
+     * 없으면 수정 범위를 보지 않고 일정도 그대로다. 하나라도 막히면 아무것도 바꾸지 않는다.
+     *
+     * @param defaultOperatingHours 종일형의 기본 운영 시간. 회차형이면 null
+     * @return 바뀐 것(회차 방식 · 기본 운영 시간 · 진행 단계)이 있는지
+     * @throws RuleViolationException   바뀌는데 지금 상태에서 고칠 수 없으면({@link #requireEditable}과 같은 오류,
+     *                                  {@link EventErrorCode#SESSION_TIME_EDIT_LOCKED}), 날짜가 있는데 회차 방식을 바꾸면
+     *                                  ({@link EventErrorCode#SESSION_MODE_LOCKED_BY_DATES})
+     * @throws IllegalArgumentException 종일형인데 기본 운영 시간이 없거나 회차형인데 있으면, 다른 행사의 일정이면
+     */
+    public boolean changeSessionMode(EventSchedule schedule, SessionMode mode, OperatingHours defaultOperatingHours, Instant now) {
+        requireOwnSchedule(schedule);
+        Objects.requireNonNull(mode, "mode");
+        Objects.requireNonNull(now, "now");
+        requireOperatingHoursMatchMode(mode, defaultOperatingHours);
+        boolean changed = false;
+        if (mode != schedule.mode()) {
+            requireEditable(EventEditTarget.SESSION_DATE_TIME);
+            changed = mode == SessionMode.TIMED ? schedule.changeToTimed() : schedule.changeToAllDay(defaultOperatingHours);
+        } else if (mode == SessionMode.ALL_DAY && !schedule.defaultOperatingHours().orElseThrow().equals(defaultOperatingHours)) {
+            requireSessionTimesEditable(schedule, sessionsFollowingDefaultOperatingHours(schedule), now);
+            changed = schedule.changeDefaultOperatingHours(defaultOperatingHours);
+        }
+        return completeWizardStep(EventWizardStep.SCHEDULE, changed, now);
+    }
+
+    /**
+     * 위저드 2단계에서 회차형 회차를 더한다 — 그 날짜가 없으면 날짜도 생긴다({@link EventSchedule#addSession}). 출연은 없고 가격 조정은 없음으로
+     * 시작한다.
+     * <ol>
+     *   <li><b>지금 상태의 수정 범위를 확인한다</b> — 회차 추가({@link EventEditTarget#SESSION_ADDITION}). 예매가 열린 뒤에도 더한다 — 매진되면 회차를
+     *       더 여는 게 자연스럽다(docs/04 "회차 추가는 허용합니다"). 판매가 끝나면 막힌다.</li>
+     *   <li>회차를 더하고, 작성 중이면 진행 단계를 2단계까지로 올리고, 마지막 수정 시각을 지금으로 한다. 더하면 늘 바뀐 것이다.</li>
+     * </ol>
+     *
+     * @return 더한 회차(아직 id 없음)
+     * @throws RuleViolationException   지금 상태에서 회차를 더할 수 없으면({@link #requireEditable}과 같은 오류), 종일형이면
+     *                                  ({@link EventErrorCode#ALL_DAY_SINGLE_SESSION_PER_DATE}), 같은 날짜에 같은 시각에 시작하는 회차가 있으면
+     *                                  ({@link EventErrorCode#SESSION_START_TIME_TAKEN})
+     * @throws IllegalArgumentException 다른 행사의 일정이면
+     */
+    public EventSession addTimedSession(EventSchedule schedule, LocalDate date, TimedSessionTime time, Instant now) {
+        requireOwnSchedule(schedule);
+        Objects.requireNonNull(now, "now");
+        requireEditable(EventEditTarget.SESSION_ADDITION);
+        EventSession added = schedule.addSession(date, time);
+        completeWizardStep(EventWizardStep.SCHEDULE, true, now);
+        return added;
+    }
+
+    /**
+     * 위저드 2단계에서 종일형 날짜를 더한다 — 날짜와 그 날짜의 회차 하나가 함께 생기고, 운영 시간은 기본 운영 시간을 따른다
+     * ({@link EventSchedule#addDate}). 수정 범위 · 진행 단계는 {@link #addTimedSession}과 같다.
+     *
+     * @return 그 날짜의 회차(아직 id 없음)
+     * @throws RuleViolationException   지금 상태에서 회차를 더할 수 없으면({@link #requireEditable}과 같은 오류), 회차형이면
+     *                                  ({@link EventErrorCode#TIMED_DATE_NEEDS_SESSION}), 이미 있는 날짜면
+     *                                  ({@link EventErrorCode#SCHEDULE_DATE_ALREADY_EXISTS})
+     * @throws IllegalArgumentException 다른 행사의 일정이면
+     */
+    public EventSession addAllDayDate(EventSchedule schedule, LocalDate date, Instant now) {
+        requireOwnSchedule(schedule);
+        Objects.requireNonNull(now, "now");
+        requireEditable(EventEditTarget.SESSION_ADDITION);
+        if (schedule.mode() == SessionMode.TIMED) {
+            throw new RuleViolationException(EventErrorCode.TIMED_DATE_NEEDS_SESSION, detail() + ", 날짜 " + date);
+        }
+        EventSession added = schedule.addDate(date);
+        completeWizardStep(EventWizardStep.SCHEDULE, true, now);
+        return added;
+    }
+
+    /**
+     * 위저드 2단계에서 회차의 일시를 바꾼다 — 화면은 날짜와 (회차형이면) 시작 · 종료 시각을 함께 보낸다. 회차 일시는 날짜까지다(docs/04 "예매가 열린 뒤
+     * (판매 중) 수정 범위 — 회차 일시"). 회차는 그대로라 회차를 가리키는 재고 · 티켓도 그대로 따라간다.
+     * <ul>
+     *   <li><b>회차형</b> — 시작 시각은 필수다. 다른 날짜로 옮기면 그 날짜가 생기고 비게 된 날짜는 빠진다
+     *       ({@link EventSchedule#changeTimedSessionDateTime}).</li>
+     *   <li><b>종일형</b> — 날짜만 바꾼다. 회차의 시간은 그날의 운영 시간이라 시작 · 종료 시각을 받지 않는다
+     *       ({@link EventSchedule#changeAllDaySessionDate}). 운영 시간은 {@link #changeDateOperatingHours}로 바꾼다.</li>
+     * </ul>
+     * 바뀌면 주최자가 혼자 회차 시간을 바꿀 수 있는지 확인한다 — 회차 일시의 수정 범위와, 예매가 열린 뒤면 그 회차 시작 1주일 전 잠금
+     * ({@link #requireSessionTimeEditable}). <b>날짜 · 시작은 그대로 두고 비어 있던 종료 시각만 채우면</b> 시간 수정이 잠긴 뒤에도 받는다 — 잠기는
+     * 시점에 종료 시각 입력을 요구하므로 입력할 길이 열려 있어야 한다({@link EventEditTarget#MISSING_SESSION_END_TIME},
+     * {@link EventSchedule#enterSessionEndTime}).
+     * <p>
+     * 작성 중이면 진행 단계를 2단계까지로 올리고, 무엇이든 바뀌었으면 마지막 수정 시각을 지금으로 한다. 같은 값을 몇 번 저장해도 안전하다. 하나라도
+     * 막히면 아무것도 바꾸지 않는다. 티켓이 있는 회차의 알림 · 공제 면제는 회차 시간 수정(#105)이 한다.
+     *
+     * @param newStartTime 회차형의 새 시작 시각. 종일형이면 null
+     * @param newEndTime   회차형의 새 종료 시각. 비워 두거나 종일형이면 null
+     * @return 바뀐 것(회차 일시 · 진행 단계)이 있는지
+     * @throws com.ticketon.domain.error.NotFoundException 일정에 없는 회차면({@link EventErrorCode#SESSION_NOT_FOUND})
+     * @throws RuleViolationException                      종일형인데 시작 · 종료 시각을 적었으면
+     *                                                     ({@link EventErrorCode#ALL_DAY_SINGLE_SESSION_PER_DATE}), 회차형인데 시작 시각이
+     *                                                     없으면({@link EventErrorCode#SESSION_START_TIME_REQUIRED}), 바뀌는데 지금 고칠 수
+     *                                                     없으면({@link #requireSessionTimeEditable}과 같은 오류), 옮겨 갈 날짜 · 시각이
+     *                                                     겹치면({@link EventErrorCode#SESSION_START_TIME_TAKEN},
+     *                                                     {@link EventErrorCode#SCHEDULE_DATE_ALREADY_EXISTS})
+     * @throws IllegalArgumentException                    종료 시각이 시작보다 늦지 않거나 분 단위가 아니면, 다른 행사의 일정이면
+     */
+    public boolean changeSessionDateTime(EventSchedule schedule, long sessionId, LocalDate newDate, LocalTime newStartTime,
+            LocalTime newEndTime, Instant now) {
+        requireOwnSchedule(schedule);
+        Objects.requireNonNull(newDate, "newDate");
+        Objects.requireNonNull(now, "now");
+        EventSession session = schedule.session(sessionId);
+        LocalDate currentDate = schedule.dateOf(sessionId).date();
+        boolean changed = schedule.mode() == SessionMode.ALL_DAY
+                ? changeAllDaySessionDate(schedule, session, currentDate, newDate, newStartTime, newEndTime, now)
+                : changeTimedSessionDateTime(schedule, session, currentDate, newDate, newStartTime, newEndTime, now);
+        return completeWizardStep(EventWizardStep.SCHEDULE, changed, now);
+    }
+
+    /**
+     * 위저드 2단계에서 종일형 날짜 하나의 운영 시간을 덮어쓰거나, 덮어쓴 것을 지워 기본 운영 시간을 따르게 한다(docs/02 "날짜마다 운영 시간이 다를 수
+     * 있습니다" — 주말은 늦게까지). 덮어쓴 값이 바뀌면 그 날짜의 회차 시간이 바뀌는 것이라 주최자가 혼자 시간을 바꿀 수 있는지 확인한다
+     * ({@link #requireSessionTimeEditable}). 진행 단계 · 마지막 수정 시각은 {@link #changeSessionDateTime}과 같다.
+     *
+     * @param newOverride 그날만 쓸 운영 시간. 덮어쓴 것을 지우려면 null
+     * @return 바뀐 것(그날의 운영 시간 · 진행 단계)이 있는지 — 덮어쓴 값이 지금과 같으면 수정 범위를 보지 않는다
+     * @throws com.ticketon.domain.error.NotFoundException 일정에 없는 날짜면({@link EventErrorCode#SCHEDULE_DATE_NOT_FOUND})
+     * @throws RuleViolationException                      회차형이면({@link EventErrorCode#OPERATING_HOURS_ONLY_FOR_ALL_DAY}), 바뀌는데 지금
+     *                                                     고칠 수 없으면({@link #requireSessionTimeEditable}과 같은 오류)
+     * @throws IllegalArgumentException                    다른 행사의 일정이면
+     */
+    public boolean changeDateOperatingHours(EventSchedule schedule, LocalDate date, OperatingHours newOverride, Instant now) {
+        requireOwnSchedule(schedule);
+        Objects.requireNonNull(date, "date");
+        Objects.requireNonNull(now, "now");
+        if (schedule.mode() != SessionMode.ALL_DAY) {
+            throw new RuleViolationException(EventErrorCode.OPERATING_HOURS_ONLY_FOR_ALL_DAY, detail() + ", 날짜 " + date);
+        }
+        EventDate eventDate = schedule.requireDate(date);
+        boolean changed = !eventDate.operatingHoursOverride().equals(Optional.ofNullable(newOverride));
+        if (changed) {
+            requireSessionTimesEditable(schedule, eventDate.sessions(), now);
+            if (newOverride == null) {
+                schedule.clearOperatingHoursOverride(date);
+            } else {
+                schedule.overrideOperatingHours(date, newOverride);
+            }
+        }
+        return completeWizardStep(EventWizardStep.SCHEDULE, changed, now);
+    }
+
+    /**
+     * 위저드 2단계에서 회차의 출연을 바꾼다(docs/02 "출연 (선택)"). 바뀔 때만 출연의 수정 범위({@link EventEditTarget#PERFORMERS})를 확인한다 — 제목
+     * · 소개 · 포스터와 같아 예매가 열린 뒤에도 고친다. 출연 칸을 고치는 것만으로는 출연자 변경 알림이 되지 않는다. 변경 이력은 #46이 남긴다. 진행
+     * 단계 · 마지막 수정 시각은 {@link #changeSessionDateTime}과 같다.
+     *
+     * @param newPerformers 새 출연. 지우려면 null
+     * @return 바뀐 것(출연 · 진행 단계)이 있는지
+     * @throws com.ticketon.domain.error.NotFoundException 일정에 없는 회차면({@link EventErrorCode#SESSION_NOT_FOUND})
+     * @throws RuleViolationException                      바뀌는데 지금 상태에서 출연을 고칠 수 없으면({@link #requireEditable}과 같은 오류)
+     * @throws IllegalArgumentException                    다른 행사의 일정이면
+     */
+    public boolean changeSessionPerformers(EventSchedule schedule, long sessionId, SessionPerformers newPerformers, Instant now) {
+        requireOwnSchedule(schedule);
+        Objects.requireNonNull(now, "now");
+        boolean changed = !schedule.session(sessionId).performers().equals(Optional.ofNullable(newPerformers));
+        if (changed) {
+            requireEditable(EventEditTarget.PERFORMERS);
+            schedule.changePerformers(sessionId, newPerformers);
+        }
+        return completeWizardStep(EventWizardStep.SCHEDULE, changed, now);
+    }
+
+    /**
+     * 회차의 가격 조정을 바꾼다(docs/05 "회차별 가격 조정" — 위저드 화면에서는 4단계에 보이지만 회차에 붙는 값이라 회차와 함께 저장한다). 바뀔 때만
+     * 가격의 수정 범위({@link EventEditTarget#PRICE})를 확인한다 — 예매가 열린 뒤에도 바꾸되 신규 예매부터 적용한다(가격 계산 #48). 확인 필요 (#41) —
+     * 진행 단계는 회차를 저장하는 2단계로 다룬다 — 2단계만 마친 행사가 가격 조정을 저장해도 4단계까지 마친 것으로 보이지 않게 한다. 마지막 수정
+     * 시각은 {@link #changeSessionDateTime}과 같다.
+     *
+     * @return 바뀐 것(가격 조정 · 진행 단계)이 있는지
+     * @throws com.ticketon.domain.error.NotFoundException 일정에 없는 회차면({@link EventErrorCode#SESSION_NOT_FOUND})
+     * @throws RuleViolationException                      바뀌는데 지금 상태에서 가격을 고칠 수 없으면({@link #requireEditable}과 같은 오류)
+     * @throws IllegalArgumentException                    다른 행사의 일정이면
+     */
+    public boolean changeSessionPriceAdjustment(EventSchedule schedule, long sessionId, SessionPriceAdjustment newPriceAdjustment,
+            Instant now) {
+        requireOwnSchedule(schedule);
+        Objects.requireNonNull(newPriceAdjustment, "newPriceAdjustment");
+        Objects.requireNonNull(now, "now");
+        boolean changed = !schedule.session(sessionId).priceAdjustment().equals(newPriceAdjustment);
+        if (changed) {
+            requireEditable(EventEditTarget.PRICE);
+            schedule.changePriceAdjustment(sessionId, newPriceAdjustment);
+        }
+        return completeWizardStep(EventWizardStep.SCHEDULE, changed, now);
+    }
+
+    /**
+     * 위저드 2단계에서 회차를 지운다 — 그 날짜의 마지막 회차였으면 날짜도 빠진다({@link EventSchedule#removeSession}). 지운 회차는 저장소가 지운 시각을
+     * 적어 남긴다 — 취소 · 회수된 티켓은 원래 회차를 그대로 가리킨다(docs/04, docs/14).
+     * <ol>
+     *   <li><b>지금 상태의 수정 범위를 확인한다</b> — 회차 · 구역 삭제({@link EventEditTarget#SESSION_OR_ZONE_DELETION}). 티켓이 있는 회차를 지울 수
+     *       없는 규칙은 #64가 더한다.</li>
+     *   <li>회차를 지우고, 작성 중이면 진행 단계를 2단계까지로 올리고, 마지막 수정 시각을 지금으로 한다.</li>
+     * </ol>
+     *
+     * @return 지운 회차
+     * @throws com.ticketon.domain.error.NotFoundException 일정에 없는 회차면({@link EventErrorCode#SESSION_NOT_FOUND})
+     * @throws RuleViolationException                      지금 상태에서 회차를 지울 수 없으면({@link #requireEditable}과 같은 오류)
+     * @throws IllegalArgumentException                    다른 행사의 일정이면
+     */
+    public EventSession removeSession(EventSchedule schedule, long sessionId, Instant now) {
+        requireOwnSchedule(schedule);
+        Objects.requireNonNull(now, "now");
+        EventSession session = schedule.session(sessionId);
+        requireEditable(EventEditTarget.SESSION_OR_ZONE_DELETION);
+        schedule.removeSession(sessionId);
+        completeWizardStep(EventWizardStep.SCHEDULE, true, now);
+        return session;
+    }
+
+    /**
+     * 위저드 2단계에서 날짜를 그 아래 회차와 함께 지운다({@link EventSchedule#removeDate}). 수정 범위 · 진행 단계는 {@link #removeSession}과 같다.
+     *
+     * @return 함께 지운 회차 — 시작 시각 순
+     * @throws com.ticketon.domain.error.NotFoundException 일정에 없는 날짜면({@link EventErrorCode#SCHEDULE_DATE_NOT_FOUND})
+     * @throws RuleViolationException                      지금 상태에서 회차를 지울 수 없으면({@link #requireEditable}과 같은 오류)
+     * @throws IllegalArgumentException                    다른 행사의 일정이면
+     */
+    public List<EventSession> removeScheduleDate(EventSchedule schedule, LocalDate date, Instant now) {
+        requireOwnSchedule(schedule);
+        Objects.requireNonNull(now, "now");
+        List<EventSession> removed = List.copyOf(schedule.requireDate(date).sessions());
+        requireEditable(EventEditTarget.SESSION_OR_ZONE_DELETION);
+        schedule.removeDate(date);
+        completeWizardStep(EventWizardStep.SCHEDULE, true, now);
+        return removed;
     }
 
     /**
@@ -1042,6 +1315,76 @@ public final class Event {
             lastModifiedAt = now;
         }
         return changed;
+    }
+
+    /** 종일형 회차의 날짜를 바꾼다 — 시작 · 종료 시각은 받지 않는다. */
+    private boolean changeAllDaySessionDate(EventSchedule schedule, EventSession session, LocalDate currentDate, LocalDate newDate,
+            LocalTime newStartTime, LocalTime newEndTime, Instant now) {
+        long sessionId = session.id().orElseThrow();
+        if (newStartTime != null || newEndTime != null) {
+            throw new RuleViolationException(EventErrorCode.ALL_DAY_SINGLE_SESSION_PER_DATE, detail() + ", 회차 " + sessionId);
+        }
+        if (currentDate.equals(newDate)) {
+            return false;
+        }
+        requireSessionTimeEditable(schedule, session, now);
+        return schedule.changeAllDaySessionDate(sessionId, newDate);
+    }
+
+    /** 회차형 회차의 날짜 · 시간을 바꾼다. 비어 있던 종료 시각만 채우면 시간 수정이 잠긴 뒤에도 받는다. */
+    private boolean changeTimedSessionDateTime(EventSchedule schedule, EventSession session, LocalDate currentDate, LocalDate newDate,
+            LocalTime newStartTime, LocalTime newEndTime, Instant now) {
+        long sessionId = session.id().orElseThrow();
+        if (newStartTime == null) {
+            throw new RuleViolationException(EventErrorCode.SESSION_START_TIME_REQUIRED, detail() + ", 회차 " + sessionId);
+        }
+        TimedSessionTime newTime = TimedSessionTime.of(newStartTime, newEndTime);
+        TimedSessionTime currentTime = session.time().orElseThrow();
+        if (currentDate.equals(newDate) && currentTime.equals(newTime)) {
+            return false;
+        }
+        boolean fillsMissingEndTime = currentDate.equals(newDate) && currentTime.startTime().equals(newTime.startTime())
+                && currentTime.end().isEmpty() && newTime.end().isPresent();
+        if (fillsMissingEndTime) {
+            requireEditable(EventEditTarget.MISSING_SESSION_END_TIME);
+            schedule.enterSessionEndTime(sessionId, newTime.endTime());
+            return true;
+        }
+        requireSessionTimeEditable(schedule, session, now);
+        return schedule.changeTimedSessionDateTime(sessionId, newDate, newTime);
+    }
+
+    /** 운영 시간을 바꾸면 시간이 따라 바뀌는 회차마다 시간 수정을 확인한다. 따라 바뀌는 회차가 없으면 회차 일시의 수정 범위만 본다. */
+    private void requireSessionTimesEditable(EventSchedule schedule, List<EventSession> affectedSessions, Instant now) {
+        if (affectedSessions.isEmpty()) {
+            requireEditable(EventEditTarget.SESSION_DATE_TIME);
+            return;
+        }
+        affectedSessions.forEach(session -> requireSessionTimeEditable(schedule, session, now));
+    }
+
+    /** {@link #requireSessionTimeEditable(EventSchedule, long, Instant)}와 같은 판정 — 회차를 직접 받는다. */
+    private void requireSessionTimeEditable(EventSchedule schedule, EventSession session, Instant now) {
+        requireEditable(EventEditTarget.SESSION_DATE_TIME);
+        if (editScope() == EventEditScope.AFTER_BOOKING_OPENED && schedule.timesOf(session).isTimeEditLocked(now)) {
+            throw new RuleViolationException(EventErrorCode.SESSION_TIME_EDIT_LOCKED,
+                    detail() + ", 회차 " + (session.id().isPresent() ? session.id().getAsLong() : "저장 전"));
+        }
+    }
+
+    /** 기본 운영 시간을 따르는 회차 — 운영 시간을 덮어쓰지 않은 날짜의 회차(종일형). */
+    private static List<EventSession> sessionsFollowingDefaultOperatingHours(EventSchedule schedule) {
+        return schedule.dates().stream()
+                .filter(eventDate -> eventDate.operatingHoursOverride().isEmpty())
+                .flatMap(eventDate -> eventDate.sessions().stream())
+                .toList();
+    }
+
+    /** 종일형은 기본 운영 시간이 있고 회차형은 없다. */
+    private static void requireOperatingHoursMatchMode(SessionMode mode, OperatingHours defaultOperatingHours) {
+        if ((mode == SessionMode.ALL_DAY) != (defaultOperatingHours != null)) {
+            throw new IllegalArgumentException("기본 운영 시간은 종일형만 갖고, 종일형에는 꼭 있습니다: " + mode);
+        }
     }
 
     private static EventErrorCode lockedErrorCode(EventEditScope scope) {

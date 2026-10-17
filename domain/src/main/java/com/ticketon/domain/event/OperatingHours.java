@@ -14,7 +14,9 @@ import java.util.Optional;
  * 시간을 한 번 넣고 다른 날만 덮어쓴다(docs/02 "날짜마다 운영 시간이 다를 수 있습니다", {@link EventSchedule#operatingHoursOn}).
  * <p>
  * 운영 종료는 운영 시작보다 늦어야 하고, 마지막 입장은 운영 시작보다 늦고 운영 종료보다 늦지 않아야 한다. 자정을 넘겨 운영하는 날(18:00 ~
- * 02:00)은 문서에 없어 받지 않는다(확인 필요 #36).
+ * 02:00)은 문서에 없어 받지 않는다(확인 필요 #36, #135).
+ * <p>
+ * 시각은 분 단위다 — 초 · 나노초가 붙은 시각은 받지 않는다({@link MinutePrecision}, 확인 필요 #41).
  *
  * @param openTime      운영 시작
  * @param closeTime     운영 종료
@@ -23,8 +25,11 @@ import java.util.Optional;
 public record OperatingHours(LocalTime openTime, LocalTime closeTime, LocalTime lastEntryTime) {
 
     public OperatingHours {
-        Objects.requireNonNull(openTime, "openTime");
-        Objects.requireNonNull(closeTime, "closeTime");
+        MinutePrecision.requireWholeMinute(Objects.requireNonNull(openTime, "openTime"), "운영 시작");
+        MinutePrecision.requireWholeMinute(Objects.requireNonNull(closeTime, "closeTime"), "운영 종료");
+        if (lastEntryTime != null) {
+            MinutePrecision.requireWholeMinute(lastEntryTime, "마지막 입장");
+        }
         if (!closeTime.isAfter(openTime)) {
             throw new IllegalArgumentException("운영 종료는 운영 시작보다 늦어야 합니다: " + openTime + " ~ " + closeTime);
         }
@@ -47,12 +52,14 @@ public record OperatingHours(LocalTime openTime, LocalTime closeTime, LocalTime 
         return new OperatingHours(openTime, closeTime, lastEntryTime);
     }
 
-    /** {@link #of(LocalTime, LocalTime, LocalTime)}로 만들 수 있는 값인지. 입력 검증에서 같은 규칙을 쓰려고 둔다. */
+    /** {@link #of(LocalTime, LocalTime, LocalTime)}로 만들 수 있는 값인지 — 분 단위이고 차례가 맞다. 입력 검증에서 같은 규칙을 쓰려고 둔다. */
     public static boolean isValid(LocalTime openTime, LocalTime closeTime, LocalTime lastEntryTime) {
-        if (openTime == null || closeTime == null || !closeTime.isAfter(openTime)) {
+        if (openTime == null || closeTime == null || !MinutePrecision.isWholeMinute(openTime)
+                || !MinutePrecision.isWholeMinute(closeTime) || !closeTime.isAfter(openTime)) {
             return false;
         }
-        return lastEntryTime == null || isWithin(openTime, closeTime, lastEntryTime);
+        return lastEntryTime == null
+                || (MinutePrecision.isWholeMinute(lastEntryTime) && isWithin(openTime, closeTime, lastEntryTime));
     }
 
     /** 적은 마지막 입장. 비워 두었으면 비어 있다. */

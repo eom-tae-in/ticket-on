@@ -51,10 +51,18 @@ public sealed interface SessionPriceAdjustment {
         return percent > Rate.MINIMUM_EXCLUSIVE;
     }
 
+    /** 조정의 종류. */
+    SessionPriceAdjustmentKind kind();
+
     /** 조정 없음. */
     record None() implements SessionPriceAdjustment {
 
         private static final None INSTANCE = new None();
+
+        @Override
+        public SessionPriceAdjustmentKind kind() {
+            return SessionPriceAdjustmentKind.NONE;
+        }
     }
 
     /**
@@ -68,6 +76,11 @@ public sealed interface SessionPriceAdjustment {
             if (won == 0) {
                 throw new IllegalArgumentException("금액 조정이 0원입니다 — 조정 없음으로 둡니다");
             }
+        }
+
+        @Override
+        public SessionPriceAdjustmentKind kind() {
+            return SessionPriceAdjustmentKind.AMOUNT;
         }
     }
 
@@ -87,6 +100,11 @@ public sealed interface SessionPriceAdjustment {
             if (percent <= MINIMUM_EXCLUSIVE) {
                 throw new IllegalArgumentException("퍼센트 조정은 -100%보다 커야 합니다: " + percent + "%");
             }
+        }
+
+        @Override
+        public SessionPriceAdjustmentKind kind() {
+            return SessionPriceAdjustmentKind.PERCENT;
         }
     }
 }

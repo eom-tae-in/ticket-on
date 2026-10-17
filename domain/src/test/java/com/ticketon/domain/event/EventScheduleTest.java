@@ -344,6 +344,75 @@ class EventScheduleTest {
     }
 
     @Nested
+    @DisplayName("회차 일시 옮기기 — 회차 일시는 날짜까지다 (docs/04 \"회차 일시\", \"기존 회차의 날짜를 고칩니다\")")
+    class DateTimeChange {
+
+        @Test
+        @DisplayName("3/14 19:00 회차를 3/16 20:00으로 옮기면 3/16이 생기고 비게 된 3/14는 빠진다 — 회차는 같은 회차다")
+        void timedSessionMovesToNewDate() {
+            EventSchedule schedule = twelveMonthsPerformances();
+            LocalDate march16 = LocalDate.of(2026, 3, 16);
+
+            assertThat(schedule.changeTimedSessionDateTime(101, march16, time(20, 22))).isTrue();
+
+            assertThat(datesOf(schedule)).containsExactly(MARCH_15, march16);
+            assertThat(schedule.dateOf(101).date()).isEqualTo(march16);
+            assertThat(schedule.session(101).time()).contains(time(20, 22));
+            assertThat(schedule.changeTimedSessionDateTime(101, march16, time(20, 22))).isFalse();
+        }
+
+        @Test
+        @DisplayName("이미 있는 날짜로 옮기면 그 날짜의 회차와 시작 시각 순으로 놓이고, 같은 시각의 회차가 있으면 받지 않는다")
+        void timedSessionMovesToExistingDate() {
+            EventSchedule schedule = twelveMonthsPerformances();
+
+            assertRejected(() -> schedule.changeTimedSessionDateTime(101, MARCH_15, time(15, 17)), EventErrorCode.SESSION_START_TIME_TAKEN);
+            assertThat(schedule.dateOf(101).date()).isEqualTo(MARCH_14);
+
+            assertThat(schedule.changeTimedSessionDateTime(101, MARCH_15, time(12, 14))).isTrue();
+
+            assertThat(datesOf(schedule)).containsExactly(MARCH_15);
+            assertThat(startTimesOn(schedule, MARCH_15)).containsExactly(LocalTime.of(12, 0), LocalTime.of(15, 0), LocalTime.of(19, 0));
+        }
+
+        @Test
+        @DisplayName("같은 날짜면 시간만 바꾼다")
+        void sameDateChangesTimeOnly() {
+            EventSchedule schedule = twelveMonthsPerformances();
+
+            assertThat(schedule.changeTimedSessionDateTime(102, MARCH_15, time(14, 16))).isTrue();
+
+            assertThat(schedule.dateOf(102).date()).isEqualTo(MARCH_15);
+            assertThat(startTimesOn(schedule, MARCH_15)).containsExactly(LocalTime.of(14, 0), LocalTime.of(19, 0));
+        }
+
+        @Test
+        @DisplayName("종일형 5/4를 5/10으로 옮기면 그날 덮어쓴 운영 시간도 함께 옮겨 간다 — 이미 있는 날짜로는 옮기지 않는다")
+        void allDayDateMovesWithOverride() {
+            EventSchedule schedule = lateSummerFestival();
+            schedule.overrideOperatingHours(MAY_4, TEN_TO_EIGHT);
+            LocalDate may10 = LocalDate.of(2026, 5, 10);
+
+            assertRejected(() -> schedule.changeAllDaySessionDate(202, MAY_5), EventErrorCode.SCHEDULE_DATE_ALREADY_EXISTS);
+            assertThat(schedule.changeAllDaySessionDate(202, may10)).isTrue();
+
+            assertThat(datesOf(schedule)).containsExactly(MAY_3, MAY_5, may10);
+            assertThat(schedule.dateOf(202).date()).isEqualTo(may10);
+            assertThat(schedule.dateOf(202).id()).isEmpty();
+            assertThat(schedule.operatingHoursOn(may10)).isEqualTo(TEN_TO_EIGHT);
+            assertThat(schedule.changeAllDaySessionDate(202, may10)).isFalse();
+        }
+
+        @Test
+        @DisplayName("회차형 회차는 날짜만, 종일형 회차는 시간까지 옮기지 않는다")
+        void modeMismatch() {
+            assertThatIllegalStateException().isThrownBy(() -> twelveMonthsPerformances().changeAllDaySessionDate(101, MAY_3));
+            assertThatIllegalStateException()
+                    .isThrownBy(() -> lateSummerFestival().changeTimedSessionDateTime(201, MAY_3, time(10, 12)));
+        }
+    }
+
+    @Nested
     @DisplayName("회차 지우기 — 회차가 없는 날짜는 남기지 않는다")
     class Removal {
 
