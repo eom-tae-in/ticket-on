@@ -48,6 +48,34 @@ import java.util.Set;
  *       방식). 같으면 쿠폰을 쓰지 않는 쪽(조기예매 또는 정가): {@code domain.pricing.BookingPrice#calculate}.</li>
  *   <li>확인 필요 (#48) — 정액 할인이 가격보다 크면 0원까지만 깎고, 정액 쿠폰은 예매 건 합계까지만 나눈다:
  *       {@code domain.pricing.Discount.FixedAmount}, {@code domain.pricing.BookingPrice}.</li>
+ *   <li>확인 필요 (#53) — 선점 중인 좌석과 예매 마감 뒤 일반 좌석에 건 초대권 좌석은 판매 제외하지 않는다(결제 중일 수 있음 · 초대권 좌석도 팔린
+ *       좌석과 똑같이 지킴): {@code domain.inventory.SeatStock#exclude}.</li>
+ *   <li>확인 필요 (#53) — 판매 제외가 아닌 좌석의 판매 제외 해제는 막지 않고 그대로 둔다(초대권이 걸린 판매 제외만 막음):
+ *       {@code domain.inventory.SeatStock#include}.</li>
+ *   <li>확인 필요 (#53) — 초대권을 회수하면 걸기 전의 상태로 돌아간다(판매 제외 좌석은 판매 제외, 예매 마감 뒤 일반 좌석은 빈자리):
+ *       {@code domain.inventory.SeatStock#withdrawInvitation}.</li>
+ *   <li>확인 필요 (#53) — 수량형에서 예매 마감 뒤 관계자 확보 수를 넘은 초대권은 일반 잔여에서 나가고, 회수하면 일반 잔여로 돌아온다(잔여 = 정원 −
+ *       판매 − 선점 − 관계자 확보 수와 초대 발권 수 중 큰 쪽): {@code domain.inventory.QuantityZoneStock#issueInvitations},
+ *       {@code domain.inventory.QuantityZoneStock#withdrawInvitations}.</li>
+ *   <li>확인 필요 (#53) — 수량형 관계자 확보 수는 남은 자리만큼만 늘리고, 발권 수 하한은 줄일 때만 본다:
+ *       {@code domain.inventory.QuantityZoneStock#changeStaffReservation}.</li>
+ *   <li>확인 필요 (#53) — 예매가 열리기 전(판매 대기)에도 수량형 정원은 판매 · 선점 · 관계자 몫을 더한 것보다 적게 줄이지 않는다(잔여가 음수가 됨):
+ *       {@code domain.inventory.QuantityZoneStock#capacityChangeRejection}.</li>
+ *   <li>확인 필요 (#53) — 매진 임박 "10% 이하"의 분모는 그 구역의 자리 전부다(수량형은 정원, 지정형은 배정된 활성 좌석 수 — 판매 제외 · 관계자
+ *       확보분 포함): {@code domain.inventory.RemainingSeats}.</li>
+ *   <li>확인 필요 (#53) — 매진 임박 10%는 반올림하기 전 비율로 본다(205석의 20석은 임박, 21석은 아님):
+ *       {@code domain.inventory.RemainingSeats}.</li>
+ *   <li>확인 필요 (#53) — 정원이 10석 이하인 구역은 하나도 팔리지 않아도 "10석 이하"라 매진 임박이다(문서 그대로):
+ *       {@code domain.inventory.RemainingSeats}.</li>
+ *   <li>확인 필요 (#53) — 여러 회차에 걸친 판매 제외 · 해제와 정원 변경은 한 회차에서라도 막히면 어느 회차도 바꾸지 않는다(나머지 회차만 적용하지
+ *       않고, 막힌 회차는 따로 알려 줌). "전 회차"는 받은 회차 전부이고, 끝난 · 취소된 회차를 넣을지는 부르는 쪽이 정한다:
+ *       {@code domain.inventory.EventInventory#excludeSeat}, {@code domain.inventory.EventInventory#sessionsBlockingExclusion}.</li>
+ *   <li>확인 필요 (#53) — 재고 쪽에서도 선점 · 티켓이 걸린 회차 · 좌석 · 수량형 구역의 재고는 지우지 않는다(문서는 티켓만 적음, 결제 중인 선점도
+ *       지킴): {@code domain.inventory.EventInventory#removeSession}, {@code domain.inventory.EventInventory#removeSeats},
+ *       {@code domain.inventory.EventInventory#removeQuantityZone}.</li>
+ *   <li>확인 필요 (#53) — 재고 오류 문구: {@code domain.inventory.InventoryErrorCode}에서 SEAT_ALREADY_TAKEN(docs/06 원문)과 찾을 수 없음 세
+ *       가지(행사 오류와 같은 문구) 밖의 문구는 모두 지었다. 경우 자체가 문서에 없는 코드에는 따로 확인 필요 (#53)를 달았다 — 판매 제외 · 초대권
+ *       좌석을 관객이 잡을 때 "방금 다른 분이 선택했습니다"와 갈라 "판매하지 않는 좌석입니다"로 알리는 것({@code SEAT_NOT_FOR_SALE}) 포함.</li>
  *   <li>확인 필요 (#56) — 공유 링크 무효 사유가 겹치면 취소 → 행사 종료 → 재발행 순서로 보인다:
  *       {@code domain.ticket.Ticket#shareLinkInvalidReason}.</li>
  *   <li>확인 필요 (#56) — 공연이 끝난 뒤 입장 기록이 남아 있어도 '공연 종료'를 '입장 완료'보다 먼저 보인다:
