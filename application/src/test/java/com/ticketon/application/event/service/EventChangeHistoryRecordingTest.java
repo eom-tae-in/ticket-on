@@ -54,6 +54,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 /**
  * 극단 열두달의 봄 정기공연 — 11/14 · 11/15 저녁 공연, 더블 캐스팅이라 11/14만 "주연: 김배우"를 적었다({@link EventWizardScene}). 작성 중에
@@ -212,6 +214,38 @@ class EventChangeHistoryRecordingTest {
         @BeforeEach
         void startSales() {
             startSalesByPlanner();
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = EventChangeHistoryTarget.class, names = {"TITLE", "POSTER", "SESSION_PERFORMERS"})
+        @DisplayName("잠금을 기다리는 동안 다른 편집이 먼저 끝나면 잠금을 얻은 시각부터 새 버전이 유효하다")
+        void waitingEditUsesTimeAfterAcquiringEventLock(EventChangeHistoryTarget target) {
+            scene.clock.moveTo(FIRST_CHANGE.minusSeconds(1));
+            scene.eventRepository.beforeNextLock(() -> {
+                scene.clock.moveTo(FIRST_CHANGE);
+                editHistoryTarget(target, "먼저 끝난 변경");
+                scene.clock.moveTo(SECOND_CHANGE);
+            });
+
+            SimulatedTransaction.run(() -> {
+                editHistoryTarget(target, "잠금 뒤 끝난 변경");
+                return null;
+            });
+
+            assertThat(versionsOf(target))
+                    .extracting(StoredVersion::validFrom, StoredVersion::validUntil)
+                    .containsExactly(tuple(NOW, FIRST_CHANGE), tuple(FIRST_CHANGE, SECOND_CHANGE), tuple(SECOND_CHANGE, null));
+            assertThat(scene.eventRepository.findById(springPlay).orElseThrow().lastModifiedAt()).isEqualTo(SECOND_CHANGE);
+        }
+
+        private void editHistoryTarget(EventChangeHistoryTarget target, String content) {
+            switch (target) {
+                case TITLE -> changeTitle(JUNGHOON, content);
+                case POSTER -> uploadService.upload(new UploadEventPosterCommand(acting(JUNGHOON, scene.twelveMonths),
+                        springPlay, EventPosterImage.of("image/jpeg", TestImages.jpeg(300, 400))));
+                case SESSION_PERFORMERS -> changePerformers(JUNGHOON, novemberFourteenth, content);
+                case INTRODUCTION -> throw new IllegalArgumentException("기본 정보 저장은 제목 변경으로 검증한다");
+            }
         }
 
         @Test

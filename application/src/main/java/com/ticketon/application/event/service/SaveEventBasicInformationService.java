@@ -72,11 +72,11 @@ public class SaveEventBasicInformationService implements SaveEventBasicInformati
     @Override
     @Transactional
     public EventWizardResult save(SaveEventBasicInformationCommand command) {
-        Instant now = clock.instant();
         StaffPermissionResult permission = EventEditingLocks.lockOrganizer(checkStaffPermissionUseCase,
                 staffAccountRepository, organizerRepository,
                 new CheckStaffPermissionQuery(command.actingStaff(), StaffAction.EDIT_EVENT));
         Event event = EventEditingLocks.lockEvent(eventRepository, permission, command.eventId());
+        Instant now = clock.instant();
         EventBasicInformation basicInformation = command.basicInformation().toBasicInformation(categoryRepository.loadCatalog());
         EventBasicInformation before = event.basicInformation();
 

@@ -77,10 +77,10 @@ class EventScheduleEditing {
      * @throws com.ticketon.domain.error.NotFoundException         없거나 지운 행사, 다른 주최자의 행사면
      */
     LockedSchedule lock(ActingStaff actingStaff, long eventId) {
-        Instant now = clock.instant();
         StaffPermissionResult permission = EventEditingLocks.lockOrganizer(checkStaffPermissionUseCase, staffAccountRepository,
                 organizerRepository, new CheckStaffPermissionQuery(actingStaff, StaffAction.EDIT_EVENT));
         Event event = EventEditingLocks.lockEvent(eventRepository, permission, eventId);
+        Instant now = clock.instant();
         return new LockedSchedule(permission, event, scheduleRepository.findByEventId(eventId), now);
     }
 

@@ -83,11 +83,11 @@ public class UploadEventPosterService implements UploadEventPosterUseCase {
     @Override
     @Transactional
     public EventWizardResult upload(UploadEventPosterCommand command) {
-        Instant now = clock.instant();
         StaffPermissionResult permission = EventEditingLocks.lockOrganizer(checkStaffPermissionUseCase,
                 staffAccountRepository, organizerRepository,
                 new CheckStaffPermissionQuery(command.actingStaff(), StaffAction.EDIT_EVENT));
         Event event = EventEditingLocks.lockEvent(eventRepository, permission, command.eventId());
+        Instant now = clock.instant();
         EventPosterImage image = command.image();
         EventPoster newPoster = EventPoster.issue(tokenGenerator.urlSafe(EventPoster.TOKEN_LENGTH), image.format());
 
