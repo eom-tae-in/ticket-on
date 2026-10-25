@@ -48,6 +48,15 @@ import java.util.Set;
  *       방식). 같으면 쿠폰을 쓰지 않는 쪽(조기예매 또는 정가): {@code domain.pricing.BookingPrice#calculate}.</li>
  *   <li>확인 필요 (#48) — 정액 할인이 가격보다 크면 0원까지만 깎고, 정액 쿠폰은 예매 건 합계까지만 나눈다:
  *       {@code domain.pricing.Discount.FixedAmount}, {@code domain.pricing.BookingPrice}.</li>
+ *   <li>확인 필요 (#56) — 공유 링크 무효 사유가 겹치면 취소 → 행사 종료 → 재발행 순서로 보인다:
+ *       {@code domain.ticket.Ticket#shareLinkInvalidReason}.</li>
+ *   <li>확인 필요 (#56) — 공연이 끝난 뒤 입장 기록이 남아 있어도 '공연 종료'를 '입장 완료'보다 먼저 보인다:
+ *       {@code domain.ticket.Ticket#display}.</li>
+ *   <li>확인 필요 (#56) — 취소되거나 포기한 회차도 그 회차의 종료 시각이 지나야 끝난 것으로 세어 QR · 공유 버튼을 숨긴다:
+ *       {@code domain.ticket.Ticket#hasAllSessionsEnded}.</li>
+ *   <li>확인 필요 (#56, #37 인계) — 지운 블록의 좌석 표기는 지금 블록 수와 상관없이 기록에 남은 블록 이름을 붙인다:
+ *       {@code domain.ticket.PointedSeat#label}.</li>
+ *   <li>확인 필요 (#56) — 이미 취소된 티켓 · 이미 포기한 날짜의 오류 문구: {@code domain.ticket.TicketErrorCode}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
