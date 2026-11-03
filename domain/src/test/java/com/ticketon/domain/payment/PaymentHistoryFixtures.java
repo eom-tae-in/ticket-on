@@ -93,6 +93,14 @@ final class PaymentHistoryFixtures {
                 ZONE_STANDING_A, null, undiscounted(130_200), Money.ZERO, Set.of(), false, null, qrKeyOf(id));
     }
 
+    /** 5/3 · 5/5 2일권 — 금 40,000 + 일 50,000 = 90,000원 → 3% → 87,300원. 5/4 회차를 가리키지 않는다. */
+    static Ticket twoDayPass(long id, int sequence) {
+        return Ticket.restore(id, BOOKING, sequence,
+                List.of(TicketSession.purchased(SESSION_MAY_3, sessionPrice(40_000)),
+                        TicketSession.purchased(SESSION_MAY_5, sessionPrice(50_000))),
+                ZONE_STANDING_A, null, undiscounted(87_300), Money.ZERO, Set.of(), false, null, qrKeyOf(id));
+    }
+
     /** 쿠폰을 쓴 3일권 — 1일권 35,000원 × 3 → 10% → 94,500원 − 쿠폰 5,000원 = 89,500원 결제 (docs/08). */
     static Ticket couponPass(long id, int sequence) {
         return Ticket.restore(id, BOOKING, sequence,

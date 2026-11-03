@@ -539,6 +539,66 @@ class PaymentHistoryRecordingTest {
         }
 
         @Test
+        @DisplayName("관리자 대신 취소도 관객 취소와 같은 규정이다 — 배상 표시가 붙은 티켓만 10% 배상 (docs/08 \"관리자 대신 취소\", \"출연자 변경\")")
+        void adminActionNeedsMark() {
+            Ticket marked = seatTicket(1, 1, ZONE_R, 1207, undiscounted(50_000));
+            marked.exemptFromDeduction(DeductionExemptionCause.PERFORMER_CHANGE);
+            Ticket unmarked = seatTicket(2, 2, ZONE_R, 1208, undiscounted(50_000));
+            PaymentHistory history = PaymentHistory.startWithBookingPayment(List.of(marked, unmarked), MARCH_1);
+            history.recordCancellationRefund(List.of(
+                    cancelled(marked, TicketCancellationReason.ADMIN_ACTION, MARCH_12),
+                    cancelled(unmarked, TicketCancellationReason.ADMIN_ACTION, MARCH_12)), Money.of(90_000), MARCH_12);
+            PaymentHistoryCause cause = PaymentHistoryCause.cancellation(TicketCancellationReason.ADMIN_ACTION);
+
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> history.recordCompensation(cause, List.of(marked, unmarked), Money.of(10_000), MARCH_12));
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> history.recordCompensation(cause, List.of(unmarked), Money.of(5_000), MARCH_12));
+            assertThat(history.recordCompensation(cause, List.of(marked), Money.of(5_000), MARCH_12).ticketIds()).containsExactly(1L);
+        }
+
+        @Test
+        @DisplayName("그날 몫 배상은 그 회차의 그날 몫을 받은 묶음권에만 — 일반 티켓, 그 회차를 가리키지 않는 묶음권, 다른 회차는 받지 않는다")
+        void bundleDayCompensationOnlyForThatDay() {
+            Ticket ticket = seatTicket(1, 1, ZONE_R, 1207, undiscounted(50_000));
+            Ticket pass = festivalPass(2, 2);
+            Ticket twoDayPass = PaymentHistoryFixtures.twoDayPass(3, 3);
+            PaymentHistory history = PaymentHistory.startWithBookingPayment(List.of(ticket, pass, twoDayPass), MAY_1);
+            history.recordBundleDayRefund(List.of(pass), SESSION_MAY_4, MAY_2);
+            PaymentHistoryCause mayFourth = PaymentHistoryCause.bundleDayShare(SESSION_MAY_4);
+
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> history.recordCompensation(mayFourth, List.of(ticket), Money.of(4_650), MAY_2));
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> history.recordCompensation(mayFourth, List.of(twoDayPass), Money.of(4_650), MAY_2));
+            assertThatIllegalArgumentException().isThrownBy(() -> history.recordCompensation(
+                    PaymentHistoryCause.bundleDayShare(SESSION_MAY_5), List.of(pass), Money.of(4_650), MAY_2));
+            assertThat(history.recordCompensation(mayFourth, List.of(pass), Money.of(4_650), MAY_2).ticketIds()).containsExactly(2L);
+        }
+
+        @Test
+        @DisplayName("불가항력으로 보류 → 그 사이 관객이 전체 취소 → 관리자가 주최자 사정으로 확인하면 늦게라도 그날 몫 배상을 남긴다")
+        void deferredBundleDayCompensationAfterWholeCancellation() {
+            Ticket pass = festivalPass(1, 1);
+            PaymentHistory history = PaymentHistory.startWithBookingPayment(List.of(pass), MAY_1);
+            PaymentHistoryEntry dayShare = history.recordBundleDayRefund(List.of(pass), SESSION_MAY_4, MAY_2);
+            pass.recordPartialRefund(dayShare.amount());
+            history.recordCancellationRefund(List.of(cancelled(pass, TicketCancellationReason.AUDIENCE_CANCELLATION, MAY_2)),
+                    Money.of(83_700), MAY_2);
+
+            PaymentHistoryEntry compensation = history.recordCompensation(PaymentHistoryCause.bundleDayShare(SESSION_MAY_4),
+                    List.of(pass), Money.of(4_650), MAY_6);
+
+            assertThat(compensation.occurredAt()).isEqualTo(MAY_6);
+            assertThat(history.entries()).extracting(PaymentHistoryEntry::kind).containsExactly(PaymentHistoryEntryKind.PAYMENT,
+                    PaymentHistoryEntryKind.REFUND, PaymentHistoryEntryKind.REFUND, PaymentHistoryEntryKind.COMPENSATION);
+            assertThat(history.netPaidAmount()).isEqualTo(Money.ZERO);
+            assertThat(history.totalOf(PaymentHistoryEntryKind.COMPENSATION)).isEqualTo(Money.of(4_650));
+            assertThatIllegalArgumentException().isThrownBy(() -> history.recordCompensation(
+                    PaymentHistoryCause.bundleDayShare(SESSION_MAY_4), List.of(pass), Money.of(4_650), MAY_6));
+        }
+
+        @Test
         @DisplayName("좌석 변경 · 결제 오류 환불에는 배상이 없다 — 다른 회차로 바꾼 사람은 원하던 공연을 보러 간다")
         void noCompensationForChangeOrPaymentError() {
             Ticket ticket = seatTicket(1, 1, ZONE_R, 1207, undiscounted(50_000));
