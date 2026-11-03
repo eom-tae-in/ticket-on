@@ -55,6 +55,18 @@ final class FakeEventRepository implements EventRepository {
         return findById(id);
     }
 
+    /** {@link #findByIdForUpdate}와 같되 잠금 기록에 "FOR KEY SHARE"로 남긴다. */
+    @Override
+    public Optional<Event> findByIdForKeyShare(long id) {
+        Runnable beforeLock = beforeNextLock;
+        beforeNextLock = null;
+        if (beforeLock != null) {
+            beforeLock.run();
+        }
+        rowLockLog.record("행사 " + id + " FOR KEY SHARE");
+        return findById(id);
+    }
+
     /** 다음 행사 잠금을 얻기 전에 끝난 다른 편집을 재현한다 — 실제 DB 잠금 검증은 통합 테스트가 맡는다. */
     void beforeNextLock(Runnable edit) {
         beforeNextLock = edit;
