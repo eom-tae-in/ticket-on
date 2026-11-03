@@ -27,9 +27,11 @@ import java.util.stream.Collectors;
 final class HeldBookingTickets {
 
     private final List<HeldSession> heldSessions;
+    private final boolean includesBundle;
 
-    private HeldBookingTickets(List<HeldSession> heldSessions) {
+    private HeldBookingTickets(List<HeldSession> heldSessions, boolean includesBundle) {
         this.heldSessions = List.copyOf(heldSessions);
+        this.includesBundle = includesBundle;
     }
 
     /**
@@ -47,10 +49,12 @@ final class HeldBookingTickets {
                 .map(session -> session.id().getAsLong())
                 .collect(Collectors.toSet());
         List<HeldSession> heldSessions = new ArrayList<>();
+        boolean includesBundle = false;
         for (Ticket ticket : tickets) {
             if (!ticket.parent().isBooking() || ticket.isCancelled()) {
                 continue;
             }
+            includesBundle |= ticket.isBundle();
             for (long sessionId : ticket.sessionIds()) {
                 if (!scheduledSessionIds.contains(sessionId)) {
                     throw new IllegalArgumentException("이 행사의 티켓이 아닙니다: 행사 " + schedule.eventId() + ", 티켓 " + ticket.number()
@@ -62,7 +66,22 @@ final class HeldBookingTickets {
                 }
             }
         }
-        return new HeldBookingTickets(heldSessions);
+        return new HeldBookingTickets(heldSessions, includesBundle);
+    }
+
+    /** 그 날짜에서 차지하는 매수 — 1인 총 매수 "날짜별". 3일권 1장은 묶은 날짜마다 1매다. */
+    int countOn(long dateId) {
+        return (int) heldSessions.stream().filter(held -> held.dateId() == dateId).count();
+    }
+
+    /** 행사 전체에서 차지하는 매수 — 1인 총 매수 "행사 전체". 3일권 1장은 3매다. */
+    int countInEvent() {
+        return heldSessions.size();
+    }
+
+    /** 유효한 묶음권 티켓이 있는지 — 매수를 넘었다고 알릴 때 묶음권을 세는 법을 덧붙인다. */
+    boolean includesBundle() {
+        return includesBundle;
     }
 
     /** 가진 티켓이 가리키는 회차들(겹치지 않게). */

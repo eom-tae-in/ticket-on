@@ -318,17 +318,53 @@ final class BookingFixtures {
 
     /** 늦여름 페스티벌 3일 통권 티켓 한 장 — 5/3 · 5/4 · 5/5, 40,000 + 50,000 + 50,000원 → 7% → 130,200원(docs/05). */
     static Ticket festivalPassTicket() {
-        return Ticket.issueForBooking(BOOKING_ID, BOOKING_NUMBER, 1, STANDING_A, OptionalLong.empty(),
-                List.of(TicketSession.purchased(SESSION_MAY_3, new SessionPrice(Money.of(40_000))),
-                        TicketSession.purchased(SESSION_MAY_4, new SessionPrice(Money.of(50_000))),
-                        TicketSession.purchased(SESSION_MAY_5, new SessionPrice(Money.of(50_000)))),
-                undiscounted(130_200), qrKey(1));
+        return festivalPassTickets(1).getFirst();
+    }
+
+    /** 늦여름 페스티벌 3일 통권 티켓 count장 — 예매 건 하나. */
+    static List<Ticket> festivalPassTickets(int count) {
+        List<Ticket> tickets = new ArrayList<>();
+        for (int sequence = 1; sequence <= count; sequence++) {
+            tickets.add(Ticket.issueForBooking(BOOKING_ID, BOOKING_NUMBER, sequence, STANDING_A, OptionalLong.empty(),
+                    List.of(TicketSession.purchased(SESSION_MAY_3, new SessionPrice(Money.of(40_000))),
+                            TicketSession.purchased(SESSION_MAY_4, new SessionPrice(Money.of(50_000))),
+                            TicketSession.purchased(SESSION_MAY_5, new SessionPrice(Money.of(50_000)))),
+                    undiscounted(130_200), qrKey(sequence)));
+        }
+        return List.copyOf(tickets);
+    }
+
+    /** 늦여름 페스티벌 그 날짜의 일반(1일) 티켓 count장 — 스탠딩A, 장당 40,000원. */
+    static List<Ticket> festivalDayTickets(long sessionId, int count) {
+        List<Ticket> tickets = new ArrayList<>();
+        for (int sequence = 1; sequence <= count; sequence++) {
+            tickets.add(Ticket.issueForBooking(BOOKING_ID, BOOKING_NUMBER, sequence, STANDING_A, OptionalLong.empty(),
+                    List.of(TicketSession.purchased(sessionId, new SessionPrice(Money.of(40_000)))), undiscounted(40_000),
+                    qrKey(sequence)));
+        }
+        return List.copyOf(tickets);
+    }
+
+    /** 출연자가 바뀐 그 날을 포기한 3일 통권 티켓 한 장(docs/04 "묶음권은 바뀐 날만 포기합니다"). */
+    static Ticket festivalPassForfeiting(long sessionId) {
+        Ticket ticket = festivalPassTicket();
+        ticket.forfeitSession(sessionId, korean(2026, 4, 25, 10, 0));
+        return ticket;
     }
 
     /** 그 회차의 초대권 티켓 한 장 — 결제 없음. */
     static Ticket invitationTicket(long sessionId) {
-        return Ticket.issueForInvitation(INVITATION_ID, INVITATION_NUMBER, 1, PLAY_ZONE_R, OptionalLong.empty(), List.of(sessionId),
-                qrKey(9));
+        return invitationTickets(sessionId, 1).getFirst();
+    }
+
+    /** 그 회차의 초대권 티켓 count장 — 단체 초대 하나. */
+    static List<Ticket> invitationTickets(long sessionId, int count) {
+        List<Ticket> tickets = new ArrayList<>();
+        for (int sequence = 1; sequence <= count; sequence++) {
+            tickets.add(Ticket.issueForInvitation(INVITATION_ID, INVITATION_NUMBER, sequence, PLAY_ZONE_R, OptionalLong.empty(),
+                    List.of(sessionId), qrKey(10 + sequence)));
+        }
+        return List.copyOf(tickets);
     }
 
     /** 늦여름 페스티벌 3일 통권 초대권 티켓 한 장 — 단체 초대(docs/09 "묶음권 초대"). */

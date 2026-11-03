@@ -14,6 +14,8 @@ import com.ticketon.domain.event.EventSession;
 import com.ticketon.domain.event.EventStatus;
 import com.ticketon.domain.event.ScreenSide;
 import com.ticketon.domain.event.SessionStatus;
+import com.ticketon.domain.event.TicketsPerPersonBasis;
+import com.ticketon.domain.event.TicketsPerPersonLimit;
 import com.ticketon.domain.pricing.BundleProduct;
 import com.ticketon.domain.pricing.PricingErrorCode;
 import com.ticketon.domain.ticket.Ticket;
@@ -22,9 +24,11 @@ import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * 예매 자격 판정 — 이 관객이 이 행사를 지금 예매할 수 있는지(docs/06 "전체 흐름"). 막으면 까닭과 문구를 돌려준다({@link BookingEligibility}).
@@ -37,6 +41,7 @@ import java.util.Set;
  *   <tr><td>[예매하기]</td><td>{@link #atStart}</td><td>미리보기 아님 · 판매 중 · 이용 정지 아님</td></tr>
  *   <tr><td>회차 선택 (또는 날짜 · 묶음권)</td><td>{@link #atSessionChoice}</td><td>+ 회차 취소 안 됨 · 그 회차 예매 종료 전 · 연령 제한 ·
  *       회차 선택 제약</td></tr>
+ *   <tr><td>좌석 선택 · 매수 선택</td><td>{@link #atTicketChoice}</td><td>+ 1인 총 매수</td></tr>
  * </table>
  * <p>
  * <b>판매 중</b>은 저장된 행사 상태가 아니라 지금 시각을 반영한 상태로 본다({@link Event#statusAt}) — 오픈 시각이 지났는데 상태 전환 작업이 아직
@@ -133,6 +138,39 @@ public final class BookingEligibilityJudge {
         Objects.requireNonNull(now, "now");
         requireSelectable(selection);
         return decide(refusalAtSessionChoice(selection, now));
+    }
+
+    /**
+     * 좌석(또는 매수)을 고른 순간의 판정 — 회차 선택의 판정 다음에 <b>1인 총 매수</b>를 본다(docs/06 "1인 총 매수 — 기준을 고릅니다").
+     * <p>
+     * <b>이미 가진 유효 예매 티켓 + 이번 매수 ≤ 한도</b>여야 한다. 계정 기준이고 계정은 전화번호 하나에 하나라 사실상 사람 단위다(docs/06 "집계
+     * 기준"). 초대권은 포함하지 않는다.
+     * <ul>
+     *   <li><b>날짜별</b> — 날짜마다 따로 센다. 4매 제한이면 같은 날 15시 2매를 가진 관객은 19시를 2매까지 산다 — 시간 회차별로 세면 15시와
+     *       19시를 다 사서 우회되기 때문이다. 8회차(4일 × 2회) 공연이면 한 사람이 최대 16매다.</li>
+     *   <li><b>행사 전체</b> — 행사 전체에서 한도만큼. 8회차 공연이어도 4매다.</li>
+     *   <li><b>묶음권</b> — 3일권 1장은 묶은 날짜마다 1매다(날짜별이면 5/3 · 5/4 · 5/5에 1매씩, 행사 전체면 3매, docs/05 "매수 제한 계산").
+     *       세는 법은 묶음권 상품이 갖는다({@link BundleProduct#ticketsPerPersonCountByDate}, {@link BundleProduct#ticketsPerPersonCountInEvent}).</li>
+     * </ul>
+     * 판매 중에 한도를 낮추면 신규 예매부터 적용되지만 이미 산 표도 센다(docs/04 "예매가 열린 뒤(판매 중) 수정 범위") — 이미 3매를 가진 관객은
+     * 한도를 2매로 낮춘 뒤 더 살 수 없고, 산 3매는 그대로다.
+     * <p>
+     * 한 번에 담을 수 있는 수(1회 선택 매수, 묶음권은 장수)는 선점이 본다(#70). 지정석은 좌석을 하나씩 누를 때마다 그때까지 담은 좌석 수로 묻는다.
+     *
+     * @param ticketCount 이번에 담는 티켓 장수, 1 이상. 묶음권은 장수다(3일권 2장 = 2)
+     * @throws NotFoundException        고른 회차가 일정에 없으면({@link EventErrorCode#SESSION_NOT_FOUND})
+     * @throws RuleViolationException   묶음권의 회차가 묶은 날짜마다 하나씩이 아니면({@link PricingErrorCode#BUNDLE_SESSIONS_MISMATCH})
+     * @throws IllegalArgumentException 장수가 1보다 작거나, 다른 행사의 묶음권이면
+     */
+    public BookingEligibility atTicketChoice(BookingSelection selection, int ticketCount, Instant now) {
+        Objects.requireNonNull(selection, "selection");
+        Objects.requireNonNull(now, "now");
+        if (ticketCount < 1) {
+            throw new IllegalArgumentException("이번에 담는 티켓은 1장 이상이어야 합니다: " + ticketCount);
+        }
+        requireSelectable(selection);
+        return decide(refusalAtSessionChoice(selection, now)
+                .or(() -> ticketsPerPersonRefusal(selection, ticketCount)));
     }
 
     private Optional<BookingRefusal> refusalAtStart(Instant now) {
@@ -237,6 +275,52 @@ public final class BookingEligibilityJudge {
         String message = audienceSubject() + " " + BookingErrorCode.ONE_SESSION_PER_EVENT.message();
         return Optional.of(new BookingRefusal(BookingErrorCode.ONE_SESSION_PER_EVENT, message,
                 "고른 회차 " + selection.sessionIds() + ", 가진 회차 " + heldTickets.sessionIds()));
+    }
+
+    private Optional<BookingRefusal> ticketsPerPersonRefusal(BookingSelection selection, int ticketCount) {
+        if (!(event.bookingSettings().ticketsPerPerson() instanceof TicketsPerPersonLimit.Limited(int maxTickets, TicketsPerPersonBasis basis))) {
+            return Optional.empty();
+        }
+        return switch (basis) {
+            case PER_DATE -> ticketsOnDateRefusal(selection, ticketCount, maxTickets);
+            case EVENT_TOTAL -> ticketsInEventRefusal(selection, ticketCount, maxTickets);
+        };
+    }
+
+    private Optional<BookingRefusal> ticketsOnDateRefusal(BookingSelection selection, int ticketCount, int maxTickets) {
+        Map<Long, Integer> requestedByDate = new TreeMap<>(switch (selection) {
+            case BookingSelection.SingleSession(long sessionId) -> Map.of(dateIdOf(sessionId), ticketCount);
+            case BookingSelection.Bundle(BundleProduct product, var _) -> product.ticketsPerPersonCountByDate(ticketCount);
+        });
+        for (Map.Entry<Long, Integer> requested : requestedByDate.entrySet()) {
+            int held = heldTickets.countOn(requested.getKey());
+            if (held + requested.getValue() > maxTickets) {
+                String message = audienceSubject() + " 한 사람이 하루에 " + maxTickets + "매까지 예매할 수 있습니다." + countingNote(selection);
+                return Optional.of(new BookingRefusal(BookingErrorCode.TICKETS_PER_PERSON_EXCEEDED_ON_DATE, message,
+                        "날짜 " + requested.getKey() + ": 가진 " + held + "매 + 이번 " + requested.getValue() + "매 > " + maxTickets + "매"));
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Optional<BookingRefusal> ticketsInEventRefusal(BookingSelection selection, int ticketCount, int maxTickets) {
+        int requested = switch (selection) {
+            case BookingSelection.SingleSession _ -> ticketCount;
+            case BookingSelection.Bundle(BundleProduct product, var _) -> product.ticketsPerPersonCountInEvent(ticketCount);
+        };
+        int held = heldTickets.countInEvent();
+        if (held + requested <= maxTickets) {
+            return Optional.empty();
+        }
+        String message = audienceSubject() + " 한 사람이 " + maxTickets + "매까지 예매할 수 있습니다." + countingNote(selection);
+        return Optional.of(new BookingRefusal(BookingErrorCode.TICKETS_PER_PERSON_EXCEEDED_IN_EVENT, message,
+                "행사 전체: 가진 " + held + "매 + 이번 " + requested + "매 > " + maxTickets + "매"));
+    }
+
+    /** 매수를 넘었다고 알릴 때 덧붙이는 세는 법 — 이미 산 표도 세고, 묶음권이 끼면 날짜마다 1매로 센다는 것까지. */
+    private String countingNote(BookingSelection selection) {
+        boolean bundleInvolved = selection instanceof BookingSelection.Bundle || heldTickets.includesBundle();
+        return " 이미 예매한 표도 함께 셉니다." + (bundleInvolved ? " 묶음권은 날짜마다 1매로 셉니다." : "");
     }
 
     /**
