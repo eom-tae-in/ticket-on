@@ -66,6 +66,28 @@ public enum EventEditTarget {
     /** 예매 종료 시각 — 변경 가능({@link BookingSettings#bookingCloseLeadTime}). */
     BOOKING_CLOSE_TIME(ALLOWED, false, false),
 
+    /** 검표 시작 시각 — 변경 가능({@link BookingSettings#checkinOpenLeadTime}). */
+    CHECKIN_OPEN_TIME(ALLOWED, false, false),
+
+    /**
+     * 1회 선택 매수 · 1인 총 매수(기준 포함) · 회차 선택 제약 — 변경 가능하되 신규 예매부터 적용한다. 이미 산 표는 그대로이고, 1인 총 매수에는 이미
+     * 산 표도 센다(#69). 가격처럼 앞으로 살 사람에게만 걸리므로 암표 조짐이 보이면 바로 줄일 수 있어야 한다(docs/04 "산 사람의 조건은 관객에게
+     * 유리한 쪽으로만 바꿉니다").
+     */
+    PURCHASE_LIMITS_AND_SESSION_CHOICE(ALLOWED, false, false),
+
+    /**
+     * 재입장 — 켜기만 한다. 끄면 이미 산 서윤이 현장에서 다시 들어오지 못한다({@link Event#saveBookingStep}). 판매 대기에는 예매가 없어 자유고, 초대권이
+     * 있어도 오픈 전부터 붙는 규칙이 아니다(docs/04 "판매 대기에 초대권을 발권했으면"의 목록에 없다).
+     */
+    REENTRY(ALLOWED_WITH_RULES, false, false),
+
+    /**
+     * 연령 제한 — 낮추거나 없애기만 한다. 새로 걸거나 올리면 이미 산 서윤이 현장에서 막히고, 연령 미달은 예매 동의대로 환불도 되지 않는다
+     * ({@link Event#saveBookingStep}). 판매 대기에는 예매가 없어 자유고, 초대권이 있어도 오픈 전부터 붙는 규칙이 아니다.
+     */
+    AGE_RESTRICTION(ALLOWED_WITH_RULES, false, false),
+
     /** 정원(수량형) — 늘리기만. 판매 수량 이하로 줄일 수 없다(#64). */
     CAPACITY(ALLOWED_WITH_RULES, false, false),
 
@@ -106,10 +128,10 @@ public enum EventEditTarget {
     MISSING_SESSION_END_TIME(ALLOWED, false, true),
 
     /**
-     * 확인 필요 (#38) — 예매 종료 시각 밖의 예매 설정(오픈 시각 · 검표 시작 · 1회 선택 매수 · 1인 총 매수 · 회차 선택 제약 · 재입장 · 연령 제한).
-     * 예매가 열린 뒤 수정 범위 표에는 예매 종료 시각만 있어 나머지는 막아 둔다 — 산 뒤에 연령 제한이 생기는 일 같은 것을 막는다.
+     * 예매 오픈 시각({@link BookingSettings#bookingOpensAt}) — 예매가 열린 뒤에는 이미 지나 해당이 없다(docs/04 "예매가 열린 뒤(판매 중) 수정
+     * 범위"의 이유 문단). 판매 대기에는 아직 열리지 않아 바꿀 수 있다.
      */
-    OTHER_BOOKING_SETTINGS(LOCKED, false, false);
+    BOOKING_OPEN_TIME(LOCKED, false, false);
 
     private final EventEditAvailability afterBookingOpened;
     private final boolean lockedByInvitationsBeforeOpening;

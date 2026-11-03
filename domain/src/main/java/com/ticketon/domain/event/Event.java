@@ -174,17 +174,23 @@ public final class Event {
      * <ol>
      *   <li>공개 수준을 바꾼 설정을 만든다({@link EventVisibilitySetting#change}) — 암호 보호로 두면서 새 암호를 적지 않으면 걸려 있던 암호를
      *       그대로 쓴다.</li>
-     *   <li><b>바뀐 항목마다 지금 상태의 수정 범위를 확인한다</b> — 공개 수준({@link EventEditTarget#VISIBILITY}), 예매 종료 · 그 밖의 예매
-     *       설정({@link BookingSettings#changedEditTargets}), 취소 규정({@link EventEditTarget#CANCELLATION_POLICY}). 바뀌지 않은 항목은 보지
-     *       않는다 — 예매가 열린 뒤 예매 종료만 고치면서 취소 규정을 그대로 보내도 막지 않는다. 하나라도 막히면 아무것도 바꾸지 않는다.</li>
-     *   <li>셋을 바꾸고, 작성 중이면 진행 단계를 이 단계까지로 올리고, 무엇이든 바뀌었으면 마지막 수정 시각을 지금으로 한다.</li>
+     *   <li><b>바뀐 항목마다 지금 상태의 수정 범위를 확인한다</b> — 공개 수준({@link EventEditTarget#VISIBILITY}), 예매 설정의 항목
+     *       ({@link BookingSettings#changedEditTargets}), 취소 규정({@link EventEditTarget#CANCELLATION_POLICY}). 바뀌지 않은 항목은 보지
+     *       않는다 — 예매가 열린 뒤 예매 종료만 고치면서 취소 규정을 그대로 보내도 막지 않는다.</li>
+     *   <li><b>예매가 열린 뒤에는 산 사람의 조건을 관객에게 유리한 쪽으로만 바꾼다</b> — 재입장은 켜기만, 연령 제한은 낮추거나 없애기만 한다
+     *       ({@link ReentrySetting#isStricterThan}, {@link AgeRestriction#isStricterThan}). 재입장을 끄거나 연령 제한을 올리면 이미 산
+     *       서윤이 현장에서 막힌다(docs/04 "산 사람의 조건은 관객에게 유리한 쪽으로만 바꿉니다"). 판매 대기 · 작성 중은 예매가 없어 자유다.</li>
+     *   <li>하나라도 막히면 아무것도 바꾸지 않는다. 셋을 바꾸고, 작성 중이면 진행 단계를 이 단계까지로 올리고, 무엇이든 바뀌었으면 마지막 수정
+     *       시각을 지금으로 한다.</li>
      * </ol>
      * 같은 값을 몇 번 저장해도 안전하다 — 바뀐 것이 없으면 아무것도 바꾸지 않고 false다. {@link #requireEditable}처럼 저장된 상태로 판정한다.
      *
      * @param newPasswordHash 새로 정한 암호의 해시 — 암호 보호로 두면서 암호를 새로 적었을 때만. 아니면 null
      * @return 바뀐 것(공개 수준 · 예매 설정 · 취소 규정 · 진행 단계)이 있는지
      * @throws RuleViolationException   암호 보호인데 새 암호도 걸려 있던 암호도 없으면({@link EventErrorCode#EVENT_PASSWORD_REQUIRED}), 바뀐
-     *                                  항목을 지금 상태에서 고칠 수 없으면({@link #requireEditable}과 같은 오류)
+     *                                  항목을 지금 상태에서 고칠 수 없으면({@link #requireEditable}과 같은 오류), 예매가 열린 뒤 재입장을
+     *                                  끄면({@link EventErrorCode#REENTRY_TURN_OFF_LOCKED_AFTER_BOOKING_OPENED}), 예매가 열린 뒤 연령 제한을
+     *                                  새로 걸거나 올리면({@link EventErrorCode#AGE_RESTRICTION_RAISE_LOCKED_AFTER_BOOKING_OPENED})
      * @throws IllegalArgumentException 암호 보호가 아닌데 새 암호 해시를 넘기면
      */
     public boolean saveBookingStep(EventVisibility newVisibility, EventPasswordHash newPasswordHash,
@@ -202,6 +208,7 @@ public final class Event {
             changedTargets.add(EventEditTarget.CANCELLATION_POLICY);
         }
         changedTargets.forEach(this::requireEditable);
+        requireBookedAudienceNotDisadvantaged(newBookingSettings);
         visibility = newVisibilitySetting;
         bookingSettings = newBookingSettings;
         cancellationPolicy = newCancellationPolicy;
@@ -1394,6 +1401,26 @@ public final class Event {
             case NOTHING -> EventErrorCode.EDIT_LOCKED_FOR_PAST_EVENT;
             case EVERYTHING, EVERYTHING_EXCEPT_INVITED -> throw new IllegalStateException("전부 고치는 범위에는 잠긴 항목이 없습니다: " + scope);
         };
+    }
+
+    /**
+     * 예매가 열린 뒤 재입장 · 연령 제한을 이미 산 관객에게 불리하게 바꾸는지 확인한다 — 재입장은 켜기만, 연령 제한은 낮추거나 없애기만
+     * 한다({@link EventEditTarget#REENTRY}, {@link EventEditTarget#AGE_RESTRICTION}). 판매 대기 · 작성 중은 예매가 없어 보지 않고, 판매 대기의
+     * 초대권에도 미리 붙지 않는다(docs/04 "판매 대기에 초대권을 발권했으면"의 목록에 없다). 판매가 끝난 뒤는 수정 범위가 먼저 막는다.
+     */
+    private void requireBookedAudienceNotDisadvantaged(BookingSettings newBookingSettings) {
+        if (editScope() != EventEditScope.AFTER_BOOKING_OPENED) {
+            return;
+        }
+        if (newBookingSettings.reentry().isStricterThan(bookingSettings.reentry())) {
+            throw new RuleViolationException(EventErrorCode.REENTRY_TURN_OFF_LOCKED_AFTER_BOOKING_OPENED,
+                    detail() + ", 재입장: " + bookingSettings.reentry() + " → " + newBookingSettings.reentry());
+        }
+        if (newBookingSettings.ageRestriction().isStricterThan(bookingSettings.ageRestriction())) {
+            throw new RuleViolationException(EventErrorCode.AGE_RESTRICTION_RAISE_LOCKED_AFTER_BOOKING_OPENED,
+                    detail() + ", 연령 제한 기준 나이: " + bookingSettings.ageRestriction().minimumAge() + " → "
+                            + newBookingSettings.ageRestriction().minimumAge());
+        }
     }
 
     private boolean endActivePause(SalesPauseCause cause, Instant now) {

@@ -4,10 +4,14 @@ import static com.ticketon.domain.event.EventFixtures.TWELVE_MONTHS_ORGANIZER;
 import static com.ticketon.domain.event.EventFixtures.assertRejected;
 import static com.ticketon.domain.event.EventFixtures.twelveMonthsSpringPlay;
 import static com.ticketon.domain.event.EventStatusFixtures.ADDRESS;
+import static com.ticketon.domain.event.EventStatusFixtures.ADMIN_ACCOUNT_ID;
+import static com.ticketon.domain.event.EventStatusFixtures.BEFORE_OPEN;
 import static com.ticketon.domain.event.EventStatusFixtures.LAST_MODIFIED_AT;
 import static com.ticketon.domain.event.EventStatusFixtures.POSTER;
 import static com.ticketon.domain.event.EventStatusFixtures.korean;
+import static com.ticketon.domain.event.EventStatusFixtures.opensAtMarchFirst;
 import static com.ticketon.domain.event.EventStatusFixtures.springPlayIn;
+import static com.ticketon.domain.event.EventStatusFixtures.withOpensAt;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
@@ -121,6 +125,33 @@ class EventWizardStepSaveTest {
                 LeadTime.of(Duration.ofMinutes(90)), SeatsPerSelectionLimit.of(6),
                 TicketsPerPersonLimit.of(4, TicketsPerPersonBasis.PER_DATE), SessionChoiceRestriction.ONE_SESSION_PER_DATE,
                 ReentrySetting.ALLOWED, AgeRestriction.none());
+    }
+
+    /** 검표 시작만 90분 전으로 고친 예매 설정 — 나머지는 처음 값. */
+    private static BookingSettings checkinNinetyMinutesBefore() {
+        BookingSettings defaults = BookingSettings.defaults();
+        return new BookingSettings(defaults.bookingOpensAt(), defaults.bookingCloseLeadTime(), LeadTime.of(Duration.ofMinutes(90)),
+                defaults.seatsPerSelection(), defaults.ticketsPerPerson(), defaults.sessionChoice(), defaults.reentry(),
+                defaults.ageRestriction());
+    }
+
+    /** 암표 조짐이 보여 줄인 매수 제한 — 1회 2석, 1인 행사 전체 2매, 행사 전체에서 한 회차만. 나머지는 처음 값. */
+    private static BookingSettings tighterPurchaseLimits() {
+        BookingSettings defaults = BookingSettings.defaults();
+        return new BookingSettings(defaults.bookingOpensAt(), defaults.bookingCloseLeadTime(), defaults.checkinOpenLeadTime(),
+                SeatsPerSelectionLimit.of(2), TicketsPerPersonLimit.of(2, TicketsPerPersonBasis.EVENT_TOTAL),
+                SessionChoiceRestriction.ONE_SESSION_PER_EVENT, defaults.reentry(), defaults.ageRestriction());
+    }
+
+    /** 처음 값에서 예매 종료 · 재입장 · 연령 제한만 정한 예매 설정. */
+    private static BookingSettings settingsWith(Duration bookingCloseLead, ReentrySetting reentry, AgeRestriction ageRestriction) {
+        BookingSettings defaults = BookingSettings.defaults();
+        return new BookingSettings(defaults.bookingOpensAt(), LeadTime.of(bookingCloseLead), defaults.checkinOpenLeadTime(),
+                defaults.seatsPerSelection(), defaults.ticketsPerPerson(), defaults.sessionChoice(), reentry, ageRestriction);
+    }
+
+    private static boolean saveBookingSettings(Event event, BookingSettings bookingSettings) {
+        return event.saveBookingStep(EventVisibility.PUBLIC, null, bookingSettings, CancellationPolicy.standard(), SAVED_AT);
     }
 
     private static boolean saveDefaultBookingStep(Event event, Instant now) {
@@ -378,12 +409,141 @@ class EventWizardStepSaveTest {
         }
 
         @Test
-        @DisplayName("확인 필요 (#38) — 예매가 열린 뒤 예매 종료 밖의 예매 설정(연령 제한 등)은 막는다")
-        void otherBookingSettingsLockedAfterBookingOpened() {
+        @DisplayName("예매가 열린 뒤 연령 제한을 새로 걸면 막는다 — 이미 산 관객이 현장에서 막힌다 (docs/04)")
+        void ageRestrictionNewlySetAfterBookingOpened() {
             Event event = springPlayIn(EventStatus.ON_SALE, BookingSettings.defaults());
 
             assertRejected(() -> event.saveBookingStep(EventVisibility.PUBLIC, null, adultsOnly(), CancellationPolicy.standard(),
-                    SAVED_AT), EventErrorCode.EDIT_LOCKED_AFTER_BOOKING_OPENED);
+                    SAVED_AT), EventErrorCode.AGE_RESTRICTION_RAISE_LOCKED_AFTER_BOOKING_OPENED);
+
+            assertThat(event.bookingSettings()).isEqualTo(BookingSettings.defaults());
+        }
+
+        @Test
+        @DisplayName("예매가 열린 뒤에도 검표 시작 · 매수 제한 · 회차 선택 제약은 바꾼다 — 암표 조짐이 보이면 바로 줄인다. 신규 예매부터 걸린다 (docs/04)")
+        void checkinAndPurchaseLimitsAfterBookingOpened() {
+            for (EventStatus status : List.of(EventStatus.ON_SALE, EventStatus.SALES_PAUSED)) {
+                for (BookingSettings changed : List.of(checkinNinetyMinutesBefore(), tighterPurchaseLimits())) {
+                    Event event = springPlayIn(status, BookingSettings.defaults());
+
+                    assertThat(saveBookingSettings(event, changed)).as(status.name()).isTrue();
+
+                    assertThat(event.bookingSettings()).as(status.name()).isEqualTo(changed);
+                    assertThat(event.lastModifiedAt()).as(status.name()).isEqualTo(SAVED_AT);
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("예매가 열린 뒤 예매 오픈 시각은 이미 지나 옮기거나 비울 수 없다 — 막히면 아무것도 바뀌지 않는다 (docs/04)")
+        void bookingOpenTimeLockedAfterBookingOpened() {
+            for (BookingSettings changed : List.of(withOpensAt(korean(LocalDate.of(2026, 3, 2), 14, 0)), withOpensAt(null))) {
+                Event event = springPlayIn(EventStatus.ON_SALE);
+
+                assertRejected(() -> saveBookingSettings(event, changed), EventErrorCode.EDIT_LOCKED_AFTER_BOOKING_OPENED);
+
+                assertThat(event.bookingSettings()).isEqualTo(opensAtMarchFirst());
+                assertThat(event.lastModifiedAt()).isEqualTo(LAST_MODIFIED_AT);
+            }
+        }
+
+        @Test
+        @DisplayName("예매가 열린 뒤에도 재입장은 켠다 — 관객에게 유리한 쪽이다")
+        void reentryTurnedOnAfterBookingOpened() {
+            for (EventStatus status : List.of(EventStatus.ON_SALE, EventStatus.SALES_PAUSED)) {
+                Event event = springPlayIn(status, BookingSettings.defaults());
+
+                assertThat(saveBookingSettings(event, settingsWith(Duration.ofHours(1), ReentrySetting.ALLOWED,
+                        AgeRestriction.none()))).as(status.name()).isTrue();
+
+                assertThat(event.bookingSettings().reentry()).as(status.name()).isEqualTo(ReentrySetting.ALLOWED);
+                assertThat(event.lastModifiedAt()).as(status.name()).isEqualTo(SAVED_AT);
+            }
+        }
+
+        @Test
+        @DisplayName("예매가 열린 뒤 재입장을 끄면 막고, 함께 보낸 공개 수준 · 예매 종료도 바꾸지 않는다 — 이미 산 관객이 다시 들어오지 못한다 (docs/04)")
+        void reentryTurnOffLockedAfterBookingOpened() {
+            for (EventStatus status : List.of(EventStatus.ON_SALE, EventStatus.SALES_PAUSED)) {
+                BookingSettings reentryOn = settingsWith(Duration.ofHours(1), ReentrySetting.ALLOWED, AgeRestriction.none());
+                Event event = springPlayIn(status, reentryOn);
+
+                assertRejected(() -> event.saveBookingStep(EventVisibility.LINK_ONLY, null,
+                        settingsWith(Duration.ofHours(2), ReentrySetting.NOT_ALLOWED, AgeRestriction.none()),
+                        CancellationPolicy.standard(), SAVED_AT), EventErrorCode.REENTRY_TURN_OFF_LOCKED_AFTER_BOOKING_OPENED);
+
+                assertThat(event.bookingSettings()).as(status.name()).isEqualTo(reentryOn);
+                assertThat(event.visibility()).as(status.name()).isEqualTo(EventVisibilitySetting.publicByDefault());
+                assertThat(event.lastModifiedAt()).as(status.name()).isEqualTo(LAST_MODIFIED_AT);
+            }
+        }
+
+        @Test
+        @DisplayName("예매가 열린 뒤에도 연령 제한은 낮추거나 없앤다 — 만 19세를 만 15세로, 만 19세를 없음으로")
+        void ageRestrictionLoweredOrRemovedAfterBookingOpened() {
+            for (EventStatus status : List.of(EventStatus.ON_SALE, EventStatus.SALES_PAUSED)) {
+                for (AgeRestriction lowered : List.of(AgeRestriction.atLeast(15), AgeRestriction.none())) {
+                    Event event = springPlayIn(status, settingsWith(Duration.ofHours(1), ReentrySetting.NOT_ALLOWED,
+                            AgeRestriction.atLeast(19)));
+
+                    assertThat(saveBookingSettings(event, settingsWith(Duration.ofHours(1), ReentrySetting.NOT_ALLOWED, lowered)))
+                            .as(status.name()).isTrue();
+
+                    assertThat(event.bookingSettings().ageRestriction()).as(status.name()).isEqualTo(lowered);
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("예매가 열린 뒤 연령 제한을 올리거나 새로 걸면 막고, 함께 보낸 공개 수준 · 예매 종료도 바꾸지 않는다 — 이미 산 관객이 현장에서 "
+                + "막히고 환불도 되지 않는다 (docs/04)")
+        void ageRestrictionRaiseLockedAfterBookingOpened() {
+            for (EventStatus status : List.of(EventStatus.ON_SALE, EventStatus.SALES_PAUSED)) {
+                for (AgeRestriction before : List.of(AgeRestriction.atLeast(15), AgeRestriction.none())) {
+                    BookingSettings original = settingsWith(Duration.ofHours(1), ReentrySetting.NOT_ALLOWED, before);
+                    Event event = springPlayIn(status, original);
+
+                    assertRejected(() -> event.saveBookingStep(EventVisibility.LINK_ONLY, null,
+                            settingsWith(Duration.ofHours(2), ReentrySetting.NOT_ALLOWED, AgeRestriction.atLeast(19)),
+                            CancellationPolicy.standard(), SAVED_AT), EventErrorCode.AGE_RESTRICTION_RAISE_LOCKED_AFTER_BOOKING_OPENED);
+
+                    assertThat(event.bookingSettings()).as(status.name()).isEqualTo(original);
+                    assertThat(event.visibility()).as(status.name()).isEqualTo(EventVisibilitySetting.publicByDefault());
+                    assertThat(event.lastModifiedAt()).as(status.name()).isEqualTo(LAST_MODIFIED_AT);
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("작성 중 · 판매 대기는 예매가 없어 재입장을 끄고 연령 제한을 올리며 오픈 시각도 옮긴다 — 예매가 열린 적 없는 판매 중단도 같다")
+        void beforeBookingOpenedChangesFreely() {
+            BookingSettings original = settingsWith(Duration.ofHours(1), ReentrySetting.ALLOWED, AgeRestriction.atLeast(15));
+            BookingSettings defaults = BookingSettings.defaults();
+            BookingSettings stricter = new BookingSettings(korean(LocalDate.of(2026, 3, 2), 14, 0), defaults.bookingCloseLeadTime(),
+                    defaults.checkinOpenLeadTime(), defaults.seatsPerSelection(), defaults.ticketsPerPerson(),
+                    defaults.sessionChoice(), ReentrySetting.NOT_ALLOWED, AgeRestriction.atLeast(19));
+            List<SalesPause> heldBeforeOpening = List.of(
+                    new SalesPause(SalesPauseCause.ADMIN_SUSPENSION, ADMIN_ACCOUNT_ID, null, BEFORE_OPEN, null));
+
+            for (Event event : List.of(springPlayIn(EventStatus.DRAFT, original), springPlayIn(EventStatus.AWAITING_OPEN, original),
+                    springPlayIn(EventStatus.SALES_PAUSED, original, heldBeforeOpening, null))) {
+                assertThat(saveBookingSettings(event, stricter)).as(event.status().name()).isTrue();
+
+                assertThat(event.bookingSettings()).as(event.status().name()).isEqualTo(stricter);
+            }
+        }
+
+        @Test
+        @DisplayName("판매가 끝나면 재입장 켜기 · 검표 시작도 고정이다 — 입구 목록 · 검표 계정만 남는다")
+        void bookingSettingsLockedAfterSalesClosed() {
+            for (BookingSettings changed : List.of(settingsWith(Duration.ofHours(1), ReentrySetting.ALLOWED, AgeRestriction.none()),
+                    checkinNinetyMinutesBefore())) {
+                Event event = springPlayIn(EventStatus.SALES_CLOSED, BookingSettings.defaults());
+
+                assertRejected(() -> saveBookingSettings(event, changed), EventErrorCode.EDIT_LOCKED_AFTER_SALES_CLOSED);
+
+                assertThat(event.bookingSettings()).isEqualTo(BookingSettings.defaults());
+            }
         }
 
         @Test
@@ -537,17 +697,45 @@ class EventWizardStepSaveTest {
         }
 
         @Test
-        @DisplayName("예매 설정 — 예매 종료와 그 밖의 칸으로 나눈다. 같으면 비어 있다")
+        @DisplayName("예매 설정 — 오픈 시각, 예매 종료, 검표 시작, 매수 제한 · 회차 선택 제약, 재입장, 연령 제한으로 나눈다. 같으면 비어 있다")
         void bookingSettings() {
             BookingSettings defaults = BookingSettings.defaults();
 
             assertThat(defaults.changedEditTargets(BookingSettings.defaults())).isEmpty();
             assertThat(defaults.changedEditTargets(closingTwoHoursBefore())).containsExactly(EventEditTarget.BOOKING_CLOSE_TIME);
-            assertThat(defaults.changedEditTargets(adultsOnly())).containsExactly(EventEditTarget.OTHER_BOOKING_SETTINGS);
+            assertThat(defaults.changedEditTargets(adultsOnly())).containsExactly(EventEditTarget.AGE_RESTRICTION);
             assertThat(closingTwoHoursBefore().changedEditTargets(adultsOnly()))
-                    .containsExactlyInAnyOrder(EventEditTarget.BOOKING_CLOSE_TIME, EventEditTarget.OTHER_BOOKING_SETTINGS);
-            assertThat(defaults.changedEditTargets(adjustedBookingSettings()))
-                    .containsExactly(EventEditTarget.OTHER_BOOKING_SETTINGS);
+                    .containsExactlyInAnyOrder(EventEditTarget.BOOKING_CLOSE_TIME, EventEditTarget.AGE_RESTRICTION);
+            assertThat(defaults.changedEditTargets(adjustedBookingSettings())).containsExactlyInAnyOrder(
+                    EventEditTarget.BOOKING_OPEN_TIME, EventEditTarget.CHECKIN_OPEN_TIME,
+                    EventEditTarget.PURCHASE_LIMITS_AND_SESSION_CHOICE, EventEditTarget.REENTRY);
+            assertThat(defaults.changedEditTargets(withOpensAt(korean(LocalDate.of(2026, 3, 1), 14, 0))))
+                    .containsExactly(EventEditTarget.BOOKING_OPEN_TIME);
+            assertThat(defaults.changedEditTargets(checkinNinetyMinutesBefore())).containsExactly(EventEditTarget.CHECKIN_OPEN_TIME);
+            assertThat(defaults.changedEditTargets(tighterPurchaseLimits()))
+                    .containsExactly(EventEditTarget.PURCHASE_LIMITS_AND_SESSION_CHOICE);
+            assertThat(defaults.changedEditTargets(settingsWith(Duration.ofHours(1), ReentrySetting.ALLOWED, AgeRestriction.none())))
+                    .containsExactly(EventEditTarget.REENTRY);
+        }
+
+        @Test
+        @DisplayName("예매 설정 — 1회 선택 매수 · 1인 총 매수(기준 포함) · 회차 선택 제약은 하나만 바뀌어도 매수 제한 · 회차 선택 제약이다")
+        void purchaseLimitsAndSessionChoice() {
+            BookingSettings defaults = BookingSettings.defaults();
+            BookingSettings sixSeats = new BookingSettings(null, defaults.bookingCloseLeadTime(), defaults.checkinOpenLeadTime(),
+                    SeatsPerSelectionLimit.of(6), defaults.ticketsPerPerson(), defaults.sessionChoice(), defaults.reentry(),
+                    defaults.ageRestriction());
+            BookingSettings eventTotalBasis = new BookingSettings(null, defaults.bookingCloseLeadTime(),
+                    defaults.checkinOpenLeadTime(), defaults.seatsPerSelection(),
+                    TicketsPerPersonLimit.of(4, TicketsPerPersonBasis.EVENT_TOTAL), defaults.sessionChoice(), defaults.reentry(),
+                    defaults.ageRestriction());
+            BookingSettings onePerDate = new BookingSettings(null, defaults.bookingCloseLeadTime(), defaults.checkinOpenLeadTime(),
+                    defaults.seatsPerSelection(), defaults.ticketsPerPerson(), SessionChoiceRestriction.ONE_SESSION_PER_DATE,
+                    defaults.reentry(), defaults.ageRestriction());
+
+            for (BookingSettings changed : List.of(sixSeats, eventTotalBasis, onePerDate)) {
+                assertThat(defaults.changedEditTargets(changed)).containsExactly(EventEditTarget.PURCHASE_LIMITS_AND_SESSION_CHOICE);
+            }
         }
     }
 }

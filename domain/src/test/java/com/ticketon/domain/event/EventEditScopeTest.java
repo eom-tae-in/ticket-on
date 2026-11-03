@@ -51,6 +51,10 @@ class EventEditScopeTest {
         table.put(EventEditTarget.CHECKIN_ACCOUNTS, ALLOWED);
         table.put(EventEditTarget.VISIBILITY, ALLOWED);
         table.put(EventEditTarget.BOOKING_CLOSE_TIME, ALLOWED);
+        table.put(EventEditTarget.CHECKIN_OPEN_TIME, ALLOWED);
+        table.put(EventEditTarget.PURCHASE_LIMITS_AND_SESSION_CHOICE, ALLOWED);
+        table.put(EventEditTarget.REENTRY, ALLOWED_WITH_RULES);
+        table.put(EventEditTarget.AGE_RESTRICTION, ALLOWED_WITH_RULES);
         table.put(EventEditTarget.CAPACITY, ALLOWED_WITH_RULES);
         table.put(EventEditTarget.FLOOR_PLAN, ALLOWED_WITH_RULES);
         table.put(EventEditTarget.BLOCK_NAME, ALLOWED);
@@ -61,7 +65,7 @@ class EventEditScopeTest {
         table.put(EventEditTarget.CANCELLATION_POLICY, LOCKED);
         table.put(EventEditTarget.PERFORMERS, ALLOWED);
         table.put(EventEditTarget.MISSING_SESSION_END_TIME, ALLOWED);
-        table.put(EventEditTarget.OTHER_BOOKING_SETTINGS, LOCKED);
+        table.put(EventEditTarget.BOOKING_OPEN_TIME, LOCKED);
         return table;
     }
 
@@ -187,6 +191,38 @@ class EventEditScopeTest {
             assertThat(onSale.requireEditable(EventEditTarget.CATEGORY)).isEqualTo(ALLOWED);
             assertThat(onSale.requireEditable(EventEditTarget.VENUE_GUIDE_AND_CONTACT)).isEqualTo(ALLOWED);
             assertThat(springPlayIn(EventStatus.AWAITING_OPEN).requireEditable(EventEditTarget.TYPE)).isEqualTo(ALLOWED);
+        }
+
+        @Test
+        @DisplayName("예매가 열린 뒤 오픈 시각은 이미 지나 바꿀 수 없고, 검표 시작 · 매수 제한은 바꾸며, 재입장 · 연령 제한에는 규칙이 붙는다")
+        void bookingSettingsAfterOpening() {
+            Event onSale = springPlayIn(EventStatus.ON_SALE);
+
+            assertRejected(() -> onSale.requireEditable(EventEditTarget.BOOKING_OPEN_TIME), EventErrorCode.EDIT_LOCKED_AFTER_BOOKING_OPENED);
+            assertThat(onSale.requireEditable(EventEditTarget.CHECKIN_OPEN_TIME)).isEqualTo(ALLOWED);
+            assertThat(onSale.requireEditable(EventEditTarget.PURCHASE_LIMITS_AND_SESSION_CHOICE)).isEqualTo(ALLOWED);
+            assertThat(onSale.requireEditable(EventEditTarget.REENTRY)).isEqualTo(ALLOWED_WITH_RULES);
+            assertThat(onSale.requireEditable(EventEditTarget.AGE_RESTRICTION)).isEqualTo(ALLOWED_WITH_RULES);
+            assertThat(springPlayIn(EventStatus.AWAITING_OPEN).requireEditable(EventEditTarget.BOOKING_OPEN_TIME)).isEqualTo(ALLOWED);
+        }
+
+        @Test
+        @DisplayName("판매 대기에 초대권이 걸려도 재입장 · 연령 제한에는 오픈 전부터 규칙이 붙지 않는다 — 초대권을 지키는 항목이 아니다 (docs/04)")
+        void reentryAndAgeNotLockedByInvitations() {
+            assertThat(EventEditTarget.REENTRY.isLockedByInvitationsBeforeOpening()).isFalse();
+            assertThat(EventEditTarget.AGE_RESTRICTION.isLockedByInvitationsBeforeOpening()).isFalse();
+            assertThat(springPlayIn(EventStatus.AWAITING_OPEN).requireEditable(EventEditTarget.REENTRY)).isEqualTo(ALLOWED);
+            assertThat(springPlayIn(EventStatus.AWAITING_OPEN).requireEditable(EventEditTarget.AGE_RESTRICTION)).isEqualTo(ALLOWED);
+        }
+
+        @Test
+        @DisplayName("판매가 끝나면 검표 시작 · 재입장도 고정이다 — 입구 목록 · 검표 계정만 남는다")
+        void bookingSettingsLockedAfterSalesClosed() {
+            Event salesClosed = springPlayIn(EventStatus.SALES_CLOSED);
+
+            assertRejected(() -> salesClosed.requireEditable(EventEditTarget.CHECKIN_OPEN_TIME),
+                    EventErrorCode.EDIT_LOCKED_AFTER_SALES_CLOSED);
+            assertRejected(() -> salesClosed.requireEditable(EventEditTarget.REENTRY), EventErrorCode.EDIT_LOCKED_AFTER_SALES_CLOSED);
         }
 
         @Test
