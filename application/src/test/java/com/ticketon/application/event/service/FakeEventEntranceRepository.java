@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 
 /**
  * 메모리 입구 목록 저장소 — 표처럼 저장한 때의 값만 갖고, 읽을 때마다 새 객체로 되살린다. 새 입구에 id를 붙이고, 목록에서 빠진 입구는 지운 시각과
- * 함께 적어 둔다. 저장한 횟수를 센다.
+ * 함께 적어 둔다. 저장한 횟수를 센다. 저장을 실패하게 할 수 있다 — 저장이 되돌려질 때의 뒷정리를 보려고.
  */
 final class FakeEventEntranceRepository implements EventEntranceRepository {
 
@@ -22,6 +22,7 @@ final class FakeEventEntranceRepository implements EventEntranceRepository {
     private final Map<Long, Instant> removedEntrances = new LinkedHashMap<>();
     private long nextEntranceId = 201;
     private int saves;
+    private boolean failingSaves;
 
     @Override
     public EventEntrances findByEventId(long eventId) {
@@ -32,6 +33,9 @@ final class FakeEventEntranceRepository implements EventEntranceRepository {
     @Override
     public EventEntrances save(EventEntrances entrances, Instant now) {
         long eventId = entrances.eventId();
+        if (failingSaves) {
+            throw new IllegalStateException("저장하지 못했습니다(테스트가 실패하게 함): 행사 " + eventId);
+        }
         Set<Long> storedIds = findByEventId(eventId).entrances().stream()
                 .map(entrance -> entrance.id().getAsLong())
                 .collect(Collectors.toSet());
@@ -57,6 +61,11 @@ final class FakeEventEntranceRepository implements EventEntranceRepository {
     /** 목록에서 빠져 지운 시각이 적힌 입구 — 입구 id와 지운 시각. */
     Map<Long, Instant> removedEntrances() {
         return Map.copyOf(removedEntrances);
+    }
+
+    /** 이후의 저장을 실패하게 한다 — 트랜잭션이 되돌려지는 것을 흉내 낸다. */
+    void failSaves() {
+        failingSaves = true;
     }
 
     /** 저장한 횟수. */

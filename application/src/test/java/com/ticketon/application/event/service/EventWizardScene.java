@@ -126,9 +126,11 @@ final class EventWizardScene {
                 organizerRepository, eventRepository, categoryRepository, posterStorage, tokenGenerator, clock);
     }
 
-    DuplicateEventService duplicateEventService() {
+    /** 복제본의 공개 주소와 복사한 포스터의 열쇠는 넘긴 생성기로 붙인다 — 공개 주소, 포스터 열쇠 차례다. */
+    DuplicateEventService duplicateEventService(TokenGenerator copyTokenGenerator) {
         return new DuplicateEventService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
-                organizerRepository, eventRepository, floorPlanRepository, entranceRepository, posterStorage, tokenGenerator, clock);
+                organizerRepository, eventRepository, floorPlanRepository, entranceRepository, posterStorage, copyTokenGenerator,
+                clock);
     }
 
     SaveEventBasicInformationService saveEventBasicInformationService() {

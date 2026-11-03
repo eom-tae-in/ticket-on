@@ -30,6 +30,8 @@ class EventDuplicationTest {
     private static final Instant CREATED_AT = Instant.parse("2025-02-01T01:00:00Z");
     private static final Instant OPENED_AT = Instant.parse("2025-03-01T01:00:00Z");
     private static final Instant NOW = Instant.parse("2026-01-15T01:00:00Z");
+    private static final EventPoster ORIGINAL_POSTER = new EventPoster("Pq3kQ9-_mN2pL7vR4tY8wZ1aC5dE6fG0.jpg");
+    private static final EventPoster COPIED_POSTER = new EventPoster("Cp9kQ9-_mN2pL7vR4tY8wZ1aC5dE6fG0.jpg");
 
     /** 작년 봄 정기공연의 예매 설정 — 처음 값에서 모두 바꿨다. 오픈 3/1 10:00(한국 시각), 예매 종료 2시간 전, 검표 30분 전, 1회 2석, 1인 6매(행사 전체), 하루 한 회차, 재입장 켬, 만 19세 이상. */
     private static BookingSettings adjustedBookingSettings() {
@@ -51,7 +53,7 @@ class EventDuplicationTest {
                 ? List.of(SalesPause.byOrganizer(1L, null, OPENED_AT.plus(Duration.ofDays(3))))
                 : List.of();
         return Event.restore(ORIGINAL_EVENT, TWELVE_MONTHS_ORGANIZER, ORIGINAL_ADDRESS, twelveMonthsSpringPlay(),
-                new EventPoster("Pq3kQ9-_mN2pL7vR4tY8wZ1aC5dE6fG0.jpg"),
+                ORIGINAL_POSTER,
                 new EventVisibilitySetting(EventVisibility.PASSWORD_PROTECTED, new EventPasswordHash("pbkdf2-hash")),
                 adjustedBookingSettings(), threeDaysFullRefund(), status, bookingOpened ? OPENED_AT : null, salesPauses,
                 EventWizardStep.ENTRANCES_AND_CHECKIN_ACCOUNTS, CREATED_AT);
@@ -64,7 +66,7 @@ class EventDuplicationTest {
         @Test
         @DisplayName("복제본은 같은 주최자의 작성 중 행사이고 제목은 \"○○ (복사본)\"이다 — 새 공개 주소, 진행 단계 1단계, 마지막 수정 시각은 복제한 시각")
         void startsAsDraftCopy() {
-            Event copy = lastSpringPlay(EventStatus.ENDED).duplicate(COPY_ADDRESS, NOW);
+            Event copy = lastSpringPlay(EventStatus.ENDED).duplicate(COPY_ADDRESS, COPIED_POSTER, NOW);
 
             assertThat(copy.id()).isEmpty();
             assertThat(copy.organizerId()).isEqualTo(TWELVE_MONTHS_ORGANIZER);
@@ -83,7 +85,8 @@ class EventDuplicationTest {
         void copiesRestOfBasicInformation() {
             EventBasicInformation original = twelveMonthsSpringPlay();
 
-            EventBasicInformation copied = lastSpringPlay(EventStatus.ENDED).duplicate(COPY_ADDRESS, NOW).basicInformation();
+            EventBasicInformation copied = lastSpringPlay(EventStatus.ENDED).duplicate(COPY_ADDRESS, COPIED_POSTER, NOW)
+                    .basicInformation();
 
             assertThat(copied.type()).isEqualTo(original.type());
             assertThat(copied.category()).isEqualTo(original.category());
@@ -97,7 +100,7 @@ class EventDuplicationTest {
         @Test
         @DisplayName("예매 설정 · 취소 규정 조정은 가져오되 예매 오픈 시각은 비운다 — 오픈 시각은 날짜가 박힌 시각이다")
         void copiesBookingSettingsWithoutOpenTime() {
-            Event copy = lastSpringPlay(EventStatus.ENDED).duplicate(COPY_ADDRESS, NOW);
+            Event copy = lastSpringPlay(EventStatus.ENDED).duplicate(COPY_ADDRESS, COPIED_POSTER, NOW);
 
             BookingSettings settings = copy.bookingSettings();
             assertThat(settings.bookingOpensAt()).isNull();
@@ -113,21 +116,49 @@ class EventDuplicationTest {
         }
 
         @Test
-        @DisplayName("공개 수준은 물려받지 않고 공개로 시작한다 — 암호 보호였어도 암호가 없다. 포스터도 가져오지 않는다")
-        void startsPublicWithoutPoster() {
-            Event copy = lastSpringPlay(EventStatus.ENDED).duplicate(COPY_ADDRESS, NOW);
+        @DisplayName("공개 수준은 물려받지 않고 공개로 시작한다 — 암호 보호였어도 암호가 없다")
+        void startsPublic() {
+            Event copy = lastSpringPlay(EventStatus.ENDED).duplicate(COPY_ADDRESS, COPIED_POSTER, NOW);
 
             assertThat(copy.visibility()).isEqualTo(EventVisibilitySetting.publicByDefault());
             assertThat(copy.visibility().passwordHash()).isNull();
+        }
+
+        @Test
+        @DisplayName("포스터는 원본 파일을 새 열쇠로 복사한 것을 붙인다 — 1단계 필수 항목을 갖춰 날짜만 넣으면 판매를 시작할 수 있다")
+        void attachesCopiedPoster() {
+            Event copy = lastSpringPlay(EventStatus.ENDED).duplicate(COPY_ADDRESS, COPIED_POSTER, NOW);
+
+            assertThat(copy.poster()).contains(COPIED_POSTER);
+            assertThat(copy.isBasicInformationComplete()).isTrue();
+        }
+
+        @Test
+        @DisplayName("원본에 포스터가 없으면 복제본에도 없다")
+        void noPosterWithoutOriginalPoster() {
+            Event withoutPoster = Event.create(TWELVE_MONTHS_ORGANIZER, ORIGINAL_ADDRESS, twelveMonthsSpringPlay(), CREATED_AT);
+
+            Event copy = withoutPoster.duplicate(COPY_ADDRESS, null, NOW);
+
             assertThat(copy.poster()).isEmpty();
             assertThat(copy.isBasicInformationComplete()).isFalse();
+        }
+
+        @Test
+        @DisplayName("원본 포스터의 열쇠를 같이 쓰지 않고, 포스터가 없던 원본의 복제본에 포스터를 만들지 않는다")
+        void rejectsSharedOrInventedPoster() {
+            Event withoutPoster = Event.create(TWELVE_MONTHS_ORGANIZER, ORIGINAL_ADDRESS, twelveMonthsSpringPlay(), CREATED_AT);
+
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> lastSpringPlay(EventStatus.ENDED).duplicate(COPY_ADDRESS, ORIGINAL_POSTER, NOW));
+            assertThatIllegalArgumentException().isThrownBy(() -> withoutPoster.duplicate(COPY_ADDRESS, COPIED_POSTER, NOW));
         }
 
         @ParameterizedTest(name = "{0}")
         @EnumSource(EventStatus.class)
         @DisplayName("상태와 상관없이 복제한다 — 종료된 행사든 진행 중인 행사든 복제본은 작성 중이다")
         void duplicatesInAnyStatus(EventStatus status) {
-            Event copy = lastSpringPlay(status).duplicate(COPY_ADDRESS, NOW);
+            Event copy = lastSpringPlay(status).duplicate(COPY_ADDRESS, COPIED_POSTER, NOW);
 
             assertThat(copy.status()).isEqualTo(EventStatus.DRAFT);
             assertThat(copy.salesPauses()).isEmpty();
@@ -139,11 +170,11 @@ class EventDuplicationTest {
         void leavesOriginalUntouched() {
             Event original = lastSpringPlay(EventStatus.SALES_PAUSED);
 
-            original.duplicate(COPY_ADDRESS, NOW);
+            original.duplicate(COPY_ADDRESS, COPIED_POSTER, NOW);
 
             assertThat(original.basicInformation()).isEqualTo(twelveMonthsSpringPlay());
             assertThat(original.visibility().visibility()).isEqualTo(EventVisibility.PASSWORD_PROTECTED);
-            assertThat(original.poster()).isPresent();
+            assertThat(original.poster()).contains(ORIGINAL_POSTER);
             assertThat(original.bookingSettings()).isEqualTo(adjustedBookingSettings());
             assertThat(original.status()).isEqualTo(EventStatus.SALES_PAUSED);
             assertThat(original.salesPauses()).hasSize(1);
@@ -153,9 +184,9 @@ class EventDuplicationTest {
         @Test
         @DisplayName("복제본을 다시 복제하면 \"(복사본)\"이 한 번 더 붙는다")
         void duplicatesCopy() {
-            Event copy = lastSpringPlay(EventStatus.ENDED).duplicate(COPY_ADDRESS, NOW);
+            Event copy = lastSpringPlay(EventStatus.ENDED).duplicate(COPY_ADDRESS, COPIED_POSTER, NOW);
 
-            Event copyOfCopy = copy.duplicate(ORIGINAL_ADDRESS, NOW);
+            Event copyOfCopy = copy.duplicate(ORIGINAL_ADDRESS, null, NOW);
 
             assertThat(copyOfCopy.basicInformation().title().value())
                     .isEqualTo("2026 봄 정기공연 〈열두 번째 달〉 (복사본) (복사본)");
@@ -165,7 +196,7 @@ class EventDuplicationTest {
         @DisplayName("원본의 공개 주소를 복제본에 주지 않는다")
         void rejectsSamePublicAddress() {
             assertThatIllegalArgumentException()
-                    .isThrownBy(() -> lastSpringPlay(EventStatus.ENDED).duplicate(ORIGINAL_ADDRESS, NOW));
+                    .isThrownBy(() -> lastSpringPlay(EventStatus.ENDED).duplicate(ORIGINAL_ADDRESS, COPIED_POSTER, NOW));
         }
     }
 

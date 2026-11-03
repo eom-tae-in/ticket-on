@@ -4,7 +4,6 @@ import static com.ticketon.application.event.service.EventWizardScene.DOHYUN;
 import static com.ticketon.application.event.service.EventWizardScene.JUNGHOON;
 import static com.ticketon.application.event.service.EventWizardScene.NOW;
 import static com.ticketon.application.event.service.EventWizardScene.PLANNER;
-import static com.ticketon.application.event.service.EventWizardScene.SECOND_ADDRESS;
 import static com.ticketon.application.event.service.EventWizardScene.SPRING_FORMER_OWNER;
 import static com.ticketon.application.event.service.EventWizardScene.YEOREUM;
 import static com.ticketon.application.event.service.EventWizardScene.acting;
@@ -32,8 +31,11 @@ import com.ticketon.application.event.port.in.PlaceStageCommand;
 import com.ticketon.application.event.port.in.RenameSeatBlockCommand;
 import com.ticketon.application.event.port.in.SeatBlockResult;
 import com.ticketon.application.event.port.in.SeatResult;
+import com.ticketon.application.event.port.in.UploadEventPosterCommand;
 import com.ticketon.application.event.port.in.ZoneResult;
 import com.ticketon.application.organizer.port.in.ActingStaff;
+import com.ticketon.common.FixedTokenGenerator;
+import com.ticketon.common.TestImages;
 import com.ticketon.domain.error.NotFoundException;
 import com.ticketon.domain.error.PermissionDeniedException;
 import com.ticketon.domain.event.AgeRestriction;
@@ -47,6 +49,7 @@ import com.ticketon.domain.event.EntranceName;
 import com.ticketon.domain.event.Event;
 import com.ticketon.domain.event.EventErrorCode;
 import com.ticketon.domain.event.EventPoster;
+import com.ticketon.domain.event.EventPosterImage;
 import com.ticketon.domain.event.EventStatus;
 import com.ticketon.domain.event.EventVisibility;
 import com.ticketon.domain.event.EventVisibilitySetting;
@@ -85,16 +88,30 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 /**
  * 극단 열두달의 운영자가 작년 봄 정기공연을 복제해 올해 공연을 만든다(docs/04 "행사 복제", {@link EventWizardScene}). 작년 공연은 도면 · 입구 ·
- * 회차를 갖추고 예매 설정 · 취소 규정을 조정한 채 끝났다. 복제본은 작성 중이고, 도면 · 입구 목록은 새 id로 복사되며, 날짜 · 회차와 공개 수준 ·
- * 예매 오픈 시각 · 포스터는 가져오지 않는다.
+ * 회차 · 포스터를 갖추고 예매 설정 · 취소 규정을 조정한 채 끝났다. 복제본은 작성 중이고, 도면 · 입구 목록은 새 id로, 포스터는 파일을 새 열쇠로
+ * 복사되며, 날짜 · 회차와 공개 수준 · 예매 오픈 시각은 가져오지 않는다. 포스터 파일 저장은 트랜잭션에 묶이지 않아 트랜잭션의 끝을 흉내 낸다
+ * ({@link SimulatedTransaction}).
  */
 @DisplayName("행사 복제 유스케이스")
 class DuplicateEventServiceTest {
 
     private static final Instant OPENED_AT = Instant.parse("2026-02-01T01:00:00Z");
 
+    /** 원본 포스터의 열쇠 앞부분. */
+    private static final String ORIGINAL_POSTER_TOKEN = "originalPosterTokenAAAAAAAAAAAAA";
+
+    /** 복제본에 발급할 공개 주소. */
+    private static final String COPY_ADDRESS = "copyAddressTokenBBBBBBBBBBBBBBBB";
+
+    /** 복사한 포스터의 열쇠 앞부분. */
+    private static final String COPY_POSTER_TOKEN = "copyPosterTokenCCCCCCCCCCCCCCCCC";
+
+    /** 크롭 도구로 3:4로 자른 JPEG 포스터. */
+    private static final byte[] POSTER_CONTENT = TestImages.jpeg(300, 400);
+
     private final EventWizardScene scene = new EventWizardScene();
-    private final DuplicateEventService service = scene.duplicateEventService();
+    private final DuplicateEventService service =
+            scene.duplicateEventService(new FixedTokenGenerator(COPY_ADDRESS, COPY_POSTER_TOKEN));
     private final long lastSpring = createLastSpring();
 
     /** 작년 봄 정기공연 — 도면(R석 · 스탠딩A, 1층 3×4 · 2층 2×4, 무대), 입구 셋, 회차 하나를 갖추고, 예매 설정 · 취소 규정을 조정해 둔다. */
@@ -122,16 +139,18 @@ class DuplicateEventServiceTest {
         scene.chooseSessionModeService().choose(new ChooseSessionModeCommand(owner, eventId, SessionMode.TIMED, null));
         scene.addTimedSessionService().add(new AddTimedSessionCommand(owner, eventId, LocalDate.of(2026, 3, 14),
                 TimedSessionTime.of(LocalTime.of(19, 0), LocalTime.of(21, 0))));
+        SimulatedTransaction.run(() -> scene.uploadEventPosterService(new FixedTokenGenerator(ORIGINAL_POSTER_TOKEN))
+                .upload(new UploadEventPosterCommand(owner, eventId, EventPosterImage.of("image/jpeg", POSTER_CONTENT))));
         storeAs(eventId, EventStatus.ENDED);
         return eventId;
     }
 
-    /** 그 행사를 그 상태로, 링크 전용 · 포스터 · 조정한 예매 설정("3일 전까지 전액" 취소 규정 포함)으로 바꿔 둔다. */
+    /** 그 행사를 그 상태로, 링크 전용 · 조정한 예매 설정("3일 전까지 전액" 취소 규정 포함)으로 바꿔 둔다. 포스터는 그대로다. */
     private void storeAs(long eventId, EventStatus status) {
         Event event = scene.eventRepository.findById(eventId).orElseThrow();
         boolean opened = status != EventStatus.DRAFT && status != EventStatus.AWAITING_OPEN;
         scene.eventRepository.store(Event.restore(eventId, event.organizerId(), event.publicAddress(), event.basicInformation(),
-                new EventPoster("Pq3kQ9-_mN2pL7vR4tY8wZ1aC5dE6fG0.jpg"),
+                event.poster().orElse(null),
                 new EventVisibilitySetting(EventVisibility.LINK_ONLY, null), adjustedBookingSettings(), threeDaysFullRefund(),
                 status, opened ? OPENED_AT : null, List.of(), EventWizardStep.ENTRANCES_AND_CHECKIN_ACCOUNTS,
                 event.lastModifiedAt()));
@@ -155,7 +174,8 @@ class DuplicateEventServiceTest {
     }
 
     private EventWizardResult duplicate(long staffAccountId, long organizerId, long eventId) {
-        return service.duplicate(new DuplicateEventCommand(acting(staffAccountId, organizerId), eventId));
+        return SimulatedTransaction.run(() -> service.duplicate(
+                new DuplicateEventCommand(acting(staffAccountId, organizerId), eventId)));
     }
 
     private FloorPlanResult floorPlanOf(long eventId) {
@@ -174,10 +194,9 @@ class DuplicateEventServiceTest {
 
         assertThat(copy.eventId()).isNotEqualTo(lastSpring);
         assertThat(copy.status()).isEqualTo(EventStatus.DRAFT);
-        assertThat(copy.publicAddress()).isEqualTo(SECOND_ADDRESS);
+        assertThat(copy.publicAddress()).isEqualTo(COPY_ADDRESS);
         assertThat(copy.wizardProgress()).isEqualTo(EventWizardStep.BASIC_INFORMATION);
         assertThat(copy.lastModifiedAt()).isEqualTo(NOW);
-        assertThat(copy.posterUrl()).isNull();
         assertThat(copy.basicInformation().title()).isEqualTo("2026 봄 정기공연 〈열두 번째 달〉 (복사본)");
         assertThat(copy.basicInformation().categoryName()).isEqualTo("연극");
         assertThat(copy.basicInformation().venueName()).isEqualTo("○○아트홀");
@@ -250,6 +269,59 @@ class DuplicateEventServiceTest {
         assertThat(copy).extracting(EntranceResult::name).containsExactly("정문", "2층 전용", "VIP 입구");
         assertThat(copy).extracting(EntranceResult::entranceId)
                 .doesNotContainAnyElementsOf(original.stream().map(EntranceResult::entranceId).toList());
+    }
+
+    @Test
+    @DisplayName("포스터는 원본 파일을 새 열쇠로 복사해 붙인다 — 같은 내용, 다른 열쇠 · 공개 주소, 원본의 포스터와 파일은 그대로다")
+    void copiesPosterFileWithNewKey() {
+        EventPoster originalPoster = new EventPoster(ORIGINAL_POSTER_TOKEN + ".jpg");
+        EventPoster copiedPoster = new EventPoster(COPY_POSTER_TOKEN + ".jpg");
+
+        EventWizardResult copy = duplicate(PLANNER, scene.twelveMonths, lastSpring);
+
+        assertThat(copy.posterUrl()).isEqualTo(FakeEventPosterStorage.PUBLIC_BASE_URL + "/" + copiedPoster.fileKey());
+        assertThat(scene.eventRepository.findById(copy.eventId()).orElseThrow().poster()).contains(copiedPoster);
+        assertThat(scene.eventRepository.findById(copy.eventId()).orElseThrow().isBasicInformationComplete()).isTrue();
+        assertThat(scene.posterStorage.storedKeys()).containsExactlyInAnyOrder(originalPoster.fileKey(), copiedPoster.fileKey());
+        assertThat(scene.posterStorage.read(copiedPoster))
+                .hasValueSatisfying(content -> assertThat(content).isEqualTo(POSTER_CONTENT));
+        assertThat(scene.posterStorage.read(originalPoster))
+                .hasValueSatisfying(content -> assertThat(content).isEqualTo(POSTER_CONTENT));
+        assertThat(scene.eventRepository.findById(lastSpring).orElseThrow().poster()).contains(originalPoster);
+    }
+
+    @Test
+    @DisplayName("복제가 되돌려지면 복사한 포스터 파일을 지운다 — 원본 파일은 남는다")
+    void deletesCopiedPosterFileOnRollback() {
+        scene.entranceRepository.failSaves();
+
+        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(() -> duplicate(PLANNER, scene.twelveMonths, lastSpring));
+
+        assertThat(scene.posterStorage.storedKeys()).containsExactly(ORIGINAL_POSTER_TOKEN + ".jpg");
+    }
+
+    @Test
+    @DisplayName("원본에 포스터가 없으면 복제본에도 없고 파일을 만들지 않는다")
+    void noPosterWithoutOriginalPoster() {
+        long withoutPoster = scene.createEventService()
+                .create(new CreateEventCommand(acting(JUNGHOON, scene.twelveMonths), springPlayItems())).eventId();
+
+        EventWizardResult copy = duplicate(PLANNER, scene.twelveMonths, withoutPoster);
+
+        assertThat(copy.posterUrl()).isNull();
+        assertThat(scene.posterStorage.storedKeys()).containsExactly(ORIGINAL_POSTER_TOKEN + ".jpg");
+    }
+
+    @Test
+    @DisplayName("원본 포스터의 파일이 저장소에 없으면 포스터 없이 복제한다 — 복제를 막지 않고, 판매를 시작하기 전에 새로 올린다")
+    void duplicatesWithoutPosterWhenFileIsMissing() {
+        scene.posterStorage.delete(new EventPoster(ORIGINAL_POSTER_TOKEN + ".jpg"));
+
+        EventWizardResult copy = duplicate(PLANNER, scene.twelveMonths, lastSpring);
+
+        assertThat(copy.posterUrl()).isNull();
+        assertThat(scene.eventRepository.findById(copy.eventId()).orElseThrow().poster()).isEmpty();
+        assertThat(scene.posterStorage.storedKeys()).isEmpty();
     }
 
     @Test
