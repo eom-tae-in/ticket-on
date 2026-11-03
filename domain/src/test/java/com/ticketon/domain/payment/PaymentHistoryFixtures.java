@@ -101,6 +101,26 @@ final class PaymentHistoryFixtures {
                 ZONE_STANDING_A, null, coupon(94_500, 5_000), Money.ZERO, Set.of(), false, null, qrKeyOf(id));
     }
 
+    /**
+     * docs/08 "결제·환불 내역" 예시의 예매 건 ...0091 — 3/20 회차, 할인 없는 4장(1 · 2번 17,500원, 3번 VIP 80,000원, 4번 12열 10번 50,000원 =
+     * 165,000원). 3/1 결제 → 3/5 1 · 2번 관객 취소, 환불 35,000원(10일 전보다 앞서 공제 0%) → 3/8 4번을 5번(15열 3번 30,000원)으로 변경, 환불
+     * 50,000원. 문서의 3/1 줄에 설명이 없어 할인 없는 티켓으로 지었다.
+     */
+    static PaymentHistory documentExampleHistory() {
+        Ticket rowTwelveSeven = seatTicketOn(1, 1, ZONE_A, 1207, SESSION_MARCH_20, undiscounted(17_500));
+        Ticket rowTwelveEight = seatTicketOn(2, 2, ZONE_A, 1208, SESSION_MARCH_20, undiscounted(17_500));
+        Ticket vip = seatTicketOn(3, 3, ZONE_VIP, 101, SESSION_MARCH_20, undiscounted(80_000));
+        Ticket rowTwelveTen = seatTicketOn(4, 4, ZONE_R, 1210, SESSION_MARCH_20, undiscounted(50_000));
+        PaymentHistory history = PaymentHistory.startWithBookingPayment(
+                List.of(rowTwelveSeven, rowTwelveEight, vip, rowTwelveTen), MARCH_1);
+        history.recordCancellationRefund(List.of(
+                cancelled(rowTwelveSeven, TicketCancellationReason.AUDIENCE_CANCELLATION, MARCH_5),
+                cancelled(rowTwelveEight, TicketCancellationReason.AUDIENCE_CANCELLATION, MARCH_5)), Money.of(35_000), MARCH_5);
+        history.recordChange(List.of(cancelled(rowTwelveTen, TicketCancellationReason.SEAT_CHANGE, MARCH_8)), Money.of(50_000),
+                List.of(seatTicketOn(5, 5, ZONE_A, 1503, SESSION_MARCH_20, undiscounted(30_000))), MARCH_8);
+        return history;
+    }
+
     /** 티켓을 그 사유로 취소하고 돌려준다. */
     static Ticket cancelled(Ticket ticket, TicketCancellationReason reason, Instant at) {
         ticket.cancel(reason, at);

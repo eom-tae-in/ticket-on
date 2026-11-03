@@ -42,19 +42,7 @@ class PaymentHistoryNetPaidAmountTest {
     @Test
     @DisplayName("3/1 결제 165,000 · 3/5 환불 −35,000 · 3/8 환불 −50,000 · 3/8 결제 30,000 → 실 결제액 110,000원 (docs/08 예시)")
     void documentExample() {
-        Ticket earlyBirdSeven = seatTicketOn(1, 1, ZONE_A, 1207, SESSION_MARCH_20, earlyBird(25_000, 7_500));
-        Ticket earlyBirdEight = seatTicketOn(2, 2, ZONE_A, 1208, SESSION_MARCH_20, earlyBird(25_000, 7_500));
-        Ticket vip = seatTicketOn(3, 3, ZONE_VIP, 101, SESSION_MARCH_20, undiscounted(80_000));
-        Ticket rowTwelveTen = seatTicketOn(4, 4, ZONE_R, 1210, SESSION_MARCH_20, undiscounted(50_000));
-        PaymentHistory history = PaymentHistory.startWithBookingPayment(
-                List.of(earlyBirdSeven, earlyBirdEight, vip, rowTwelveTen), MARCH_1);
-
-        history.recordCancellationRefund(List.of(
-                cancelled(earlyBirdSeven, TicketCancellationReason.AUDIENCE_CANCELLATION, MARCH_5),
-                cancelled(earlyBirdEight, TicketCancellationReason.AUDIENCE_CANCELLATION, MARCH_5)), Money.of(35_000), MARCH_5);
-        Ticket rowFifteenThree = seatTicketOn(5, 5, ZONE_A, 1503, SESSION_MARCH_20, undiscounted(30_000));
-        history.recordChange(List.of(cancelled(rowTwelveTen, TicketCancellationReason.SEAT_CHANGE, MARCH_8)),
-                Money.of(50_000), List.of(rowFifteenThree), MARCH_8);
+        PaymentHistory history = PaymentHistoryFixtures.documentExampleHistory();
 
         assertThat(history.entries()).extracting(PaymentHistoryEntry::kind, PaymentHistoryEntry::amount).containsExactly(
                 tuple(PaymentHistoryEntryKind.PAYMENT, Money.of(165_000)),

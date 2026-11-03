@@ -9,7 +9,7 @@
  * {@link com.ticketon.domain.payment.PaymentHistoryEntryKind}) · 까닭({@link com.ticketon.domain.payment.PaymentHistoryCause}) · 금액 ·
  * 시각 · 대상 티켓들을 갖는다. 실 결제액은 결제 합 − 환불 합이고, 지연 환급은 환불처럼 빼고 배상은 빼지 않는다.
  * <p>
- * 줄의 설명("2매 취소", "R석 12열 10번 변경", "5/4 그날 몫", 적용 할인)은 글자로 저장하지 않고, 그릴 때마다 대상 티켓의 지금 표기 · 받은 할인 ·
+ * 줄의 설명("2매 취소", "12열 10번 변경", "5/4 그날 몫", 적용 할인)은 글자로 저장하지 않고, 그릴 때마다 대상 티켓의 지금 표기 · 받은 할인 ·
  * 회차의 지금 날짜({@link com.ticketon.domain.payment.PaymentHistoryDescriptionSource})로 까닭이 만든다 — 티켓 표기를 글자로 복사하지 않는
  * 원칙과 같다(docs/99 B "티켓에 좌석 표기를 글자로 복사").
  * <p>

@@ -109,7 +109,7 @@ public final class PaymentHistoryEntry {
     }
 
     /**
-     * 목록에서 금액 옆에 붙는 설명 — "2매 취소", "R석 12열 10번 변경", "5/4 그날 몫"({@link PaymentHistoryCause#describe}). 저장하지 않고
+     * 목록에서 금액 옆에 붙는 설명 — "2매 취소", "12열 10번 변경", "5/4 그날 몫"({@link PaymentHistoryCause#describe}). 저장하지 않고
      * 그릴 때마다 대상 티켓의 지금 표기로 만든다.
      *
      * @param source 그 예매 건의 티켓 표기 · 받은 할인 · 회차 날짜

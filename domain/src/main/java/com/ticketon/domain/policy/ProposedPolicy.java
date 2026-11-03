@@ -53,11 +53,11 @@ import java.time.LocalTime;
  *       {@code domain.pricing.BundleProduct#startingPrice}.</li>
  *   <li>확인 필요 (#223) — 관리자 대신 취소(관리자 조치)도 관객 취소처럼, 출연자 변경으로 취소 시 배상 표시가 붙은 티켓이면 10% 배상 줄을 남길 수
  *       있다(docs/08 "관리자 대신 취소"는 "문의한 시각 기준의 규정대로"라고만 한다): {@code domain.payment.PaymentHistoryCause.Cancellation}.</li>
- *   <li>확인 필요 (#223) — 결제·환불 내역 설명 중 문서 예시에 없는 모양: 티켓 표기에 구역 이름까지 붙임("R석 12열 10번 변경" — 예시는
- *       "12열 10번 변경"), 여러 장은 쉼표로 이음, 관객 취소가 아닌 취소는 사유를 괄호로 붙임("2매 취소 (회차 취소)"), 배상 줄은 함께 나간 환불 줄과
- *       같은 설명: {@code domain.payment.PaymentHistoryCause#describe}.</li>
+ *   <li>확인 필요 (#223) — 결제·환불 내역 설명 중 문서 예시에 없는 모양: 여러 장은 쉼표로 이음("12열 9번, 12열 10번 변경"), 관객 취소가 아닌
+ *       취소는 사유를 괄호로 붙임("2매 취소 (회차 취소)"), 배상 줄은 함께 나간 환불 줄과 같은 설명: {@code domain.payment.PaymentHistoryCause#describe}.</li>
  *   <li>확인 필요 (#223) — 적용 할인 표시는 결제 줄(예매 결제 · 변경 결제)의 설명에 할인 종류별 장수로 붙인다("조기예매 2매 · 쿠폰 1매"). 할인
- *       없는 예매 결제는 설명이 없다(문서 예시 "3/1 결제 165,000원"). 장마다의 금액 · 할인액은 티켓이 갖고 결제 상세(#76)에서 보인다:
+ *       없는 예매 결제는 설명이 없다. 문서 예시 "3/1 결제 165,000원"에 설명이 없는 것은 할인이 없었다는 뜻일 수도, 할인은 [상세](결제 상세)에서
+ *       보인다는 뜻일 수도 있다 — 뒤의 뜻이면 이 요약을 목록 줄에서 빼고 결제 상세(#76)에서 장마다 보인다:
  *       {@code domain.payment.PaymentHistoryDescriptionSource#appliedDiscountSummaryOf}.</li>
  * </ul>
  */

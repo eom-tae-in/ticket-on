@@ -1,32 +1,31 @@
 package com.ticketon.domain.payment;
 
-import static com.ticketon.domain.payment.PaymentHistoryFixtures.MARCH_1;
-import static com.ticketon.domain.payment.PaymentHistoryFixtures.MARCH_5;
-import static com.ticketon.domain.payment.PaymentHistoryFixtures.MARCH_8;
+import static com.ticketon.domain.payment.PaymentHistoryFixtures.BOOKING;
 import static com.ticketon.domain.payment.PaymentHistoryFixtures.MAY_1;
 import static com.ticketon.domain.payment.PaymentHistoryFixtures.MAY_2;
-import static com.ticketon.domain.payment.PaymentHistoryFixtures.SESSION_MARCH_20;
+import static com.ticketon.domain.payment.PaymentHistoryFixtures.SESSION_MARCH_14;
 import static com.ticketon.domain.payment.PaymentHistoryFixtures.SESSION_MAY_4;
-import static com.ticketon.domain.payment.PaymentHistoryFixtures.ZONE_A;
-import static com.ticketon.domain.payment.PaymentHistoryFixtures.ZONE_R;
-import static com.ticketon.domain.payment.PaymentHistoryFixtures.ZONE_VIP;
-import static com.ticketon.domain.payment.PaymentHistoryFixtures.cancelled;
-import static com.ticketon.domain.payment.PaymentHistoryFixtures.seatTicketOn;
+import static com.ticketon.domain.payment.PaymentHistoryFixtures.ZONE_STANDING_A;
 import static com.ticketon.domain.payment.PaymentHistoryFixtures.undiscounted;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
+import com.ticketon.domain.event.SeatLabel;
+import com.ticketon.domain.event.ZoneName;
 import com.ticketon.domain.pricing.DiscountKind;
 import com.ticketon.domain.pricing.Money;
+import com.ticketon.domain.pricing.SessionPrice;
+import com.ticketon.domain.ticket.QrKey;
 import com.ticketon.domain.ticket.Ticket;
 import com.ticketon.domain.ticket.TicketCancellationReason;
-import com.ticketon.domain.ticket.TicketLabel;
+import com.ticketon.domain.ticket.TicketSession;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.DisplayName;
@@ -40,26 +39,35 @@ class PaymentHistoryDescriptionTest {
     @Test
     @DisplayName("3/1 결제 · 3/5 환불 2매 취소 · 3/8 환불 12열 10번 변경 · 3/8 결제 15열 3번 (docs/08 예시)")
     void documentExample() {
-        Ticket seven = seatTicketOn(1, 1, ZONE_R, 1207, SESSION_MARCH_20, undiscounted(17_500));
-        Ticket eight = seatTicketOn(2, 2, ZONE_R, 1208, SESSION_MARCH_20, undiscounted(17_500));
-        Ticket vip = seatTicketOn(3, 3, ZONE_VIP, 101, SESSION_MARCH_20, undiscounted(80_000));
-        Ticket ten = seatTicketOn(4, 4, ZONE_R, 1210, SESSION_MARCH_20, undiscounted(50_000));
-        PaymentHistory history = PaymentHistory.startWithBookingPayment(List.of(seven, eight, vip, ten), MARCH_1);
-        history.recordCancellationRefund(List.of(
-                cancelled(seven, TicketCancellationReason.AUDIENCE_CANCELLATION, MARCH_5),
-                cancelled(eight, TicketCancellationReason.AUDIENCE_CANCELLATION, MARCH_5)), Money.of(35_000), MARCH_5);
-        history.recordChange(List.of(cancelled(ten, TicketCancellationReason.SEAT_CHANGE, MARCH_8)), Money.of(50_000),
-                List.of(seatTicketOn(5, 5, ZONE_A, 1503, SESSION_MARCH_20, undiscounted(30_000))), MARCH_8);
+        PaymentHistory history = PaymentHistoryFixtures.documentExampleHistory();
         PaymentHistoryDescriptionSource source = new PaymentHistoryDescriptionSource(
-                Map.of(1L, label("R석 12열 7번"), 2L, label("R석 12열 8번"), 3L, label("VIP 1열 1번"), 4L, label("R석 12열 10번"),
-                        5L, label("A석 15열 3번")),
+                Map.of(1L, seat("12열 7번"), 2L, seat("12열 8번"), 3L, seat("1열 1번"), 4L, seat("12열 10번"), 5L, seat("15열 3번")),
                 noDiscount(1L, 2L, 3L, 4L, 5L), Map.of());
 
         assertThat(history.entries()).extracting(entry -> entry.description(source)).containsExactly(
                 Optional.empty(),
                 Optional.of("2매 취소"),
-                Optional.of("R석 12열 10번 변경"),
-                Optional.of("A석 15열 3번"));
+                Optional.of("12열 10번 변경"),
+                Optional.of("15열 3번"));
+    }
+
+    @Test
+    @DisplayName("티켓 표기는 docs/07 \"티켓 표기\" 모양 — 지정석은 좌석 표기(구역 이름 없음), 수량형은 \"스탠딩A · 0091-2\"")
+    void ticketLabelShapes() {
+        Ticket standing = Ticket.restore(6, BOOKING, 2,
+                List.of(TicketSession.purchased(SESSION_MARCH_14, new SessionPrice(Money.of(30_000)))), ZONE_STANDING_A, null,
+                undiscounted(30_000), Money.ZERO, Set.of(), false, null, QrKey.issue("E".repeat(QrKey.LENGTH)));
+        PaymentHistoryEntry designated = entry(PaymentHistoryEntryKind.REFUND,
+                PaymentHistoryCause.cancellation(TicketCancellationReason.SEAT_CHANGE), 4L);
+        PaymentHistoryEntry quantity = entry(PaymentHistoryEntryKind.REFUND,
+                PaymentHistoryCause.cancellation(TicketCancellationReason.SEAT_CHANGE), 6L);
+        PaymentHistoryDescriptionSource source = new PaymentHistoryDescriptionSource(
+                Map.of(4L, PaymentHistoryTicketLabel.ofSeat(new SeatLabel("1층 12열 10번")),
+                        6L, PaymentHistoryTicketLabel.ofQuantityTicket(standing.label(ZoneName.of("스탠딩A"), Optional.empty()))),
+                Map.of(), Map.of());
+
+        assertThat(designated.description(source)).contains("1층 12열 10번 변경");
+        assertThat(quantity.description(source)).contains("스탠딩A · 0091-2 변경");
     }
 
     @Test
@@ -68,13 +76,13 @@ class PaymentHistoryDescriptionTest {
         PaymentHistoryEntry booking = entry(PaymentHistoryEntryKind.PAYMENT, PaymentHistoryCause.bookingPayment(), 1L, 2L, 3L, 4L);
         PaymentHistoryEntry change = entry(PaymentHistoryEntryKind.PAYMENT, PaymentHistoryCause.changePayment(), 5L);
         PaymentHistoryDescriptionSource source = new PaymentHistoryDescriptionSource(
-                Map.of(5L, label("A석 15열 3번")),
+                Map.of(5L, seat("15열 3번")),
                 Map.of(1L, DiscountKind.COUPON, 2L, DiscountKind.EARLY_BIRD, 3L, DiscountKind.EARLY_BIRD, 4L, DiscountKind.NONE,
                         5L, DiscountKind.COUPON),
                 Map.of());
 
         assertThat(booking.description(source)).contains("조기예매 2매 · 쿠폰 1매");
-        assertThat(change.description(source)).contains("A석 15열 3번 · 쿠폰 1매");
+        assertThat(change.description(source)).contains("15열 3번 · 쿠폰 1매");
     }
 
     @Test
@@ -83,12 +91,14 @@ class PaymentHistoryDescriptionTest {
         PaymentHistoryEntry refund = entry(PaymentHistoryEntryKind.REFUND,
                 PaymentHistoryCause.cancellation(TicketCancellationReason.SEAT_CHANGE), 3L, 4L);
         PaymentHistoryEntry quantityRefund = entry(PaymentHistoryEntryKind.REFUND,
-                PaymentHistoryCause.cancellation(TicketCancellationReason.SEAT_CHANGE), 6L);
+                PaymentHistoryCause.cancellation(TicketCancellationReason.SEAT_CHANGE), 6L, 7L);
         PaymentHistoryDescriptionSource source = new PaymentHistoryDescriptionSource(
-                Map.of(3L, label("R석 12열 9번"), 4L, label("R석 12열 10번"), 6L, label("스탠딩A · 0091-2")), Map.of(), Map.of());
+                Map.of(3L, seat("12열 9번"), 4L, seat("12열 10번"),
+                        6L, new PaymentHistoryTicketLabel("스탠딩A · 0091-2"), 7L, new PaymentHistoryTicketLabel("스탠딩A · 0091-3")),
+                Map.of(), Map.of());
 
-        assertThat(refund.description(source)).contains("R석 12열 9번, R석 12열 10번 변경");
-        assertThat(quantityRefund.description(source)).contains("스탠딩A · 0091-2 변경");
+        assertThat(refund.description(source)).contains("12열 9번, 12열 10번 변경");
+        assertThat(quantityRefund.description(source)).contains("스탠딩A · 0091-2, 스탠딩A · 0091-3 변경");
     }
 
     @ParameterizedTest(name = "{0} → {1}")
@@ -147,12 +157,12 @@ class PaymentHistoryDescriptionTest {
         PaymentHistoryEntry dayShare = entry(PaymentHistoryEntryKind.REFUND, PaymentHistoryCause.bundleDayShare(504), 1L);
 
         PaymentHistoryDescriptionSource before = new PaymentHistoryDescriptionSource(
-                Map.of(4L, label("R석 12열 10번")), Map.of(), Map.of(504L, LocalDate.of(2026, 5, 4)));
+                Map.of(4L, seat("1층 12열 10번")), Map.of(), Map.of(504L, LocalDate.of(2026, 5, 4)));
         PaymentHistoryDescriptionSource after = new PaymentHistoryDescriptionSource(
-                Map.of(4L, label("R석 1층 12열 10번")), Map.of(), Map.of(504L, LocalDate.of(2026, 5, 11)));
+                Map.of(4L, seat("지상 1층 12열 10번")), Map.of(), Map.of(504L, LocalDate.of(2026, 5, 11)));
 
-        assertThat(refund.description(before)).contains("R석 12열 10번 변경");
-        assertThat(refund.description(after)).contains("R석 1층 12열 10번 변경");
+        assertThat(refund.description(before)).contains("1층 12열 10번 변경");
+        assertThat(refund.description(after)).contains("지상 1층 12열 10번 변경");
         assertThat(dayShare.description(after)).contains("5/11 그날 몫");
     }
 
@@ -166,6 +176,7 @@ class PaymentHistoryDescriptionTest {
         assertThatIllegalArgumentException().isThrownBy(() -> change.description(emptySource()));
         assertThatIllegalArgumentException().isThrownBy(() -> booking.description(emptySource()));
         assertThatIllegalArgumentException().isThrownBy(() -> dayShare.description(emptySource()));
+        assertThatIllegalArgumentException().isThrownBy(() -> new PaymentHistoryTicketLabel(" "));
     }
 
     private static PaymentHistoryEntry entry(PaymentHistoryEntryKind kind, PaymentHistoryCause cause, Long... ticketIds) {
@@ -173,8 +184,8 @@ class PaymentHistoryDescriptionTest {
                 List.of(ticketIds));
     }
 
-    private static TicketLabel label(String value) {
-        return new TicketLabel(value);
+    private static PaymentHistoryTicketLabel seat(String seatLabel) {
+        return PaymentHistoryTicketLabel.ofSeat(new SeatLabel(seatLabel));
     }
 
     private static Map<Long, DiscountKind> noDiscount(Long... ticketIds) {
