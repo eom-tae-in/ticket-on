@@ -15,7 +15,7 @@ import java.util.List;
  */
 @Schema(description = "내 알림 설정")
 public record NotificationSettingsResponse(
-        @Schema(description = "끌 수 있는 알림 묶음과 받는지. 화면 순서대로 — 예매·취소 확인, 공연 전날 리마인더, 예매 오픈 알림",
+        @Schema(description = "끌 수 있는 알림 묶음과 받는지. 화면 순서대로 — 예매·취소 확인, 공연 전날 안내, 예매 오픈 알림",
                 requiredMode = REQUIRED)
         List<NotificationPreferenceItem> preferences,
 
@@ -36,7 +36,7 @@ public record NotificationSettingsResponse(
      */
     @Schema(description = "알림 설정 한 줄")
     public record NotificationPreferenceItem(
-            @Schema(description = "묶음 — BOOKING_CONFIRMATION(예매·취소 확인), DAY_BEFORE_REMINDER(공연 전날 리마인더), "
+            @Schema(description = "묶음 — BOOKING_CONFIRMATION(예매·취소 확인), DAY_BEFORE_REMINDER(공연 전날 안내), "
                     + "BOOKING_OPEN(예매 오픈 알림)", requiredMode = REQUIRED)
             NotificationPreferenceCode preference,
 
