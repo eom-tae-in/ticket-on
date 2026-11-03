@@ -3,7 +3,6 @@ package com.ticketon.domain.policy;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ticketon.common.ImageFormat;
-import java.time.Period;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -29,11 +28,11 @@ class QuantityPolicyTest {
     }
 
     @Test
-    @DisplayName("조기예매 임박은 30% / 10% 또는 10장 / 종료 3일이다 (docs/05)")
+    @DisplayName("조기예매 임박은 30% / 10% 또는 10장이면서 절반 이상 나감이다 (docs/05)")
     void earlyBirdIndicators() {
         assertThat(QuantityPolicy.EARLY_BIRD_RUNNING_LOW).isEqualTo(Percent.of(30));
         assertThat(QuantityPolicy.EARLY_BIRD_ALMOST_GONE).isEqualTo(new QuantityThreshold(10, Percent.of(10)));
-        assertThat(QuantityPolicy.EARLY_BIRD_ENDING_SOON).isEqualTo(Period.ofDays(3));
+        assertThat(QuantityPolicy.EARLY_BIRD_ALMOST_GONE_CLAIMED_SHARE).isEqualTo(Percent.of(50));
     }
 
     @Test
@@ -98,7 +97,7 @@ class QuantityPolicyTest {
     }
 
     @Test
-    @DisplayName("글자 수 상한은 제목 · 출연 100자, 소개 · 판매 중단 사유 50자, 닉네임 · 카테고리 · 블록 · 구역 · 입구 이름 20자다 (docs/99 C \"입력·파일 상한\")")
+    @DisplayName("글자 수 상한은 제목 · 출연 100자, 소개 · 판매 중단 사유 50자, 닉네임 · 카테고리 · 블록 · 구역 · 입구 이름 · 쿠폰 코드 20자다 (docs/99 C \"입력·파일 상한\")")
     void textLengthLimits() {
         assertThat(QuantityPolicy.EVENT_TITLE_MAXIMUM_LENGTH).isEqualTo(100);
         assertThat(QuantityPolicy.SESSION_PERFORMERS_MAXIMUM_LENGTH).isEqualTo(100);
@@ -109,6 +108,7 @@ class QuantityPolicyTest {
         assertThat(QuantityPolicy.BLOCK_NAME_MAXIMUM_LENGTH).isEqualTo(20);
         assertThat(QuantityPolicy.ZONE_NAME_MAXIMUM_LENGTH).isEqualTo(20);
         assertThat(QuantityPolicy.ENTRANCE_NAME_MAXIMUM_LENGTH).isEqualTo(20);
+        assertThat(QuantityPolicy.COUPON_CODE_MAXIMUM_LENGTH).isEqualTo(20);
     }
 
     @Test

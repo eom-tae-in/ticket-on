@@ -1,7 +1,6 @@
 package com.ticketon.domain.policy;
 
 import com.ticketon.common.ImageFormat;
-import java.time.Period;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
@@ -9,7 +8,7 @@ import java.util.Set;
 /**
  * docs/99 C "수량·비율"과 "입력·파일 상한" 표의 확정 숫자.
  * <p>
- * 조기예매 임박의 "종료 3일 전"처럼 99 C에서 이 표에 함께 적힌 기간도 여기 둔다.
+ * 조기예매 임박의 "끝나기 72시간 전"은 99 C "시간" 표에 따로 있어 {@link TimePolicy#EARLY_BIRD_ENDING_SOON}에 둔다.
  */
 public final class QuantityPolicy {
 
@@ -25,11 +24,14 @@ public final class QuantityPolicy {
     /** 조기예매 "얼마 남지 않음" — 남은 몫이 30% 이하. docs/05 "임박 표시" */
     public static final Percent EARLY_BIRD_RUNNING_LOW = Percent.of(30);
 
-    /** 조기예매 "마감 임박"(수량) — 남은 몫이 10% 이하 또는 10장 이하. docs/05 "임박 표시" */
+    /**
+     * 조기예매 "마감 임박"(수량) — 남은 몫이 10% 이하, 또는 10장 이하이면서 절반 이상 나감({@link #EARLY_BIRD_ALMOST_GONE_CLAIMED_SHARE}).
+     * 비율은 반올림하지 않는다. docs/05 "임박 표시", docs/99 C "조기예매 임박 표시"
+     */
     public static final QuantityThreshold EARLY_BIRD_ALMOST_GONE = new QuantityThreshold(10, Percent.of(10));
 
-    /** 조기예매 "마감 임박"(기간) — 종료일 3일 이내. 수량과 기간 중 더 급한 쪽을 따른다. docs/05 "임박 표시" */
-    public static final Period EARLY_BIRD_ENDING_SOON = Period.ofDays(3);
+    /** 조기예매 "마감 임박"의 10장 이하 조건에 붙는 "절반 이상 나감" — 10장짜리 조기예매가 한 장도 안 나갔는데 임박이면 거짓 재촉이다. docs/05 "임박 표시" */
+    public static final Percent EARLY_BIRD_ALMOST_GONE_CLAIMED_SHARE = Percent.of(50);
 
     /** 잔여 배지 "매진 임박" — 잔여 10% 이하, 또는 10석 이하이면서 절반 이상 팔림. 목록 카드에만 배지. docs/13 "잔여 좌석 표시", docs/99 C "잔여 배지" */
     public static final QuantityThreshold REMAINING_SEATS_BADGE = new QuantityThreshold(10, Percent.of(10));
@@ -111,6 +113,9 @@ public final class QuantityPolicy {
 
     /** 입구 이름 최대 길이(글자 수). */
     public static final int ENTRANCE_NAME_MAXIMUM_LENGTH = 20;
+
+    /** 쿠폰 코드 최대 길이(글자 수) — 대소문자를 구분하지 않고, 안에 공백을 둘 수 없으며, 발급한 뒤 바꾸지 않는다. */
+    public static final int COUPON_CODE_MAXIMUM_LENGTH = 20;
 
     /** 주최자 로고 용량 상한(1MB = 1,048,576바이트). */
     public static final FileSize ORGANIZER_LOGO_MAXIMUM_SIZE = FileSize.ofMegabytes(2);

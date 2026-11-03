@@ -16,5 +16,12 @@
  *   <li>그 위에 티켓마다 조기예매 또는 쿠폰 중 유리한 하나({@link com.ticketon.domain.pricing.BookingPrice}) — 정액 쿠폰은 티켓마다 비례로 나눈 몫으로
  *       비교해 티켓 한 장의 가격({@link com.ticketon.domain.pricing.TicketPrice})을 하나의 값으로 만든다.</li>
  * </ol>
+ * 조기예매와 쿠폰은 쓸 수 있는지를 판정해 그 할인({@link com.ticketon.domain.pricing.Discount})을 위 3단계에 넘긴다.
+ * <ul>
+ *   <li>조기예매({@link com.ticketon.domain.pricing.EarlyBird}, 행사마다 {@link com.ticketon.domain.pricing.EarlyBirds}) — 선점하는 순간 몫을
+ *       잡고 사용 수는 줄지 않는다. 몫을 잡은 결과({@link com.ticketon.domain.pricing.EarlyBirdAllocation})가 할인 전 티켓을 만든다. 관객에게는
+ *       남은 수량 대신 임박 단계({@link com.ticketon.domain.pricing.EarlyBirdUrgency})를 보인다.</li>
+ *   <li>쿠폰({@link com.ticketon.domain.pricing.Coupon}) — 잘못된 코드는 한 문구로 답하고, 전체 취소일 때만 돌려준다.</li>
+ * </ul>
  */
 package com.ticketon.domain.pricing;
