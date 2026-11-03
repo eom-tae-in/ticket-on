@@ -102,7 +102,7 @@ class CouponTest {
         }
 
         @Test
-        @DisplayName("선착순 2회 — 두 번 쓰면 세 번째는 소진 (확인 필요 #49 — 문구)")
+        @DisplayName("선착순 2회 — 두 번 쓰면 세 번째는 \"선착순 수량이 모두 소진된 코드입니다\" (docs/05 \"잘못된 코드\")")
         void usageLimit() {
             Coupon coupon = coupon(2, false, 0);
             coupon.use(EVENT_ID, MARCH_5, false);
@@ -111,12 +111,14 @@ class CouponTest {
             assertRuleViolation(() -> coupon.use(EVENT_ID, MARCH_5, false), PricingErrorCode.COUPON_USES_EXHAUSTED);
             assertRuleViolation(() -> coupon.checkAvailableTo(false), PricingErrorCode.COUPON_USES_EXHAUSTED);
             assertThat(coupon.usedCount()).isEqualTo(2);
+            assertThat(PricingErrorCode.COUPON_USES_EXHAUSTED.message()).isEqualTo("선착순 수량이 모두 소진된 코드입니다");
         }
 
         @Test
-        @DisplayName("1인 1회를 켜면 이미 쓴 사람은 못 쓴다 — 끄면 쓸 수 있다 (확인 필요 #49 — 문구)")
+        @DisplayName("1인 1회를 켜면 이미 쓴 사람은 \"이미 사용한 코드입니다. 한 사람이 한 번만 쓸 수 있습니다\" — 끄면 쓸 수 있다 (docs/05 \"잘못된 코드\")")
         void onePerPerson() {
             assertRuleViolation(() -> coupon(100, true, 1).use(EVENT_ID, MARCH_5, true), PricingErrorCode.COUPON_ALREADY_USED);
+            assertThat(PricingErrorCode.COUPON_ALREADY_USED.message()).isEqualTo("이미 사용한 코드입니다. 한 사람이 한 번만 쓸 수 있습니다");
 
             Coupon unlimitedPerPerson = coupon(100, false, 1);
             unlimitedPerPerson.use(EVENT_ID, MARCH_5, true);

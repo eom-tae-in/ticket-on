@@ -49,11 +49,18 @@ public enum PricingErrorCode implements ErrorCode {
      */
     COUPON_NOT_USABLE_FOR_EVENT("이 행사에서 사용할 수 없는 코드입니다"),
 
-    /** 이 행사의 쿠폰이지만 전체 사용 가능 횟수(선착순 N회)를 다 썼다({@link Coupon#checkAvailableTo}). 확인 필요 (#49) — 문구는 문서에 없다. */
-    COUPON_USES_EXHAUSTED("사용 가능 횟수가 모두 소진된 코드입니다."),
+    /**
+     * 이 행사의 쿠폰이지만 전체 사용 가능 횟수(선착순 N회)를 다 썼다({@link Coupon#checkAvailableTo}). 이 행사의 코드임을 확인한 뒤라 통일 문구와
+     * 따로 알린다 — 같은 문구로 막으면 관객은 잘못 옮겨 적은 줄 알고 좌석 타이머가 도는 동안 코드를 다시 찾는다. 문구는 docs/05 "잘못된 코드" 표
+     * 그대로다(docs/99 D "쿠폰 소진 · 1인 1회 문구").
+     */
+    COUPON_USES_EXHAUSTED("선착순 수량이 모두 소진된 코드입니다"),
 
-    /** 1인 1회 쿠폰인데 이 관객이 이미 쓴 예매가 살아 있다({@link Coupon#checkAvailableTo}). 확인 필요 (#49) — 문구는 문서에 없다. */
-    COUPON_ALREADY_USED("이미 사용한 코드입니다. 한 사람이 한 번만 쓸 수 있습니다."),
+    /**
+     * 1인 1회 쿠폰인데 이 관객이 이미 쓴 예매가 살아 있다({@link Coupon#checkAvailableTo}). 따로 알리는 까닭은 소진과 같다. 문구는 docs/05 "잘못된
+     * 코드" 표 그대로다(docs/99 D "쿠폰 소진 · 1인 1회 문구").
+     */
+    COUPON_ALREADY_USED("이미 사용한 코드입니다. 한 사람이 한 번만 쓸 수 있습니다"),
 
     /**
      * 쿠폰의 전체 사용 가능 횟수를 이미 쓴 횟수보다 적게 줄이려 한다({@link Coupon#reconfigure}, docs/99 E "가격 · 할인").
