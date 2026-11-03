@@ -28,8 +28,11 @@ public final class QuantityPolicy {
     /** 조기예매 "마감 임박"(기간) — 종료일 3일 이내. 수량과 기간 중 더 급한 쪽을 따른다. docs/05 "임박 표시" */
     public static final Period EARLY_BIRD_ENDING_SOON = Period.ofDays(3);
 
-    /** 잔여 배지 "매진 임박" — 잔여 10% 이하 또는 10석 이하. 목록 카드에만 배지. docs/13 "잔여 좌석 표시" */
+    /** 잔여 배지 "매진 임박" — 잔여 10% 이하, 또는 10석 이하이면서 절반 이상 팔림. 목록 카드에만 배지. docs/13 "잔여 좌석 표시", docs/99 C "잔여 배지" */
     public static final QuantityThreshold REMAINING_SEATS_BADGE = new QuantityThreshold(10, Percent.of(10));
+
+    /** 잔여 배지 "매진 임박"의 10석 이하 조건에 붙는 "절반 이상 팔림" — 정원이 작은 구역이 처음부터 임박이 되지 않게. docs/13 "잔여 좌석 표시" */
+    public static final Percent REMAINING_SEATS_BADGE_SOLD_SHARE = Percent.of(50);
 
     /** 묶음권 할인율 기본값 — 2일권 3%. 주최자가 조정한다. docs/05 "가격은 할인율로 계산합니다" */
     public static final Percent DEFAULT_BUNDLE_DISCOUNT_TWO_DAYS = Percent.of(3);
