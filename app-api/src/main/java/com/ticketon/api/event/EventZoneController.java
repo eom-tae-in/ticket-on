@@ -41,7 +41,7 @@ public class EventZoneController {
     private static final String REJECTIONS = "그 주최자에 지금 소속된 운영진이 아니면(없는 주최자 · 승인 전인 주최자도) 403 NOT_ORGANIZER_STAFF, "
             + "활동 중인 주최자가 아니면 403 ORGANIZER_NOT_ACTIVE. 없거나 지운 행사, 다른 주최자의 행사면 404 EVENT_NOT_FOUND.";
 
-    private static final String FIELD_RULES = "비었거나 너무 긴 이름(20자, 확인 필요), #RRGGBB가 아닌 색, 1원 미만의 기본가, 1 미만의 정원은 400. "
+    private static final String FIELD_RULES = "비었거나 너무 긴 이름(20자), #RRGGBB가 아닌 색, 1원 미만의 기본가, 1 미만의 정원은 400. "
             + "수량형인데 정원이 없으면 409 ZONE_CAPACITY_REQUIRED, 지정형인데 정원을 적으면 409 ZONE_CAPACITY_ONLY_FOR_QUANTITY. 같은 행사의 다른 "
             + "구역 이름이면 409 ZONE_NAME_ALREADY_TAKEN, 블록 이름이면 409 ZONE_NAME_TAKEN_BY_BLOCK.";
 

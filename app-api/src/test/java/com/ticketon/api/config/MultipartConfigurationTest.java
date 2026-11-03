@@ -2,7 +2,7 @@ package com.ticketon.api.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import jakarta.servlet.MultipartConfigElement;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,9 +17,9 @@ class MultipartConfigurationTest {
     private MultipartConfigElement multipartConfig;
 
     @Test
-    @DisplayName("파일 하나와 요청 전체 모두 정책 숫자 모음의 바깥 울타리(제안 10MB)까지 받는다 — 확인 필요 #29")
+    @DisplayName("파일 하나와 요청 전체 모두 정책 숫자 모음의 바깥 울타리(10MB)까지 받는다")
     void limitComesFromPolicy() {
-        long limit = ProposedPolicy.UPLOAD_REQUEST_MAXIMUM_SIZE.bytes();
+        long limit = QuantityPolicy.UPLOAD_REQUEST_MAXIMUM_SIZE.bytes();
 
         assertThat(limit).isEqualTo(10L * 1024 * 1024);
         assertThat(multipartConfig.getMaxFileSize()).isEqualTo(limit);
@@ -30,13 +30,13 @@ class MultipartConfigurationTest {
     @DisplayName("울타리는 로고 용량 상한보다 커서, 상한을 넘은 로고도 끝까지 받아 칸 옆에 까닭을 알려 줄 수 있다")
     void limitIsAboveLogoLimit() {
         assertThat(multipartConfig.getMaxFileSize())
-                .isGreaterThan(ProposedPolicy.ORGANIZER_LOGO_MAXIMUM_SIZE.bytes());
+                .isGreaterThan(QuantityPolicy.ORGANIZER_LOGO_MAXIMUM_SIZE.bytes());
     }
 
     @Test
-    @DisplayName("울타리는 포스터 용량 상한(제안 5MB)보다도 커서, 상한을 넘은 포스터도 끝까지 받아 칸 옆에 까닭을 알려 줄 수 있다 — 확인 필요 #40")
+    @DisplayName("울타리는 포스터 용량 상한(5MB)보다도 커서, 상한을 넘은 포스터도 끝까지 받아 칸 옆에 까닭을 알려 줄 수 있다")
     void limitIsAbovePosterLimit() {
         assertThat(multipartConfig.getMaxFileSize())
-                .isGreaterThan(ProposedPolicy.EVENT_POSTER_MAXIMUM_SIZE.bytes());
+                .isGreaterThan(QuantityPolicy.EVENT_POSTER_MAXIMUM_SIZE.bytes());
     }
 }

@@ -35,7 +35,7 @@ import jakarta.validation.constraints.NotNull;
  */
 @Schema(description = "위저드 1단계(기본 정보) — 행사 만들기와 1단계 저장")
 public record EventBasicInformationRequest(
-        @Schema(description = "제목 — 앞뒤 공백은 걷는다. 100자까지(확인 필요)", example = "2026 봄 정기공연 〈열두 번째 달〉",
+        @Schema(description = "제목 — 앞뒤 공백은 걷는다. 100자까지", example = "2026 봄 정기공연 〈열두 번째 달〉",
                 requiredMode = REQUIRED)
         @FilledText(message = "제목을 입력해 주세요.")
         @EventTitleRule
@@ -51,7 +51,7 @@ public record EventBasicInformationRequest(
         @EventCategoryNameRule(message = "카테고리는 목록에서 골라 주세요.")
         String categoryName,
 
-        @Schema(description = "장르명 — 카테고리 \"기타\"를 고를 때만 필수로 적는다. 정식 카테고리면 비우거나 생략. 20자까지(확인 필요)",
+        @Schema(description = "장르명 — 카테고리 \"기타\"를 고를 때만 필수로 적는다. 정식 카테고리면 비우거나 생략. 20자까지",
                 example = "낭독극", requiredMode = NOT_REQUIRED, nullable = true)
         @EventCategoryNameRule(message = "장르명은 20자 이하로 입력해 주세요.")
         String genreName,

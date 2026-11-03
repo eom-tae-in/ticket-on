@@ -32,8 +32,8 @@ import com.ticketon.application.event.port.in.SaveEventBookingSettingsUseCase;
 import com.ticketon.application.event.port.in.UploadEventPosterCommand;
 import com.ticketon.application.event.port.in.UploadEventPosterUseCase;
 import com.ticketon.application.organizer.port.in.ActingStaff;
-import com.ticketon.domain.account.AccountKind;
 import com.ticketon.common.TestImages;
+import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
 import com.ticketon.domain.error.NotFoundException;
 import com.ticketon.domain.error.PermissionDeniedException;
@@ -60,7 +60,7 @@ import com.ticketon.domain.event.Venue;
 import com.ticketon.domain.organizer.ExternalLink;
 import com.ticketon.domain.organizer.OrganizerErrorCode;
 import com.ticketon.domain.policy.CancellationFeeTier;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -354,10 +354,10 @@ class OrganizerEventControllerTest {
         }
 
         @Test
-        @DisplayName("용량 상한(제안 5MB)을 넘는 파일은 400이고 상한을 알려 준다")
+        @DisplayName("용량 상한(5MB)을 넘는 파일은 400이고 상한을 알려 준다")
         void rejectsOverSizePoster() throws Exception {
             byte[] overLimit = Arrays.copyOf(TestImages.png(30, 40),
-                    (int) ProposedPolicy.EVENT_POSTER_MAXIMUM_SIZE.bytes() + 1);
+                    (int) QuantityPolicy.EVENT_POSTER_MAXIMUM_SIZE.bytes() + 1);
 
             expectPosterRejected(new MockMultipartFile("poster", "poster.png", "image/png", overLimit),
                     "포스터는 5MB 이하로 올려 주세요.");

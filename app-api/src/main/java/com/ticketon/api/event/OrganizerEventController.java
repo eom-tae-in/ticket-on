@@ -102,8 +102,8 @@ public class OrganizerEventController {
 
     @Operation(summary = "1단계 포스터 올리기", description = "화면의 크롭 도구로 3:4 세로로 자른 포스터를 multipart/form-data의 poster 칸으로 "
             + "올리고 위저드 값을 돌려준다(posterUrl에 공개 주소). 처음 올리기와 바꾸기가 같고, 바꾸기 전 포스터의 파일은 지워진다. 파일 이름은 쓰지 "
-            + "않고 추측할 수 없는 열쇠로 저장한다. 운영진 누구나 올린다. 빈 파일 · 용량 상한(정책값, 확인 필요) 초과 · PNG · JPEG가 아닌 파일(올린 "
-            + "쪽이 적은 형식과 실제 파일 내용을 함께 본다) · 3:4 세로가 아닌 그림(허용 오차 정책값, 확인 필요)은 400(fieldErrors의 poster 칸에 까닭), "
+            + "않고 추측할 수 없는 열쇠로 저장한다. 운영진 누구나 올린다. 빈 파일 · 용량 상한(정책값) 초과 · PNG · JPEG가 아닌 파일(올린 "
+            + "쪽이 적은 형식과 실제 파일 내용을 함께 본다) · 3:4 세로가 아닌 그림(허용 오차 정책값)은 400(fieldErrors의 poster 칸에 까닭), "
             + "poster 칸이 없으면 400, 파일 올리기 요청의 바깥 울타리를 넘으면 400 INVALID_INPUT. 판매가 끝난 행사는 409 "
             + "EDIT_LOCKED_AFTER_SALES_CLOSED, 지난 행사는 409 EDIT_LOCKED_FOR_PAST_EVENT. " + REJECTIONS + " " + EVENT_NOT_FOUND
             + " 운영진 조작 기록에 남고, 마지막 수정 시각이 바뀐다.")

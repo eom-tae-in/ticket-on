@@ -1,7 +1,7 @@
 package com.ticketon.domain.account;
 
 import com.ticketon.domain.error.RuleViolationException;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -9,8 +9,8 @@ import java.util.Objects;
  * 운영진 로그인 이메일 인증 링크 — 가입하면 그 이메일로 하나 보낸다(docs/01 "수집 정보 — 주최자 운영진" 이메일(인증)).
  * <p>
  * 관객 계정의 인증 링크({@link EmailVerificationToken})와 규칙이 같다. 링크 값은 추측할 수 없는 무작위 값
- * {@value EmailVerificationToken#LENGTH}자이고, 보낸 때부터 {@link ProposedPolicy#EMAIL_VERIFICATION_LINK_VALIDITY 유효 시간}
- * (확인 필요) 동안 열 수 있다. 인증한 뒤에도 지우지 않아, 같은 링크를 다시 열면 유효 시간과 상관없이 "이미 인증을 마친 계정"으로 안내한다.
+ * {@value EmailVerificationToken#LENGTH}자이고, 보낸 때부터 {@link TimePolicy#EMAIL_VERIFICATION_LINK_VALIDITY 유효 시간}
+ * 동안 열 수 있다. 인증한 뒤에도 지우지 않아, 같은 링크를 다시 열면 유효 시간과 상관없이 "이미 인증을 마친 계정"으로 안내한다.
  * 관객 계정과 계정 id를 따로 매기므로 링크도 따로 둔다 — 관객 링크로 운영진 로그인을 인증할 수 없고, 그 반대도 그렇다.
  *
  * @param value          링크에 담는 값
@@ -36,14 +36,14 @@ public record StaffEmailVerificationToken(String value, long staffAccountId, Ins
     }
 
     /**
-     * 막 가입한 계정에 보낼 링크를 만든다. 유효 시간은 지금부터 {@link ProposedPolicy#EMAIL_VERIFICATION_LINK_VALIDITY}다.
+     * 막 가입한 계정에 보낼 링크를 만든다. 유효 시간은 지금부터 {@link TimePolicy#EMAIL_VERIFICATION_LINK_VALIDITY}다.
      *
      * @param value 추측할 수 없는 무작위 값
      */
     public static StaffEmailVerificationToken issue(String value, long staffAccountId, Instant now) {
         Objects.requireNonNull(now, "now");
         return new StaffEmailVerificationToken(value, staffAccountId, now,
-                now.plus(ProposedPolicy.EMAIL_VERIFICATION_LINK_VALIDITY));
+                now.plus(TimePolicy.EMAIL_VERIFICATION_LINK_VALIDITY));
     }
 
     /** 그 순간에 유효 시간이 지났는지. 끝나는 일시 그 순간부터 지난 것이다. */

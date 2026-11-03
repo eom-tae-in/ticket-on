@@ -1,6 +1,6 @@
 package com.ticketon.api.security;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 import org.springframework.boot.session.autoconfigure.SessionTimeout;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +16,6 @@ public class LoginSessionConfiguration {
 
     @Bean
     public SessionTimeout loginSessionTimeout() {
-        return () -> ProposedPolicy.LOGIN_SESSION_IDLE_TIMEOUT;
+        return () -> TimePolicy.LOGIN_SESSION_IDLE_TIMEOUT;
     }
 }

@@ -1,6 +1,6 @@
 package com.ticketon.domain.event;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import java.util.Objects;
 import java.util.Optional;
@@ -14,8 +14,8 @@ import java.util.Optional;
  * <b>선택이다.</b> 비우면 출연이 없는 것이다 — 빈 출연 값은 만들지 않고 없음으로 둔다({@link #fromInput}).
  * <p>
  * 적은 값에서 앞뒤 공백을 걷고 유니코드 NFC(완성형)로 맞춘다. <b>한 줄</b>이라 줄바꿈은 받지 않는다. 맞춘 값이
- * {@value ProposedPolicy#SESSION_PERFORMERS_MAXIMUM_LENGTH}자를 넘으면 받지 않는다({@link ProposedPolicy#SESSION_PERFORMERS_MAXIMUM_LENGTH},
- * 확인 필요). 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자).
+ * {@value QuantityPolicy#SESSION_PERFORMERS_MAXIMUM_LENGTH}자를 넘으면 받지 않는다({@link QuantityPolicy#SESSION_PERFORMERS_MAXIMUM_LENGTH}).
+ * 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자).
  * <p>
  * 출연 칸을 고치는 것은 소개 글을 고치는 것과 같아 출연자 변경 알림이 되지 않는다 — 이미 산 관객에게 권리가 생기는 것은 [출연자 변경 알림]을
  * 따로 보냈을 때다(docs/02, docs/04 "출연자 변경"). 제목 · 소개 · 포스터와 같이 변경 이력을 남긴다({@link EventChangeHistory}).
@@ -34,7 +34,7 @@ public record SessionPerformers(String value) {
             throw new IllegalArgumentException("출연은 한 줄로 적습니다");
         }
         if (exceedsMaximumLength(value)) {
-            throw new IllegalArgumentException("출연은 " + ProposedPolicy.SESSION_PERFORMERS_MAXIMUM_LENGTH + "자 이하여야 합니다");
+            throw new IllegalArgumentException("출연은 " + QuantityPolicy.SESSION_PERFORMERS_MAXIMUM_LENGTH + "자 이하여야 합니다");
         }
     }
 
@@ -70,6 +70,6 @@ public record SessionPerformers(String value) {
     }
 
     private static boolean exceedsMaximumLength(String normalized) {
-        return normalized.codePointCount(0, normalized.length()) > ProposedPolicy.SESSION_PERFORMERS_MAXIMUM_LENGTH;
+        return normalized.codePointCount(0, normalized.length()) > QuantityPolicy.SESSION_PERFORMERS_MAXIMUM_LENGTH;
     }
 }

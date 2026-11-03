@@ -1,6 +1,7 @@
 package com.ticketon.domain.organizer;
 
 import com.ticketon.domain.error.ErrorCode;
+import com.ticketon.domain.policy.TimePolicy;
 
 /**
  * 주최자 도메인의 오류 코드. 문구는 화면에 그대로 나간다.
@@ -195,7 +196,7 @@ public enum OrganizerErrorCode implements ErrorCode {
     /** 이미 수락하거나 거절한 초대에 다시 답하려 했다. 같은 초대를 거의 동시에 두 번 수락해 한쪽이 먼저 처리된 경우도 이 코드다. */
     STAFF_INVITATION_ALREADY_ANSWERED("이미 답한 초대입니다."),
 
-    /** 유효 기간({@link com.ticketon.domain.policy.ProposedPolicy#STAFF_INVITATION_VALIDITY})이 지난 초대에 답하려 했다. */
+    /** 유효 기간({@link com.ticketon.domain.policy.TimePolicy#STAFF_INVITATION_VALIDITY})이 지난 초대에 답하려 했다. */
     STAFF_INVITATION_EXPIRED("유효 기간이 지난 초대입니다. 소유자에게 다시 초대해 달라고 요청해 주세요."),
 
     /**

@@ -17,7 +17,7 @@ import com.ticketon.api.error.ErrorResponse;
 import com.ticketon.application.account.port.out.SessionTerminationPort;
 import com.ticketon.domain.account.AccountKind;
 import com.ticketon.domain.account.AccountRef;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 import jakarta.servlet.http.Cookie;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -28,8 +28,8 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -93,7 +93,7 @@ class LoginSessionIntegrationTest {
         Map<String, ? extends Session> sessions = sessionRepository.findByPrincipalName("AUDIENCE:101");
         assertThat(sessions).hasSize(1);
         assertThat(sessions.values().iterator().next().getMaxInactiveInterval())
-                .isEqualTo(ProposedPolicy.LOGIN_SESSION_IDLE_TIMEOUT);
+                .isEqualTo(TimePolicy.LOGIN_SESSION_IDLE_TIMEOUT);
 
         mockMvc.perform(get("/api/audience/test").cookie(sessionCookie))
                 .andExpect(status().isOk())

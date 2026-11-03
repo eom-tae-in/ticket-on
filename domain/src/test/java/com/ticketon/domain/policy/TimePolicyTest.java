@@ -146,4 +146,19 @@ class TimePolicyTest {
     private static Instant koreanInstant(int year, int month, int day, int hour, int minute) {
         return KoreanTime.toInstant(LocalDateTime.of(year, month, day, hour, minute));
     }
+
+    @Test
+    @DisplayName("가입 인증 링크 24시간, 비밀번호 재설정 링크 1시간, 운영자 초대 7일이다 (docs/99 C)")
+    void linkValidity() {
+        assertThat(TimePolicy.EMAIL_VERIFICATION_LINK_VALIDITY).isEqualTo(Duration.ofHours(24));
+        assertThat(TimePolicy.PASSWORD_RESET_LINK_VALIDITY).isEqualTo(Duration.ofHours(1));
+        assertThat(TimePolicy.STAFF_INVITATION_VALIDITY).isEqualTo(Duration.ofDays(7));
+    }
+
+    @Test
+    @DisplayName("작성 중 행사 알림은 오전 10시, 주최자 신청 강조는 남은 1영업일부터다 (docs/99 C)")
+    void draftNoticeTimeAndReviewHighlight() {
+        assertThat(TimePolicy.DRAFT_EVENT_IDLE_NOTICE_RUN_TIME).isEqualTo(LocalTime.of(10, 0));
+        assertThat(TimePolicy.ORGANIZER_REVIEW_DEADLINE_APPROACHING_WITHIN).isEqualTo(BusinessDays.of(1));
+    }
 }

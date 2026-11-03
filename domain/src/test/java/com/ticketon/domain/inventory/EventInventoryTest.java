@@ -85,7 +85,7 @@ class EventInventoryTest {
         }
 
         @Test
-        @DisplayName("확인 필요 (#53) — 한 회차에서 팔린 좌석이면 일괄 적용을 거부하고 어느 회차도 바꾸지 않는다")
+        @DisplayName("docs/99 E \"재고 · 초대권\" — 한 회차에서 팔린 좌석이면 일괄 적용을 거부하고 어느 회차도 바꾸지 않는다")
         void soldInOneSessionRejectsAll() {
             EventInventory inventory = eightSessions();
             SeatStock soldOnThird = inventory.session(THIRD_SESSION).seat(PRESS_SEAT);

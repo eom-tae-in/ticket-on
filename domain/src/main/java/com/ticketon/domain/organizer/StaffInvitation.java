@@ -3,7 +3,7 @@ package com.ticketon.domain.organizer;
 import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.error.PermissionDeniedException;
 import com.ticketon.domain.error.RuleViolationException;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Objects;
@@ -25,7 +25,7 @@ import java.util.OptionalLong;
  *   <li><b>받는 사람은 이메일로 정한다.</b> 초대받은 이메일과 같은 이메일(대소문자 무시 — 운영진 로그인 이메일이 하나뿐인 기준과 같다)의
  *       운영진 로그인만 답한다({@link #isAddressedTo}). 운영진 로그인은 이메일 인증을 마쳐야 로그인되므로, 답하는 사람은 그 메일함의 주인이다.
  *       아직 주최자 쪽 로그인이 없는 사람에게도 보낸다 — 받은 사람이 그 이메일로 로그인을 만들어 답한다.</li>
- *   <li><b>유효 기간</b> — 보낸 때부터 {@link ProposedPolicy#STAFF_INVITATION_VALIDITY}(확인 필요 #25). 끝나는 일시 그 순간부터 답할 수
+ *   <li><b>유효 기간</b> — 보낸 때부터 {@link TimePolicy#STAFF_INVITATION_VALIDITY}. 끝나는 일시 그 순간부터 답할 수
  *       없다. 만료는 상태로 저장하지 않고 시각으로 계산한다({@link #isExpiredAt}).</li>
  *   <li><b>한 번만 답한다.</b> 수락하거나 거절한 초대에는 다시 답할 수 없다.</li>
  *   <li><b>운영자는 심사를 받지 않는다.</b> 수락하면 바로 운영자 소속이 시작된다({@link OrganizerStaff#addOperator}).</li>
@@ -84,7 +84,7 @@ public final class StaffInvitation {
     }
 
     /**
-     * 그 이메일로 운영자 초대를 보낸다. 유효 기간은 지금부터 {@link ProposedPolicy#STAFF_INVITATION_VALIDITY}다.
+     * 그 이메일로 운영자 초대를 보낸다. 유효 기간은 지금부터 {@link TimePolicy#STAFF_INVITATION_VALIDITY}다.
      *
      * @param staff                   초대하는 주최자의 운영진 명단
      * @param invitedByStaffAccountId 초대하는 사람 — 그 주최자의 소유자
@@ -101,7 +101,7 @@ public final class StaffInvitation {
         Objects.requireNonNull(now, "now");
         requireInvitable(staff, invitedByStaffAccountId, inviteeStaffAccountId);
         return new StaffInvitation(null, staff.organizerId(), inviteeEmail, invitedByStaffAccountId, now,
-                now.plus(ProposedPolicy.STAFF_INVITATION_VALIDITY), StaffInvitationStatus.PENDING, null, null);
+                now.plus(TimePolicy.STAFF_INVITATION_VALIDITY), StaffInvitationStatus.PENDING, null, null);
     }
 
     /**
@@ -143,7 +143,7 @@ public final class StaffInvitation {
         }
         this.invitedByStaffAccountId = invitedByStaffAccountId;
         this.invitedAt = now;
-        this.expiresAt = now.plus(ProposedPolicy.STAFF_INVITATION_VALIDITY);
+        this.expiresAt = now.plus(TimePolicy.STAFF_INVITATION_VALIDITY);
     }
 
     /**

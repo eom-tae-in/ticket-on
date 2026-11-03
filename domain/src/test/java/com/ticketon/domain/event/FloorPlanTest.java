@@ -274,7 +274,7 @@ class FloorPlanTest {
         }
 
         @Test
-        @DisplayName("자동 이름은 다른 블록 · 구역이 쓰지 않는 가장 작은 번호 — 직접 지은 '블록 2', 구역 '블록 3'은 건너뛴다 (확인 필요)")
+        @DisplayName("자동 이름은 다른 블록 · 구역이 쓰지 않는 가장 작은 번호 — 직접 지은 '블록 2', 구역 '블록 3'은 건너뛴다")
         void automaticNameSkipsTakenNumbers() {
             FloorPlan plan = FloorPlan.empty(EVENT_ID);
             plan.addBlock(BlockName.of("1층"), BlockSize.of(5, 10), CanvasPoint.ORIGIN, BlockAngle.NONE);

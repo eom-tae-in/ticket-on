@@ -8,7 +8,7 @@ import com.ticketon.domain.notification.NotificationKind;
 import com.ticketon.domain.notification.NotificationRecipient;
 import com.ticketon.domain.organizer.OrganizerName;
 import com.ticketon.domain.organizer.StaffInvitation;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 
 /**
  * 운영자 초대 메일 — 초대받은 이메일로 보낸다(docs/12 "주최자 대상 — 운영자 초대 (받는 사람에게)").
@@ -46,6 +46,6 @@ final class OperatorInvitationNotice {
                 초대는 %d일 동안 수락할 수 있습니다.
                 초대받을 일이 없었다면 이 메일을 무시해 주세요.
                 """.formatted(organizerName.value(), invitation.inviteeEmail().value(),
-                webAddress.page(ORGANIZER_PAGE_PATH), ProposedPolicy.STAFF_INVITATION_VALIDITY.toDays());
+                webAddress.page(ORGANIZER_PAGE_PATH), TimePolicy.STAFF_INVITATION_VALIDITY.toDays());
     }
 }

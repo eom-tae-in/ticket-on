@@ -2,7 +2,6 @@ package com.ticketon.domain.organizer;
 
 import com.ticketon.common.BusinessDayCalculator;
 import com.ticketon.common.KoreanTime;
-import com.ticketon.domain.policy.ProposedPolicy;
 import com.ticketon.domain.policy.TimePolicy;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -41,7 +40,7 @@ public record OrganizerReviewDeadline(LocalDate dueDate) {
 
     /**
      * 목표일이 다가왔는지 — 오늘부터 목표일까지 남은 영업일이
-     * {@link ProposedPolicy#ORGANIZER_REVIEW_DEADLINE_APPROACHING_WITHIN 정해 둔 수} 이하다. 목표일 당일과 지난 뒤도 다가온 것이다.
+     * {@link TimePolicy#ORGANIZER_REVIEW_DEADLINE_APPROACHING_WITHIN 정해 둔 수} 이하다. 목표일 당일과 지난 뒤도 다가온 것이다.
      * 목표일이 2026-10-20(화)이면 19일(월)부터 다가왔고, 16일(금)·17일(토)은 아직이다(남은 영업일 2일).
      *
      * @param today                 오늘 (한국 날짜)
@@ -54,6 +53,6 @@ public record OrganizerReviewDeadline(LocalDate dueDate) {
             return true;
         }
         return businessDayCalculator.businessDaysBetween(today, dueDate)
-                <= ProposedPolicy.ORGANIZER_REVIEW_DEADLINE_APPROACHING_WITHIN.count();
+                <= TimePolicy.ORGANIZER_REVIEW_DEADLINE_APPROACHING_WITHIN.count();
     }
 }

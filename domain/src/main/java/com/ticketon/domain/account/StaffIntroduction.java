@@ -1,6 +1,6 @@
 package com.ticketon.domain.account;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import java.util.Objects;
 import java.util.Optional;
@@ -12,8 +12,8 @@ import java.util.Optional;
  * 비우면 소개가 없는 것이다 — 빈 소개 값은 만들지 않고 없음으로 둔다({@link #fromInput}).
  * <p>
  * 적은 값에서 앞뒤 공백을 걷고 유니코드 NFC(완성형)로 맞춘다. 맞추지 않으면 자모를 늘어놓은 꼴(NFD)로 적은 한글이 글자 수를 두세 배로 세어
- * 같은 소개가 길이 상한에 걸리기도 하고 안 걸리기도 한다. 맞춘 값이 {@value ProposedPolicy#STAFF_INTRODUCTION_MAXIMUM_LENGTH}자를 넘으면 받지
- * 않는다({@link ProposedPolicy#STAFF_INTRODUCTION_MAXIMUM_LENGTH}, 확인 필요). 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자).
+ * 같은 소개가 길이 상한에 걸리기도 하고 안 걸리기도 한다. 맞춘 값이 {@value QuantityPolicy#STAFF_INTRODUCTION_MAXIMUM_LENGTH}자를 넘으면 받지
+ * 않는다({@link QuantityPolicy#STAFF_INTRODUCTION_MAXIMUM_LENGTH}). 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자).
  * 쓸 수 있는 글자(줄바꿈 포함)는 문서에 없어 정하지 않았다. 부적절한 소개는 관리자가 초기화한다(docs/01 "닉네임 — 부적절하면").
  *
  * @param value 앞뒤 공백을 걷고 NFC로 맞춘 소개. 비어 있지 않다.
@@ -28,7 +28,7 @@ public record StaffIntroduction(String value) {
         }
         if (exceedsMaximumLength(value)) {
             throw new IllegalArgumentException(
-                    "한 줄 소개는 " + ProposedPolicy.STAFF_INTRODUCTION_MAXIMUM_LENGTH + "자 이하여야 합니다");
+                    "한 줄 소개는 " + QuantityPolicy.STAFF_INTRODUCTION_MAXIMUM_LENGTH + "자 이하여야 합니다");
         }
     }
 
@@ -56,6 +56,6 @@ public record StaffIntroduction(String value) {
     }
 
     private static boolean exceedsMaximumLength(String normalized) {
-        return normalized.codePointCount(0, normalized.length()) > ProposedPolicy.STAFF_INTRODUCTION_MAXIMUM_LENGTH;
+        return normalized.codePointCount(0, normalized.length()) > QuantityPolicy.STAFF_INTRODUCTION_MAXIMUM_LENGTH;
     }
 }

@@ -42,7 +42,7 @@ public class EventEntranceController {
     private static final String REJECTIONS = "그 주최자에 지금 소속된 운영진이 아니면(없는 주최자 · 승인 전인 주최자도) 403 NOT_ORGANIZER_STAFF, "
             + "활동 중인 주최자가 아니면 403 ORGANIZER_NOT_ACTIVE. 없거나 지운 행사, 다른 주최자의 행사면 404 EVENT_NOT_FOUND.";
 
-    private static final String NAME_RULES = "비었거나 너무 긴 이름(20자, 확인 필요)은 400, 같은 행사의 다른 입구 이름이면 409 "
+    private static final String NAME_RULES = "비었거나 너무 긴 이름(20자)은 400, 같은 행사의 다른 입구 이름이면 409 "
             + "ENTRANCE_NAME_ALREADY_TAKEN.";
 
     private final AddEntranceUseCase addEntranceUseCase;

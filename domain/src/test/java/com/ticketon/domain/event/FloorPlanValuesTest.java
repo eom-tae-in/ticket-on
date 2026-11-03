@@ -3,7 +3,7 @@ package com.ticketon.domain.event;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -38,9 +38,9 @@ class FloorPlanValuesTest {
         }
 
         @Test
-        @DisplayName("20자까지 받고 21자는 받지 않는다 (제안값, 확인 필요)")
+        @DisplayName("20자까지 받고 21자는 받지 않는다")
         void maximumLength() {
-            assertThat(ProposedPolicy.ZONE_NAME_MAXIMUM_LENGTH).isEqualTo(20);
+            assertThat(QuantityPolicy.ZONE_NAME_MAXIMUM_LENGTH).isEqualTo(20);
             assertThat(ZoneName.isValid("가".repeat(20))).isTrue();
             assertThat(ZoneName.isValid("가".repeat(21))).isFalse();
             assertThatIllegalArgumentException().isThrownBy(() -> ZoneName.of("가".repeat(21)));
@@ -130,9 +130,9 @@ class FloorPlanValuesTest {
         }
 
         @Test
-        @DisplayName("20자까지 받고 21자는 받지 않는다 (제안값, 확인 필요)")
+        @DisplayName("20자까지 받고 21자는 받지 않는다")
         void maximumLength() {
-            assertThat(ProposedPolicy.BLOCK_NAME_MAXIMUM_LENGTH).isEqualTo(20);
+            assertThat(QuantityPolicy.BLOCK_NAME_MAXIMUM_LENGTH).isEqualTo(20);
             assertThat(BlockName.isAcceptable("가".repeat(20))).isTrue();
             assertThat(BlockName.isAcceptable("가".repeat(21))).isFalse();
             assertThatIllegalArgumentException().isThrownBy(() -> BlockName.fromInput("가".repeat(21)));
@@ -151,10 +151,10 @@ class FloorPlanValuesTest {
         }
 
         @Test
-        @DisplayName("행 · 열은 1~50 (제안값, 확인 필요)")
+        @DisplayName("행 · 열은 1~50")
         void bounds() {
-            assertThat(ProposedPolicy.SEAT_BLOCK_MAXIMUM_ROWS).isEqualTo(50);
-            assertThat(ProposedPolicy.SEAT_BLOCK_MAXIMUM_COLUMNS).isEqualTo(50);
+            assertThat(QuantityPolicy.SEAT_BLOCK_MAXIMUM_ROWS).isEqualTo(50);
+            assertThat(QuantityPolicy.SEAT_BLOCK_MAXIMUM_COLUMNS).isEqualTo(50);
             assertThat(BlockSize.isValid(1, 1)).isTrue();
             assertThat(BlockSize.isValid(50, 50)).isTrue();
             assertThat(BlockSize.isValid(0, 10)).isFalse();

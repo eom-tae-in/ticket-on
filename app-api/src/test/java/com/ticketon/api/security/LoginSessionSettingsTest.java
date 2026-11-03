@@ -2,7 +2,7 @@ package com.ticketon.api.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -10,10 +10,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.session.autoconfigure.SessionTimeout;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
-import org.springframework.boot.web.server.Cookie;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.web.server.Cookie.SameSite;
+import org.springframework.boot.web.server.Cookie;
 import org.springframework.boot.web.server.autoconfigure.ServerProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -51,8 +51,8 @@ class LoginSessionSettingsTest {
         @Test
         @DisplayName("비활성 만료는 정책 숫자 모음의 제안값(30분)이다 — 확인 필요 #8")
         void idleTimeoutComesFromPolicy() {
-            assertThat(sessionTimeout.getTimeout()).isEqualTo(ProposedPolicy.LOGIN_SESSION_IDLE_TIMEOUT);
-            assertThat(ProposedPolicy.LOGIN_SESSION_IDLE_TIMEOUT).isEqualTo(Duration.ofMinutes(30));
+            assertThat(sessionTimeout.getTimeout()).isEqualTo(TimePolicy.LOGIN_SESSION_IDLE_TIMEOUT);
+            assertThat(TimePolicy.LOGIN_SESSION_IDLE_TIMEOUT).isEqualTo(Duration.ofMinutes(30));
         }
     }
 

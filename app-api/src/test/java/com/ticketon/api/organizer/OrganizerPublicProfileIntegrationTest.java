@@ -7,7 +7,7 @@ import com.ticketon.api.security.LoginTestController;
 import com.ticketon.application.account.port.out.PasswordHashPort;
 import com.ticketon.common.TestImages;
 import com.ticketon.domain.account.NewPassword;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.io.ByteArrayOutputStream;
 import java.net.CookieManager;
 import java.net.URI;
@@ -27,8 +27,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
@@ -199,14 +199,14 @@ class OrganizerPublicProfileIntegrationTest {
             expectLogoRejected(operator.uploadLogo("logo.png", "image/png", TestImages.png(400, 300)),
                     "로고는 정사각형으로 잘라 올려 주세요.");
             byte[] overLogoLimit = Arrays.copyOf(TestImages.png(64, 64),
-                    (int) ProposedPolicy.ORGANIZER_LOGO_MAXIMUM_SIZE.bytes() + 1);
+                    (int) QuantityPolicy.ORGANIZER_LOGO_MAXIMUM_SIZE.bytes() + 1);
             expectLogoRejected(operator.uploadLogo("logo.png", "image/png", overLogoLimit), "로고는 2MB 이하로 올려 주세요.");
             expectLogoRejected(operator.uploadLogo("logo.png", "image/png",
                     "<svg xmlns=\"http://www.w3.org/2000/svg\"/>".getBytes(StandardCharsets.UTF_8)),
                     "로고는 PNG 또는 JPEG 그림만 올릴 수 있습니다.");
 
             byte[] overRequestLimit = Arrays.copyOf(TestImages.png(64, 64),
-                    (int) ProposedPolicy.UPLOAD_REQUEST_MAXIMUM_SIZE.bytes() + 1);
+                    (int) QuantityPolicy.UPLOAD_REQUEST_MAXIMUM_SIZE.bytes() + 1);
             HttpResponse<String> tooLarge = operator.uploadLogo("logo.png", "image/png", overRequestLimit);
             assertThat(tooLarge.statusCode()).isEqualTo(400);
             assertThat(jsonMapper.readValue(tooLarge.body(), ErrorResponse.class).code()).isEqualTo("INVALID_INPUT");

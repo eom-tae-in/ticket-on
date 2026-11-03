@@ -4,7 +4,7 @@ import static com.ticketon.domain.event.EventFixtures.assertRejected;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
@@ -159,9 +159,9 @@ class EventCategoryTest {
         }
 
         @Test
-        @DisplayName("장르명은 " + ProposedPolicy.EVENT_CATEGORY_NAME_MAXIMUM_LENGTH + "자까지 받는다 (확인 필요)")
+        @DisplayName("장르명은 " + QuantityPolicy.EVENT_CATEGORY_NAME_MAXIMUM_LENGTH + "자까지 받는다")
         void genreNameMaximumLength() {
-            String longest = "가".repeat(ProposedPolicy.EVENT_CATEGORY_NAME_MAXIMUM_LENGTH);
+            String longest = "가".repeat(QuantityPolicy.EVENT_CATEGORY_NAME_MAXIMUM_LENGTH);
 
             assertThat(EventCategorySelection.other(EventType.PERFORMANCE, longest).genreName().value()).isEqualTo(longest);
             assertThat(EventCategoryName.isValid(longest)).isTrue();

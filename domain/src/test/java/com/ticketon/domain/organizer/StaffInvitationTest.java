@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import com.ticketon.common.KoreanTime;
 import com.ticketon.domain.account.EmailAddress;
 import com.ticketon.domain.error.PermissionDeniedException;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -39,7 +39,7 @@ class StaffInvitationTest {
     /** 초대한 일시 — 2026-10-15 10:00 (한국 시각). */
     private static final Instant INVITED_AT = at(2026, 10, 15, 10, 0);
 
-    /** 유효 기간(7일, 확인 필요 #25)이 끝나는 일시 — 2026-10-22 10:00. 이 순간부터 답할 수 없다. */
+    /** 유효 기간(7일)이 끝나는 일시 — 2026-10-22 10:00. 이 순간부터 답할 수 없다. */
     private static final Instant EXPIRES_AT = at(2026, 10, 22, 10, 0);
 
     private static Instant at(int year, int month, int day, int hour, int minute) {
@@ -73,11 +73,11 @@ class StaffInvitationTest {
     class Issue {
 
         @Test
-        @DisplayName("소유자가 이메일로 보내면 답을 기다리는 초대가 되고, 유효 기간은 보낸 때부터 7일이다 (확인 필요 #25)")
+        @DisplayName("소유자가 이메일로 보내면 답을 기다리는 초대가 되고, 유효 기간은 보낸 때부터 7일이다")
         void ownerInvitesByEmail() {
             StaffInvitation invitation = invitationToDohyun(twelveMonthsStaff());
 
-            assertThat(ProposedPolicy.STAFF_INVITATION_VALIDITY).isEqualTo(Duration.ofDays(7));
+            assertThat(TimePolicy.STAFF_INVITATION_VALIDITY).isEqualTo(Duration.ofDays(7));
             assertThat(invitation.id()).isEmpty();
             assertThat(invitation.organizerId()).isEqualTo(TWELVE_MONTHS);
             assertThat(invitation.inviteeEmail()).isEqualTo(DOHYUN_EMAIL);

@@ -167,7 +167,7 @@ class StaffSignUpControllerTest {
         }
 
         @Test
-        @DisplayName("닉네임은 20자까지 받는다 (확인 필요 #15) — 앞뒤 공백은 세지 않는다")
+        @DisplayName("닉네임은 20자까지 받는다 — 앞뒤 공백은 세지 않는다")
         void acceptsNicknameOfMaximumLength() throws Exception {
             given(signUpStaffUseCase.signUp(any())).willReturn(new SignUpStaffResult(7, "junghoon@example.com"));
             Map<String, Object> body = validBody();

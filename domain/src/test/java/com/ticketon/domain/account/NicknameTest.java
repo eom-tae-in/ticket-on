@@ -3,7 +3,7 @@ package com.ticketon.domain.account;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,9 +58,9 @@ class NicknameTest {
     }
 
     @Test
-    @DisplayName("최대 길이는 20자다 (확인 필요 #15) — 20자는 받고 21자는 받지 않는다")
+    @DisplayName("최대 길이는 20자다 — 20자는 받고 21자는 받지 않는다")
     void maximumLengthIsTwenty() {
-        assertThat(ProposedPolicy.NICKNAME_MAXIMUM_LENGTH).isEqualTo(20);
+        assertThat(QuantityPolicy.NICKNAME_MAXIMUM_LENGTH).isEqualTo(20);
         String twenty = "가".repeat(20);
 
         assertThat(Nickname.of(twenty).value()).isEqualTo(twenty);
