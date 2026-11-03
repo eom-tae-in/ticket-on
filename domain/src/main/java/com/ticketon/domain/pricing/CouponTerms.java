@@ -17,7 +17,7 @@ import java.util.Objects;
  * "취소하면 쿠폰은 돌아옵니다").
  *
  * @param discount     할인 — 정액 또는 정률. 값의 범위({@link Discount#requireOfferable})를 지켜야 한다
- * @param usageLimit   전체 사용 가능 횟수 — 선착순 N회, 1 이상. 확인 필요 (#49) — 문서 표에 "선택"이 없어 꼭 받는다(제한 없는 쿠폰은 두지 않음)
+ * @param usageLimit   전체 사용 가능 횟수 — 선착순 N회, 1 이상. 꼭 받는다(제한 없는 쿠폰 없음, docs/99 C "쿠폰 전체 사용 가능 횟수")
  * @param onePerPerson 1인 1회 제한을 켰는지
  * @param validity     유효 기간
  */

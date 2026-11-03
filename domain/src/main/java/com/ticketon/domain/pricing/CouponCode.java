@@ -1,6 +1,6 @@
 package com.ticketon.domain.pricing;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import java.util.Locale;
 import java.util.Objects;
@@ -11,8 +11,8 @@ import java.util.Optional;
  * <p>
  * 적은 값에서 앞뒤 공백을 걷고 유니코드 NFC(완성형)로 맞춘 뒤 <b>영문을 대문자로 맞춘다</b> — 관객이 {@code spring20}이나 {@code Spring20}(휴대폰
  * 자판이 첫 글자를 대문자로 바꿈)으로 적어도 같은 코드다. 인스타 게시물에서 코드를 찾아 손으로 옮겨 적는 일이 흔하다(docs/15 한서윤). 코드 안에는
- * 공백을 둘 수 없다. 맞춘 값이 {@value ProposedPolicy#COUPON_CODE_MAXIMUM_LENGTH}자를 넘으면 받지 않는다. 확인 필요 (#49) — 대소문자 · 공백 ·
- * 길이는 문서에 없다. 한 행사 안에서 코드가 겹치지 않는지는 저장소가 본다(#51).
+ * 공백을 둘 수 없다. 맞춘 값이 {@value QuantityPolicy#COUPON_CODE_MAXIMUM_LENGTH}자를 넘으면 받지 않는다 — 대소문자 · 공백 · 길이는 docs/99 C
+ * "입력·파일 상한"이다. 글자 수는 사람이 세는 대로 센다(유니코드 code point). 한 행사 안에서 코드가 겹치지 않는지는 저장소가 본다(#51).
  *
  * @param value 앞뒤 공백을 걷고 NFC · 대문자로 맞춘 코드
  */
@@ -28,7 +28,7 @@ public record CouponCode(String value) {
             throw new IllegalArgumentException("쿠폰 코드에 공백을 둘 수 없습니다");
         }
         if (exceedsMaximumLength(value)) {
-            throw new IllegalArgumentException("쿠폰 코드는 " + ProposedPolicy.COUPON_CODE_MAXIMUM_LENGTH + "자 이하여야 합니다");
+            throw new IllegalArgumentException("쿠폰 코드는 " + QuantityPolicy.COUPON_CODE_MAXIMUM_LENGTH + "자 이하여야 합니다");
         }
     }
 
@@ -67,6 +67,6 @@ public record CouponCode(String value) {
     }
 
     private static boolean exceedsMaximumLength(String normalized) {
-        return normalized.codePointCount(0, normalized.length()) > ProposedPolicy.COUPON_CODE_MAXIMUM_LENGTH;
+        return normalized.codePointCount(0, normalized.length()) > QuantityPolicy.COUPON_CODE_MAXIMUM_LENGTH;
     }
 }

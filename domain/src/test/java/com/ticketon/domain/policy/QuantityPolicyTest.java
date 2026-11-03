@@ -97,7 +97,7 @@ class QuantityPolicyTest {
     }
 
     @Test
-    @DisplayName("글자 수 상한은 제목 · 출연 100자, 소개 · 판매 중단 사유 50자, 닉네임 · 카테고리 · 블록 · 구역 · 입구 이름 20자다 (docs/99 C \"입력·파일 상한\")")
+    @DisplayName("글자 수 상한은 제목 · 출연 100자, 소개 · 판매 중단 사유 50자, 닉네임 · 카테고리 · 블록 · 구역 · 입구 이름 · 쿠폰 코드 20자다 (docs/99 C \"입력·파일 상한\")")
     void textLengthLimits() {
         assertThat(QuantityPolicy.EVENT_TITLE_MAXIMUM_LENGTH).isEqualTo(100);
         assertThat(QuantityPolicy.SESSION_PERFORMERS_MAXIMUM_LENGTH).isEqualTo(100);
@@ -108,6 +108,7 @@ class QuantityPolicyTest {
         assertThat(QuantityPolicy.BLOCK_NAME_MAXIMUM_LENGTH).isEqualTo(20);
         assertThat(QuantityPolicy.ZONE_NAME_MAXIMUM_LENGTH).isEqualTo(20);
         assertThat(QuantityPolicy.ENTRANCE_NAME_MAXIMUM_LENGTH).isEqualTo(20);
+        assertThat(QuantityPolicy.COUPON_CODE_MAXIMUM_LENGTH).isEqualTo(20);
     }
 
     @Test

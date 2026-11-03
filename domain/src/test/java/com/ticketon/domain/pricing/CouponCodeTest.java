@@ -3,11 +3,11 @@ package com.ticketon.domain.pricing;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("쿠폰 코드 — SPRING20 같은 문자열 (docs/05 \"쿠폰\", 확인 필요 #49)")
+@DisplayName("쿠폰 코드 — SPRING20 같은 문자열 (docs/05 \"쿠폰\", docs/99 C \"입력·파일 상한\")")
 class CouponCodeTest {
 
     @Test
@@ -36,7 +36,7 @@ class CouponCodeTest {
     @Test
     @DisplayName("20자까지 받는다 — 21자는 받지 않는다")
     void maximumLength() {
-        assertThat(ProposedPolicy.COUPON_CODE_MAXIMUM_LENGTH).isEqualTo(20);
+        assertThat(QuantityPolicy.COUPON_CODE_MAXIMUM_LENGTH).isEqualTo(20);
         assertThat(CouponCode.isValid("A".repeat(20))).isTrue();
         assertThat(CouponCode.isValid("A".repeat(21))).isFalse();
         assertThatIllegalArgumentException().isThrownBy(() -> CouponCode.of("A".repeat(21)));

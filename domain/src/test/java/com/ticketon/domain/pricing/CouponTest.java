@@ -189,7 +189,7 @@ class CouponTest {
         }
 
         @Test
-        @DisplayName("2매를 먼저 취소하고 남은 2매를 취소하면 그때 돌려준다 (확인 필요 #49)")
+        @DisplayName("2매를 먼저 취소하고 남은 2매를 취소하면 그때 돌려준다 (docs/99 E \"가격 · 할인\")")
         void lastRemainingTicketsReturn() {
             Coupon coupon = coupon(100, true, 1);
 
@@ -274,7 +274,7 @@ class CouponTest {
         }
 
         @Test
-        @DisplayName("전체 사용 가능 횟수는 이미 쓴 횟수 아래로 줄일 수 없다 — 같게는 된다 (확인 필요 #49)")
+        @DisplayName("전체 사용 가능 횟수는 이미 쓴 횟수 아래로 줄일 수 없다 — 같게는 된다 (docs/99 E \"가격 · 할인\")")
         void usageLimitNotBelowUsed() {
             Coupon coupon = coupon(100, true, 30);
 

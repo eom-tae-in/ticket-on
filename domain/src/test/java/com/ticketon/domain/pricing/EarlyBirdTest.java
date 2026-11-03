@@ -94,7 +94,7 @@ class EarlyBirdTest {
         }
 
         @Test
-        @DisplayName("할인 값이 범위 밖이면 설정을 만들지 않는다 — 정률 100% (확인 필요 #49)")
+        @DisplayName("할인 값이 범위 밖이면 설정을 만들지 않는다 — 정률 100% (docs/99 C \"할인 값 (조기예매·쿠폰)\")")
         void termsRejectWholeRate() {
             assertThatThrownBy(() -> EarlyBirdTerms.periodOnly(Discount.rate(Percent.of(100)), MARCH_1_TO_10, EarlyBirdScope.everything()))
                     .isInstanceOfSatisfying(RuleViolationException.class,
@@ -125,7 +125,7 @@ class EarlyBirdTest {
         }
 
         @Test
-        @DisplayName("소진된 조기예매는 수량을 늘려 다시 열 수 없다 (확인 필요 #49)")
+        @DisplayName("소진된 조기예매는 수량을 늘려 다시 열 수 없다 (docs/99 E \"가격 · 할인\")")
         void soldOutCannotReopen() {
             EarlyBird earlyBird = earlyBirdWithClaimed(30);
             EarlyBirdTerms moreTickets = EarlyBirdTerms.limited(THIRTY_PERCENT, MARCH_1_TO_10, EarlyBirdQuantity.of(50), EarlyBirdScope.everything());
@@ -137,7 +137,7 @@ class EarlyBirdTest {
         }
 
         @Test
-        @DisplayName("기간이 끝난 조기예매는 기간을 늘려 다시 열 수 없다 (확인 필요 #49)")
+        @DisplayName("기간이 끝난 조기예매는 기간을 늘려 다시 열 수 없다 (docs/99 E \"가격 · 할인\")")
         void endedCannotReopen() {
             EarlyBird earlyBird = earlyBirdWithClaimed(10);
             EarlyBirdTerms longer = EarlyBirdTerms.limited(THIRTY_PERCENT, DiscountPeriod.of(MARCH_1, korean(2026, 3, 20, 0, 0)),
@@ -149,7 +149,7 @@ class EarlyBirdTest {
         }
 
         @Test
-        @DisplayName("수량은 잡힌 몫 아래로 줄일 수 없다 — 25장 잡혔으면 24장은 막고 25장은 그 순간 소진 (확인 필요 #49)")
+        @DisplayName("수량은 잡힌 몫 아래로 줄일 수 없다 — 25장 잡혔으면 24장은 막고 25장은 그 순간 소진 (docs/99 E \"가격 · 할인\")")
         void quantityNotBelowClaimed() {
             EarlyBird earlyBird = earlyBirdWithClaimed(25);
 

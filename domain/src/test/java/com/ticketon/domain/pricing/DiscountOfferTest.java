@@ -12,7 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("조기예매 · 쿠폰으로 내놓는 할인 값의 범위 — 0원 결제를 막는다 (확인 필요 #49)")
+@DisplayName("조기예매 · 쿠폰으로 내놓는 할인 값의 범위 — 0원 결제를 막는다 (docs/99 C \"할인 값 (조기예매·쿠폰)\")")
 class DiscountOfferTest {
 
     private static Money won(long won) {

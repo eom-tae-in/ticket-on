@@ -287,7 +287,7 @@ class EarlyBirdsTest {
         }
 
         @Test
-        @DisplayName("겹친 기간에는 유리한 쪽부터, 모자라면 다음 것에서 — 30% 2장 남음 + 20% → 35,000 · 35,000 · 40,000 · 40,000원 (확인 필요 #49)")
+        @DisplayName("겹친 기간에는 유리한 쪽부터, 모자라면 다음 것에서 — 30% 2장 남음 + 20% → 35,000 · 35,000 · 40,000 · 40,000원 (docs/99 E \"가격 · 할인\")")
         void overlappingFavorableFirstThenNext() {
             EarlyBird almostGone = EarlyBird.restore(10L, EVENT_ID, first.terms(), 28, EarlyBirdUrgency.NONE);
             EarlyBird overlapping = saved(20L, EarlyBirdTerms.limited(Discount.rate(Percent.of(20)), DiscountPeriod.of(MARCH_5, MARCH_20),

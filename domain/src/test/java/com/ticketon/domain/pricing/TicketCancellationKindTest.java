@@ -17,7 +17,7 @@ class TicketCancellationKindTest {
     }
 
     @Test
-    @DisplayName("남은 2매를 마저 취소하면 전체 취소 (확인 필요 #49)")
+    @DisplayName("남은 2매를 마저 취소하면 전체 취소 (docs/99 E \"가격 · 할인\")")
     void lastRemaining() {
         assertThat(TicketCancellationKind.ofCancellation(2, 2)).isEqualTo(TicketCancellationKind.WHOLE_BOOKING);
     }

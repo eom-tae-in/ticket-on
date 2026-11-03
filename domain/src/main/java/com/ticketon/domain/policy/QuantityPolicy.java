@@ -109,6 +109,9 @@ public final class QuantityPolicy {
     /** 입구 이름 최대 길이(글자 수). */
     public static final int ENTRANCE_NAME_MAXIMUM_LENGTH = 20;
 
+    /** 쿠폰 코드 최대 길이(글자 수) — 대소문자를 구분하지 않고, 안에 공백을 둘 수 없으며, 발급한 뒤 바꾸지 않는다. */
+    public static final int COUPON_CODE_MAXIMUM_LENGTH = 20;
+
     /** 주최자 로고 용량 상한(1MB = 1,048,576바이트). */
     public static final FileSize ORGANIZER_LOGO_MAXIMUM_SIZE = FileSize.ofMegabytes(2);
 
