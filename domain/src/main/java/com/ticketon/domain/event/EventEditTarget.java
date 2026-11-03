@@ -41,6 +41,19 @@ public enum EventEditTarget {
     /** 제목 · 포스터 · 소개 — 예매가 열린 뒤에도 자유 변경. 변경 이력을 남긴다(docs/03 "변경 이력", {@link EventChangeHistory}). */
     TITLE_POSTER_DESCRIPTION(ALLOWED, false, false),
 
+    /**
+     * 상세 안내 · 지도 링크 · 공개용 연락처 — 예매가 열린 뒤에도 자유 변경. 조건이 아니라 안내라서, 막으면 정훈이 "주차 불가" 한 줄을 못 넣는다
+     * (docs/04 "산 사람의 조건은 관객에게 유리한 쪽으로만 바꿉니다"). 변경 이력을 남긴다(docs/03 "상세 안내 · 지도 링크 · 공개용 연락처도 이력을
+     * 남깁니다"). 장소(공연장 이름 · 주소)는 {@link #VENUE}의 승인 절차 그대로다.
+     */
+    VENUE_GUIDE_AND_CONTACT(ALLOWED, false, false),
+
+    /** 유형 — 불가. 목록 필터와 화면 이름이 통째로 바뀌는 분류라 예매가 열린 뒤에는 바꾸지 않는다. 판매 대기에는 예매가 없어 바꿀 수 있다. */
+    TYPE(LOCKED, false, false),
+
+    /** 카테고리 — 변경 가능. 조건이 아니라 안내라서 막을 이유가 없다. 바꿔도 지금 유형의 목록에서 고른다(docs/03 "카테고리"). */
+    CATEGORY(ALLOWED, false, false),
+
     /** 입구 목록 — 자유 변경. 판매가 끝난 뒤에도 행사가 끝날 때까지 고친다(18:10 정문 줄이 길어 "옆문" 추가). */
     ENTRANCES(ALLOWED, false, true),
 
@@ -91,12 +104,6 @@ public enum EventEditTarget {
      * 행사가 끝나지 않고 정산도 할 수 없다. 이미 있는 종료 시각을 바꾸는 것은 회차 일시다.
      */
     MISSING_SESSION_END_TIME(ALLOWED, false, true),
-
-    /** 확인 필요 (#38) — 유형 · 카테고리. 예매가 열린 뒤 수정 범위 표에 없어 막아 둔다. */
-    TYPE_AND_CATEGORY(LOCKED, false, false),
-
-    /** 확인 필요 (#38) — 상세 안내 · 지도 링크 · 공개용 연락처. 예매가 열린 뒤 수정 범위 표에 없어 막아 둔다. */
-    VENUE_GUIDE_AND_CONTACT(LOCKED, false, false),
 
     /**
      * 확인 필요 (#38) — 예매 종료 시각 밖의 예매 설정(오픈 시각 · 검표 시작 · 1회 선택 매수 · 1인 총 매수 · 회차 선택 제약 · 재입장 · 연령 제한).

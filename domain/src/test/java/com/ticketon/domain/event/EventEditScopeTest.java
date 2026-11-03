@@ -44,6 +44,9 @@ class EventEditScopeTest {
         table.put(EventEditTarget.VENUE, NEEDS_ADMIN_APPROVAL);
         table.put(EventEditTarget.SESSION_DATE_TIME, ALLOWED_WITH_RULES);
         table.put(EventEditTarget.TITLE_POSTER_DESCRIPTION, ALLOWED);
+        table.put(EventEditTarget.VENUE_GUIDE_AND_CONTACT, ALLOWED);
+        table.put(EventEditTarget.TYPE, LOCKED);
+        table.put(EventEditTarget.CATEGORY, ALLOWED);
         table.put(EventEditTarget.ENTRANCES, ALLOWED);
         table.put(EventEditTarget.CHECKIN_ACCOUNTS, ALLOWED);
         table.put(EventEditTarget.VISIBILITY, ALLOWED);
@@ -58,8 +61,6 @@ class EventEditScopeTest {
         table.put(EventEditTarget.CANCELLATION_POLICY, LOCKED);
         table.put(EventEditTarget.PERFORMERS, ALLOWED);
         table.put(EventEditTarget.MISSING_SESSION_END_TIME, ALLOWED);
-        table.put(EventEditTarget.TYPE_AND_CATEGORY, LOCKED);
-        table.put(EventEditTarget.VENUE_GUIDE_AND_CONTACT, LOCKED);
         table.put(EventEditTarget.OTHER_BOOKING_SETTINGS, LOCKED);
         return table;
     }
@@ -175,6 +176,27 @@ class EventEditScopeTest {
             assertRejected(() -> springPlayIn(EventStatus.ON_SALE).requireEditable(EventEditTarget.CANCELLATION_POLICY),
                     EventErrorCode.EDIT_LOCKED_AFTER_BOOKING_OPENED);
             assertThat(springPlayIn(EventStatus.AWAITING_OPEN).requireEditable(EventEditTarget.CANCELLATION_POLICY)).isEqualTo(ALLOWED);
+        }
+
+        @Test
+        @DisplayName("예매가 열린 뒤 유형은 바꿀 수 없고, 카테고리 · 상세 안내는 바꾼다 — 판매 대기에는 유형도 바꾼다")
+        void typeLockedButCategoryAndGuideOpenAfterOpening() {
+            Event onSale = springPlayIn(EventStatus.ON_SALE);
+
+            assertRejected(() -> onSale.requireEditable(EventEditTarget.TYPE), EventErrorCode.EDIT_LOCKED_AFTER_BOOKING_OPENED);
+            assertThat(onSale.requireEditable(EventEditTarget.CATEGORY)).isEqualTo(ALLOWED);
+            assertThat(onSale.requireEditable(EventEditTarget.VENUE_GUIDE_AND_CONTACT)).isEqualTo(ALLOWED);
+            assertThat(springPlayIn(EventStatus.AWAITING_OPEN).requireEditable(EventEditTarget.TYPE)).isEqualTo(ALLOWED);
+        }
+
+        @Test
+        @DisplayName("판매가 끝나면 카테고리 · 상세 안내도 고정이다 — 입구 목록 · 검표 계정만 남는다")
+        void categoryAndGuideLockedAfterSalesClosed() {
+            Event salesClosed = springPlayIn(EventStatus.SALES_CLOSED);
+
+            assertRejected(() -> salesClosed.requireEditable(EventEditTarget.CATEGORY), EventErrorCode.EDIT_LOCKED_AFTER_SALES_CLOSED);
+            assertRejected(() -> salesClosed.requireEditable(EventEditTarget.VENUE_GUIDE_AND_CONTACT),
+                    EventErrorCode.EDIT_LOCKED_AFTER_SALES_CLOSED);
         }
 
         @Test

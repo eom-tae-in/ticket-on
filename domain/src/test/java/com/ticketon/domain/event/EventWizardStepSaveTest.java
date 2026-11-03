@@ -76,11 +76,27 @@ class EventWizardStepSaveTest {
                 original.venue(), original.venueDetails(), original.mapLink(), original.publicContact());
     }
 
+    /** 유형을 전시로 바꾼 봄 정기공연 — 카테고리도 전시의 목록(회화)에서 다시 골랐다. */
+    private static EventBasicInformation retyped() {
+        EventBasicInformation original = twelveMonthsSpringPlay();
+        return new EventBasicInformation(original.title(), EventType.EXHIBITION,
+                EventCategoryCatalog.initial().select(EventType.EXHIBITION, "회화", null), original.introduction(),
+                original.venue(), original.venueDetails(), original.mapLink(), original.publicContact());
+    }
+
     /** 상세 안내를 고친 봄 정기공연 — "주차 불가"를 "주차 2시간 무료"로. */
     private static EventBasicInformation withNewVenueDetails() {
         EventBasicInformation original = twelveMonthsSpringPlay();
         return new EventBasicInformation(original.title(), original.type(), original.category(), original.introduction(),
                 original.venue(), "지하 1층, 주차 2시간 무료", original.mapLink(), original.publicContact());
+    }
+
+    /** 지도 링크와 공개용 연락처를 고친 봄 정기공연. */
+    private static EventBasicInformation withNewMapLinkAndPublicContact() {
+        EventBasicInformation original = twelveMonthsSpringPlay();
+        return new EventBasicInformation(original.title(), original.type(), original.category(), original.introduction(),
+                original.venue(), original.venueDetails(), ExternalLink.of("https://map.example/place/99"),
+                EventPublicContact.of("010-1234-5678"));
     }
 
     /** 예매 종료만 2시간 전으로 고친 예매 설정 — 나머지는 처음 값. */
@@ -167,6 +183,8 @@ class EventWizardStepSaveTest {
                 assertThat(event.saveBasicInformationStep(retitledAndMoved(), SAVED_AT)).isTrue();
                 assertThat(event.saveBasicInformationStep(recategorized(), SAVED_AT)).isTrue();
                 assertThat(event.saveBasicInformationStep(withNewVenueDetails(), SAVED_AT)).isTrue();
+                assertThat(event.saveBasicInformationStep(retyped(), SAVED_AT)).isTrue();
+                assertThat(event.basicInformation().type()).isEqualTo(EventType.EXHIBITION);
             }
         }
 
@@ -194,15 +212,33 @@ class EventWizardStepSaveTest {
         }
 
         @Test
-        @DisplayName("확인 필요 (#38) — 예매가 열린 뒤 유형 · 카테고리 · 상세 안내는 표에 없어 막는다")
-        void unlistedItemsAfterBookingOpened() {
-            Event event = springPlayIn(EventStatus.ON_SALE);
+        @DisplayName("예매가 열린 뒤에도 카테고리 · 상세 안내 · 지도 링크 · 공개용 연락처는 바꾼다 — 조건이 아니라 안내라서 막지 않는다 (docs/04)")
+        void categoryAndGuideAfterBookingOpened() {
+            for (EventStatus status : List.of(EventStatus.ON_SALE, EventStatus.SALES_PAUSED)) {
+                for (EventBasicInformation changed : List.of(recategorized(), withNewVenueDetails(),
+                        withNewMapLinkAndPublicContact())) {
+                    Event event = springPlayIn(status);
 
-            assertRejected(() -> event.saveBasicInformationStep(recategorized(), SAVED_AT),
-                    EventErrorCode.EDIT_LOCKED_AFTER_BOOKING_OPENED);
-            assertRejected(() -> event.saveBasicInformationStep(withNewVenueDetails(), SAVED_AT),
-                    EventErrorCode.EDIT_LOCKED_AFTER_BOOKING_OPENED);
-            assertThat(event.basicInformation()).isEqualTo(twelveMonthsSpringPlay());
+                    assertThat(event.saveBasicInformationStep(changed, SAVED_AT)).as(status.name()).isTrue();
+
+                    assertThat(event.basicInformation()).as(status.name()).isEqualTo(changed);
+                    assertThat(event.lastModifiedAt()).as(status.name()).isEqualTo(SAVED_AT);
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("예매가 열린 뒤 유형은 바꿀 수 없고, 함께 바꾼 카테고리도 바꾸지 않는다 — 목록 필터와 화면 이름이 통째로 바뀌는 분류다 (docs/04)")
+        void typeLockedAfterBookingOpened() {
+            for (EventStatus status : List.of(EventStatus.ON_SALE, EventStatus.SALES_PAUSED)) {
+                Event event = springPlayIn(status);
+
+                assertRejected(() -> event.saveBasicInformationStep(retyped(), SAVED_AT),
+                        EventErrorCode.EDIT_LOCKED_AFTER_BOOKING_OPENED);
+
+                assertThat(event.basicInformation()).as(status.name()).isEqualTo(twelveMonthsSpringPlay());
+                assertThat(event.lastModifiedAt()).as(status.name()).isEqualTo(LAST_MODIFIED_AT);
+            }
         }
 
         @Test
@@ -474,12 +510,15 @@ class EventWizardStepSaveTest {
     class ChangedEditTargets {
 
         @Test
-        @DisplayName("기본 정보 — 제목 · 소개, 유형 · 카테고리, 장소, 상세 안내 · 지도 링크 · 공개용 연락처로 나눈다. 같으면 비어 있다")
+        @DisplayName("기본 정보 — 제목 · 소개, 유형, 카테고리, 장소, 상세 안내 · 지도 링크 · 공개용 연락처로 나눈다. 같으면 비어 있다")
         void basicInformation() {
             EventBasicInformation original = twelveMonthsSpringPlay();
             EventBasicInformation newMapLink = new EventBasicInformation(original.title(), original.type(), original.category(),
                     original.introduction(), original.venue(), original.venueDetails(),
                     ExternalLink.of("https://map.example/place/99"), original.publicContact());
+            EventBasicInformation newPublicContact = new EventBasicInformation(original.title(), original.type(),
+                    original.category(), original.introduction(), original.venue(), original.venueDetails(), original.mapLink(),
+                    EventPublicContact.of("010-1234-5678"));
             EventBasicInformation newIntroduction = new EventBasicInformation(original.title(), original.type(),
                     original.category(), "새 소개입니다.", original.venue(), original.venueDetails(), original.mapLink(),
                     original.publicContact());
@@ -487,11 +526,14 @@ class EventWizardStepSaveTest {
             assertThat(original.changedEditTargets(twelveMonthsSpringPlay())).isEmpty();
             assertThat(original.changedEditTargets(retitled())).containsExactly(EventEditTarget.TITLE_POSTER_DESCRIPTION);
             assertThat(original.changedEditTargets(newIntroduction)).containsExactly(EventEditTarget.TITLE_POSTER_DESCRIPTION);
-            assertThat(original.changedEditTargets(recategorized())).containsExactly(EventEditTarget.TYPE_AND_CATEGORY);
+            assertThat(original.changedEditTargets(recategorized())).containsExactly(EventEditTarget.CATEGORY);
+            assertThat(original.changedEditTargets(retyped()))
+                    .containsExactlyInAnyOrder(EventEditTarget.TYPE, EventEditTarget.CATEGORY);
             assertThat(original.changedEditTargets(retitledAndMoved()))
                     .containsExactlyInAnyOrder(EventEditTarget.TITLE_POSTER_DESCRIPTION, EventEditTarget.VENUE);
             assertThat(original.changedEditTargets(withNewVenueDetails())).containsExactly(EventEditTarget.VENUE_GUIDE_AND_CONTACT);
             assertThat(original.changedEditTargets(newMapLink)).containsExactly(EventEditTarget.VENUE_GUIDE_AND_CONTACT);
+            assertThat(original.changedEditTargets(newPublicContact)).containsExactly(EventEditTarget.VENUE_GUIDE_AND_CONTACT);
         }
 
         @Test
