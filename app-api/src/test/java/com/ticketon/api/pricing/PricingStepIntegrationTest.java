@@ -306,6 +306,90 @@ class PricingStepIntegrationTest {
     }
 
     @Test
+    @DisplayName("묶음권을 지우면 204 — 기록으로 남고 목록에서 빠지며, 조기예매가 그 묶음권을 꺼 둔 기록도 지운다. 다시 지우면 404")
+    void removesBundleProductAndCleansEarlyBirds() throws Exception {
+        try (Browser dohyunBrowser = new Browser()) {
+            dohyunBrowser.logInStaff(dohyunEmail);
+            Festival festival = dohyunBrowser.createFestival();
+            long bundleId = jsonMapper.readTree(dohyunBrowser.post(festival.path("/bundle-products"),
+                    bundleBody("3일 통권", festival.allDateIds(), List.of(festival.standingA()), 7)).body()).get("bundleProductId").asLong();
+            Map<String, Object> oneDayOnly = earlyBirdBody("RATE", 10, "2027-04-01T00:00:00+09:00", "2027-04-21T00:00:00+09:00", null);
+            oneDayOnly.put("excludedBundleProductIds", List.of(bundleId));
+            HttpResponse<String> earlyBird = dohyunBrowser.post(festival.path("/early-birds"), oneDayOnly);
+            assertThat(earlyBird.statusCode()).isEqualTo(201);
+            assertThat(longs(jsonMapper.readTree(earlyBird.body()).get("excludedBundleProductIds"))).containsExactly(bundleId);
+
+            assertThat(dohyunBrowser.delete(festival.path("/bundle-products/" + bundleId)).statusCode()).isEqualTo(204);
+
+            JsonNode step = dohyunBrowser.pricingStep(festival);
+            assertThat(step.get("bundleProducts")).isEmpty();
+            assertThat(step.get("earlyBirds").get(0).get("excludedBundleProductIds")).isEmpty();
+            assertThat(jdbcTemplate.queryForObject("SELECT deleted_at IS NOT NULL FROM bundle_product WHERE id = ?", Boolean.class, bundleId))
+                    .isTrue();
+            assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM early_bird_excluded_bundle_product WHERE bundle_product_id = ?",
+                    Long.class, bundleId)).isZero();
+            assertError(dohyunBrowser.delete(festival.path("/bundle-products/" + bundleId)), 404, "BUNDLE_PRODUCT_NOT_FOUND");
+        }
+        assertThat(eventOperations(lateSummer)).contains("EDIT_EVENT 묶음권 삭제 · 3일 통권 (4단계) " + dohyun);
+    }
+
+    @Test
+    @DisplayName("30,000원 쿠폰이 있으면 72% 묶음권(105,000원 → 29,400원)은 409, 7%로 만든 묶음권을 30,000원 조기예매가 있는 채 72%로 고쳐도 409 — 묶음권은 그대로다")
+    void bundleChangesKeepDiscountedPricesPositive() throws Exception {
+        try (Browser dohyunBrowser = new Browser()) {
+            dohyunBrowser.logInStaff(dohyunEmail);
+            Festival festival = dohyunBrowser.createFestival();
+            long couponId = jsonMapper.readTree(dohyunBrowser.post(festival.path("/coupons"), couponBody("FAN30000", 30_000)).body())
+                    .get("couponId").asLong();
+
+            assertError(dohyunBrowser.post(festival.path("/bundle-products"),
+                    bundleBody("3일 통권", festival.allDateIds(), List.of(festival.standingA()), 72)), 409,
+                    "PRICE_CHANGE_MAKES_DISCOUNTED_PRICE_ZERO");
+            assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM bundle_product WHERE event_id = ?", Long.class,
+                    festival.eventId())).isZero();
+
+            assertThat(dohyunBrowser.delete(festival.path("/coupons/" + couponId)).statusCode()).isEqualTo(204);
+            long bundleId = jsonMapper.readTree(dohyunBrowser.post(festival.path("/bundle-products"),
+                    bundleBody("3일 통권", festival.allDateIds(), List.of(festival.standingA()), 7)).body()).get("bundleProductId").asLong();
+            assertThat(dohyunBrowser.post(festival.path("/early-birds"), earlyBirdBody("FIXED_AMOUNT", 30_000, "2027-04-01T00:00:00+09:00",
+                    "2027-04-21T00:00:00+09:00", null)).statusCode()).isEqualTo(201);
+
+            assertError(dohyunBrowser.put(festival.path("/bundle-products/" + bundleId),
+                    bundleBody("3일 통권", festival.allDateIds(), List.of(festival.standingA()), 72)), 409,
+                    "PRICE_CHANGE_MAKES_DISCOUNTED_PRICE_ZERO");
+
+            assertThat(dohyunBrowser.pricingStep(festival).get("bundleProducts")).singleElement().satisfies(bundle -> {
+                assertThat(bundle.get("discountRate").asInt()).isEqualTo(7);
+                assertThat(bundle.get("startingPrice").asLong()).isEqualTo(97_600);
+            });
+        }
+    }
+
+    @Test
+    @DisplayName("40,000원 쿠폰이 있는 행사(회차마다 +10,000원)에 30,000원 구역(→ 40,000원)을 더하거나 조정 없는 날짜(스탠딩A 35,000원)를 더하면 409 — 더해지지 않는다")
+    void addingCheaperZoneOrSessionKeepsDiscountedPricesPositive() throws Exception {
+        try (Browser dohyunBrowser = new Browser()) {
+            dohyunBrowser.logInStaff(dohyunEmail);
+            Festival festival = dohyunBrowser.createFestival();
+            for (String date : List.of("2027-05-03", "2027-05-04", "2027-05-05")) {
+                assertThat(dohyunBrowser.put(festival.schedulePath() + "/sessions/" + festival.sessionOn(date) + "/price-adjustment",
+                        Map.of("kind", "AMOUNT", "amount", 10_000)).statusCode()).isEqualTo(200);
+            }
+            assertThat(dohyunBrowser.post(festival.path("/coupons"), couponBody("FAN40000", 40_000)).statusCode()).isEqualTo(201);
+
+            assertError(dohyunBrowser.post(festival.path("/zones"), Map.of("kind", "QUANTITY", "name", "스탠딩C", "color", "#30A46C",
+                    "basePrice", 30_000, "capacity", 300)), 409, "PRICE_CHANGE_MAKES_DISCOUNTED_PRICE_ZERO");
+            assertError(dohyunBrowser.post(festival.schedulePath() + "/dates", Map.of("date", "2027-05-06")), 409,
+                    "PRICE_CHANGE_MAKES_DISCOUNTED_PRICE_ZERO");
+
+            JsonNode step = dohyunBrowser.pricingStep(festival);
+            assertThat(step.get("zones")).extracting(zone -> zone.get("name").asString()).containsExactly("스탠딩A", "테이블석");
+            assertThat(step.get("sessions")).extracting(session -> session.get("date").asString())
+                    .containsExactly("2027-05-03", "2027-05-04", "2027-05-05");
+        }
+    }
+
+    @Test
     @DisplayName("가격을 바꿔 0원이 되는 가격이 생기면 막는다 — 30,000원 쿠폰이 있는 스탠딩A를 30,000원으로 내리면 409, 35,000원에 −40,000원 조정은 409 SESSION_PRICE_NOT_POSITIVE")
     void priceChangesKeepPricesPositive() throws Exception {
         try (Browser dohyunBrowser = new Browser()) {
