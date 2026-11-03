@@ -20,6 +20,9 @@ package com.ticketon.domain.error;
  *     }
  * }
  * }</pre>
+ * 문구에 값(기준 나이 · 한도 · 행사 유형)을 채워야 하는 경우만 예외다 — enum 상수를 감싸고 채운 문구를 가진 값 객체가 구현한다
+ * ({@code domain.booking.BookingRefusal}). 코드는 감싼 enum 상수 이름이라 화면이 분기에 쓰는 이름은 같다. 그런 값은 enum과 {@code equals}로 견줄 수
+ * 없으니 테스트는 {@link #code()}로 견준다.
  */
 public interface ErrorCode {
 
