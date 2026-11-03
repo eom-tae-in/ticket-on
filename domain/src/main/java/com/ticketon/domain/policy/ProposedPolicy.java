@@ -24,12 +24,10 @@ import java.time.LocalTime;
  *       메일이 가지 않게): {@code domain.event.EventChangeHistory#notifiesOwner}.</li>
  *   <li>확인 필요 (#46) — 변경 이력은 행사가 끝난 날(한국 날짜) + 6개월까지 보관하고 그다음 날부터 지운다. 회차가 모두 취소돼 끝난 날을 알 수 없는
  *       행사의 이력은 지우지 않는다: {@code domain.event.EventChangeHistory#isPurgeDue}.</li>
- *   <li>확인 필요 (#53) — 매진 임박 "10% 이하"의 분모는 그 구역의 자리 전부다(수량형은 정원, 지정형은 배정된 활성 좌석 수 — 판매 제외 · 관계자
- *       확보분 포함): {@code domain.inventory.RemainingSeats}.</li>
- *   <li>확인 필요 (#53) — 매진 임박 10%는 반올림하기 전 비율로 본다(205석의 20석은 임박, 21석은 아님):
+ *   <li>확인 필요 (#223) — 매진 임박의 "절반 이상 팔림"은 판매 제외 · 관계자 확보분도 팔린 쪽으로 센다(잔여 × 2 ≤ 전체):
  *       {@code domain.inventory.RemainingSeats}.</li>
- *   <li>확인 필요 (#53) — 정원이 10석 이하인 구역은 하나도 팔리지 않아도 "10석 이하"라 매진 임박이다(문서 그대로):
- *       {@code domain.inventory.RemainingSeats}.</li>
+ *   <li>확인 필요 (#223) — 목록 카드는 매진된 회차와 여유 있는 회차만 섞여 있으면 표시하지 않는다:
+ *       {@code domain.inventory.RemainingSeatsBadge#forEventCard}.</li>
  *   <li>확인 필요 (#53) — 재고 오류 문구: {@code domain.inventory.InventoryErrorCode}에서 SEAT_ALREADY_TAKEN(docs/06 원문)과 찾을 수 없음 세
  *       가지(행사 오류와 같은 문구) 밖의 문구는 모두 지었다. 경우 자체가 문서에 없는 코드에는 따로 확인 필요 (#53)를 달았다 — 판매 제외 · 초대권
  *       좌석을 관객이 잡을 때 "방금 다른 분이 선택했습니다"와 갈라 "판매하지 않는 좌석입니다"로 알리는 것({@code SEAT_NOT_FOR_SALE}) 포함.</li>
