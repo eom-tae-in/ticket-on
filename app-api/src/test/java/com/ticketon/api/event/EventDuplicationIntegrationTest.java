@@ -5,13 +5,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.ticketon.api.error.ErrorResponse;
 import com.ticketon.api.security.LoginTestController;
 import com.ticketon.application.account.port.out.PasswordHashPort;
+import com.ticketon.common.TestImages;
 import com.ticketon.domain.account.NewPassword;
+import java.io.ByteArrayOutputStream;
 import java.net.CookieManager;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,6 +23,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
@@ -29,6 +33,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -43,8 +49,8 @@ import tools.jackson.databind.node.ObjectNode;
  * 도면에는 여전히 "1층 12열 7번"이 있어야 한다(docs/02 "도면은 행사마다 따로 갖습니다"). Docker가 없는 환경에서는 건너뛴다.
  * <p>
  * 극단 열두달(docs/15)의 소유자 박정훈과 운영자 기획 단원, 늦여름의 소유자 최여름. 운영진 로그인 · 주최자 · 소속은 표에 바로 넣고, 로그인과 행사
- * 만들기 · 도면 · 입구 · 회차 · 예매 설정 · 복제는 실제 API로 한다. 원본을 끝난 행사로 두는 일만 표를 바로 고친다. 테스트끼리 같은 DB를 쓰므로
- * 테스트마다 다른 이메일 · 닉네임 · 주최자명을 쓴다.
+ * 만들기 · 도면 · 입구 · 회차 · 예매 설정 · 포스터 · 복제는 실제 API로 한다. 원본을 끝난 행사로 두는 일만 표를 바로 고친다. 포스터 파일은
+ * 테스트마다 비운 임시 폴더(로컬 저장소)에 둔다. 테스트끼리 같은 DB를 쓰므로 테스트마다 다른 이메일 · 닉네임 · 주최자명을 쓴다.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @Import(LoginTestController.class)
@@ -60,9 +66,22 @@ class EventDuplicationIntegrationTest {
 
     private static final String SPRING_PLAY_TITLE = "2026 봄 정기공연 〈열두 번째 달〉";
 
+    private static final String PUBLIC_BASE_URL = "http://files.ticket-on.test/api/public/files";
+
+    private static final String POSTER_BUNDLE = "event-posters";
+
     @Container
     @ServiceConnection
     private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18");
+
+    @TempDir
+    private static Path storageDirectory;
+
+    @DynamicPropertySource
+    static void localStorage(DynamicPropertyRegistry registry) {
+        registry.add("ticketon.storage.local.directory", () -> storageDirectory.toString());
+        registry.add("ticketon.storage.local.public-base-url", () -> PUBLIC_BASE_URL);
+    }
 
     @Autowired
     private JsonMapper jsonMapper;
@@ -194,6 +213,76 @@ class EventDuplicationIntegrationTest {
     }
 
     @Test
+    @DisplayName("원본에서 지운 구역 · 블록 · 입구는 복제되지 않는다 — 복제본 표에는 지금 도면의 줄만 새로 생긴다")
+    void removedZonesBlocksAndEntrancesAreNotCopied() throws Exception {
+        try (Browser operator = new Browser()) {
+            operator.logInStaff(plannerEmail);
+            long original = operator.expect(operator.post("/api/organizer/organizers/" + twelveMonths + "/events", springPlayBody()),
+                    201).get("eventId").asLong();
+            String path = eventPath(twelveMonths, original);
+            operator.expect(operator.post(path + "/zones", withKind("DESIGNATED", zoneBody("R석", "#E5484D", 50_000, null))), 201);
+            long sSeat = operator.expect(operator.post(path + "/zones", withKind("DESIGNATED", zoneBody("S석", "#3E63DD", 40_000, null))),
+                    201).get("zoneId").asLong();
+            operator.expect(operator.post(path + "/zones", withKind("QUANTITY", zoneBody("스탠딩A", "#30A46C", 30_000, 300))), 201);
+            operator.expect(operator.post(path + "/blocks", blockBody("1층", 5, 10, 120, 200, 0)), 201);
+            long secondFloor = operator.expect(operator.post(path + "/blocks", blockBody("2층", 3, 10, 120, 600, 0)), 201)
+                    .get("blockId").asLong();
+            List<Long> entranceIds = new ArrayList<>();
+            for (String entrance : List.of("정문", "2층 전용", "VIP 입구")) {
+                entranceIds.add(operator.expect(operator.post(path + "/entrances", Map.of("name", entrance)), 201)
+                        .get("entranceId").asLong());
+            }
+            assertThat(operator.delete(path + "/zones/" + sSeat).statusCode()).isEqualTo(204);
+            assertThat(operator.delete(path + "/blocks/" + secondFloor).statusCode()).isEqualTo(204);
+            assertThat(operator.delete(path + "/entrances/" + entranceIds.get(2)).statusCode()).isEqualTo(204);
+
+            long copyId = operator.expect(operator.post(path + "/duplication", Map.of()), 201).get("eventId").asLong();
+
+            JsonNode copiedFloorPlan = operator.getJson(eventPath(twelveMonths, copyId) + "/floor-plan");
+            assertThat(namesOf(copiedFloorPlan.get("zones"))).containsExactly("R석", "스탠딩A");
+            assertThat(namesOf(copiedFloorPlan.get("blocks"))).containsExactly("1층");
+            assertThat(namesOf(operator.getJson(eventPath(twelveMonths, copyId) + "/entrances").get("entrances")))
+                    .containsExactly("정문", "2층 전용");
+        }
+        long copyId = latestEventOf(twelveMonths);
+        assertThat(rowCounts("event_zone", copyId)).isEqualTo("2 live, 0 removed");
+        assertThat(rowCounts("event_block", copyId)).isEqualTo("1 live, 0 removed");
+        assertThat(rowCounts("event_seat", copyId)).isEqualTo("50 live, 0 removed");
+        assertThat(rowCounts("event_entrance", copyId)).isEqualTo("2 live, 0 removed");
+    }
+
+    @Test
+    @DisplayName("포스터는 원본 파일을 새 열쇠로 복사한다 — 같은 그림을 다른 주소로 열고, 복제본의 포스터를 바꿔도 원본 파일은 남는다")
+    void copiesPosterFileWithNewKey() throws Exception {
+        byte[] poster = TestImages.jpeg(300, 400);
+        try (Browser operator = new Browser()) {
+            operator.logInStaff(plannerEmail);
+            long original = operator.lastSpringPlay(poster);
+            String originalPosterUrl = jsonMapper.readTree(operator.get(eventPath(twelveMonths, original)).body())
+                    .get("posterUrl").asString();
+
+            JsonNode copy = operator.expect(operator.post(eventPath(twelveMonths, original) + "/duplication", Map.of()), 201);
+
+            long copyId = copy.get("eventId").asLong();
+            String copiedPosterUrl = copy.get("posterUrl").asString();
+            assertThat(copiedPosterUrl).isNotEqualTo(originalPosterUrl)
+                    .matches(PUBLIC_BASE_URL.replace(".", "\\.") + "/event-posters/[A-Za-z0-9_-]{32}\\.jpg");
+            assertThat(posterFileKey(copyId)).isEqualTo(fileKeyOf(copiedPosterUrl));
+            assertThat(posterFileKey(original)).isEqualTo(fileKeyOf(originalPosterUrl));
+            assertThat(storageDirectory.resolve(POSTER_BUNDLE).resolve(fileKeyOf(copiedPosterUrl))).hasBinaryContent(poster);
+            assertThat(operator.getBytes(URI.create(copiedPosterUrl).getPath()).body()).isEqualTo(poster);
+            assertThat(operator.getBytes(URI.create(originalPosterUrl).getPath()).body()).isEqualTo(poster);
+
+            HttpResponse<String> replaced = operator.uploadPoster(copyId, TestImages.png(900, 1200));
+            assertThat(replaced.statusCode()).isEqualTo(200);
+
+            assertThat(storageDirectory.resolve(POSTER_BUNDLE).resolve(fileKeyOf(copiedPosterUrl))).doesNotExist();
+            assertThat(storageDirectory.resolve(POSTER_BUNDLE).resolve(fileKeyOf(originalPosterUrl))).hasBinaryContent(poster);
+            assertThat(posterFileKey(original)).isEqualTo(fileKeyOf(originalPosterUrl));
+        }
+    }
+
+    @Test
     @DisplayName("다른 주최자의 행사를 자기 주최자 경로로 복제하면 404 EVENT_NOT_FOUND이고 복제본이 생기지 않는다")
     void otherOrganizersEventIsNotFound() throws Exception {
         long original;
@@ -293,6 +382,13 @@ class EventDuplicationIntegrationTest {
         return body;
     }
 
+    private static Map<String, Object> withKind(String kind, Map<String, Object> zoneBody) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("kind", kind);
+        body.putAll(zoneBody);
+        return body;
+    }
+
     private static Map<String, Object> blockBody(String name, int rows, int columns, int x, int y, int angleDegrees) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", name);
@@ -332,6 +428,28 @@ class EventDuplicationIntegrationTest {
         body.put("cancellationFeeTiers", List.of(Map.of("fromDaysBefore", 3, "deductionRatePercent", 0),
                 Map.of("fromDaysBefore", 1, "deductionRatePercent", 30), Map.of("fromDaysBefore", 0, "deductionRatePercent", 90)));
         return body;
+    }
+
+    /** 그 주최자의 가장 나중에 만든 행사 — 복제본. */
+    private long latestEventOf(long organizerId) {
+        Long id = jdbcTemplate.queryForObject("SELECT max(id) FROM event WHERE organizer_id = ?", Long.class, organizerId);
+        assertThat(id).isNotNull();
+        return id;
+    }
+
+    /** 그 표에서 그 행사의 줄 수 — "지우지 않은 수 live, 지운 수 removed". */
+    private String rowCounts(String table, long eventId) {
+        return jdbcTemplate.queryForObject("SELECT count(*) FILTER (WHERE deleted_at IS NULL) || ' live, ' "
+                + "|| count(*) FILTER (WHERE deleted_at IS NOT NULL) || ' removed' FROM " + table + " WHERE event_id = ?",
+                String.class, eventId);
+    }
+
+    private String posterFileKey(long eventId) {
+        return jdbcTemplate.queryForObject("SELECT poster_file_key FROM event WHERE id = ?", String.class, eventId);
+    }
+
+    private static String fileKeyOf(String posterUrl) {
+        return posterUrl.substring(posterUrl.lastIndexOf('/') + 1);
     }
 
     private String publicAddressOf(long eventId) {
@@ -392,6 +510,31 @@ class EventDuplicationIntegrationTest {
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         }
 
+        HttpResponse<byte[]> getBytes(String path) throws Exception {
+            return client.send(HttpRequest.newBuilder(uri(path)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+        }
+
+        /** 열두달의 그 행사에 포스터 파일(PNG) 하나를 multipart/form-data의 poster 칸으로 올린다. */
+        HttpResponse<String> uploadPoster(long eventId, byte[] content) throws Exception {
+            return uploadPoster(eventId, "image/png", "poster.png", content);
+        }
+
+        private HttpResponse<String> uploadPoster(long eventId, String contentType, String fileName, byte[] content) throws Exception {
+            String boundary = "ticketon-" + UUID.randomUUID();
+            ByteArrayOutputStream body = new ByteArrayOutputStream();
+            body.write(("--" + boundary + "\r\n"
+                    + "Content-Disposition: form-data; name=\"poster\"; filename=\"" + fileName + "\"\r\n"
+                    + "Content-Type: " + contentType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+            body.write(content);
+            body.write(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+            HttpRequest request = HttpRequest.newBuilder(uri(eventPath(twelveMonths, eventId) + "/poster"))
+                    .header(CSRF_HEADER, csrfToken())
+                    .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + boundary)
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))
+                    .build();
+            return client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        }
+
         /** 200으로 받은 응답 본문. */
         JsonNode getJson(String path) throws Exception {
             HttpResponse<String> response = get(path);
@@ -436,7 +579,7 @@ class EventDuplicationIntegrationTest {
         }
 
         /** 보낸 요청이 그 상태 코드로 끝났는지 보고 응답 본문을 돌려준다. */
-        private JsonNode expect(HttpResponse<String> response, int status) throws Exception {
+        JsonNode expect(HttpResponse<String> response, int status) throws Exception {
             assertThat(response.statusCode()).as(response.body()).isEqualTo(status);
             return jsonMapper.readTree(response.body());
         }
@@ -447,8 +590,16 @@ class EventDuplicationIntegrationTest {
          * 링크 전용과 조정한 예매 설정.
          */
         long lastSpringPlay() throws Exception {
+            return lastSpringPlay(null);
+        }
+
+        /** {@link #lastSpringPlay()}와 같되, 그 JPEG 포스터를 올려 둔다. 포스터가 null이면 올리지 않는다. */
+        long lastSpringPlay(byte[] jpegPoster) throws Exception {
             long eventId = expect(post("/api/organizer/organizers/" + twelveMonths + "/events", springPlayBody()), 201)
                     .get("eventId").asLong();
+            if (jpegPoster != null) {
+                expect(uploadPoster(eventId, "image/jpeg", "poster.jpg", jpegPoster), 200);
+            }
             String path = eventPath(twelveMonths, eventId);
             long rSeat = expect(post(path + "/zones", withKind("DESIGNATED", zoneBody("R석", "#E5484D", 50_000, null))), 201)
                     .get("zoneId").asLong();
@@ -474,13 +625,6 @@ class EventDuplicationIntegrationTest {
             expect(put(path + "/booking-settings", adjustedBookingBody()), 200);
             jdbcTemplate.update("UPDATE event SET status = 'ENDED', booking_opened_at = '2026-02-01T01:00:00Z' WHERE id = ?", eventId);
             return eventId;
-        }
-
-        private static Map<String, Object> withKind(String kind, Map<String, Object> zoneBody) {
-            Map<String, Object> body = new LinkedHashMap<>();
-            body.put("kind", kind);
-            body.putAll(zoneBody);
-            return body;
         }
 
         @Override
