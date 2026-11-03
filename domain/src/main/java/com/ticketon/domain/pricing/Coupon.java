@@ -2,6 +2,7 @@ package com.ticketon.domain.pricing;
 
 import com.ticketon.domain.error.RuleViolationException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -64,6 +65,30 @@ public final class Coupon {
     /** 새 쿠폰을 발급한다 — 아직 쓴 사람이 없다. */
     public static Coupon issue(long eventId, CouponCode code, CouponTerms terms) {
         return new Coupon(null, eventId, code, terms, 0);
+    }
+
+    /**
+     * 이 행사의 쿠폰들 사이에 새 쿠폰을 발급한다 — <b>한 행사 안에서 코드는 겹치지 않는다.</b> 관객은 적은 코드로 쿠폰을 찾으므로 겹치면 어느 쿠폰인지
+     * 알 수 없다. 코드는 대문자로 맞춰 두어({@link CouponCode}) {@code spring20}과 {@code SPRING20}은 같은 코드다. 지운 쿠폰은 넘기지 않는다 — 그
+     * 코드는 다시 쓸 수 있다(잘못 만들었으면 지우고 새로 발급한다). 확인 필요 (#223) — 다시 발급한 쿠폰은 다른 쿠폰이라 1인 1회 · 선착순 횟수가 새로
+     * 시작한다(지운 쿠폰을 쓴 관객도 다시 쓸 수 있다). 같은 행사의 발급끼리는 부르는 쪽이 행사 줄을 잠가 차례로 처리한다.
+     *
+     * @param eventCoupons 그 행사의 지우지 않은 쿠폰
+     * @throws RuleViolationException   같은 코드의 쿠폰이 있으면({@link PricingErrorCode#COUPON_CODE_ALREADY_TAKEN})
+     * @throws IllegalArgumentException 다른 행사의 쿠폰을 넘기면
+     */
+    public static Coupon issueAmong(List<Coupon> eventCoupons, long eventId, CouponCode code, CouponTerms terms) {
+        Objects.requireNonNull(eventCoupons, "eventCoupons");
+        Objects.requireNonNull(code, "code");
+        for (Coupon coupon : eventCoupons) {
+            if (coupon.eventId != eventId) {
+                throw new IllegalArgumentException("다른 행사의 쿠폰입니다: 행사 " + eventId + ", 쿠폰의 행사 " + coupon.eventId);
+            }
+            if (coupon.code.equals(code)) {
+                throw new RuleViolationException(PricingErrorCode.COUPON_CODE_ALREADY_TAKEN, "행사 " + eventId + ", 코드 " + code.value());
+            }
+        }
+        return issue(eventId, code, terms);
     }
 
     /**

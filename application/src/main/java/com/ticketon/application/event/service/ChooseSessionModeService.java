@@ -7,7 +7,7 @@ import com.ticketon.application.event.service.EventScheduleEditing.LockedSchedul
 import com.ticketon.domain.event.Event;
 import com.ticketon.domain.event.EventSchedule;
 import com.ticketon.domain.event.SessionMode;
-import java.util.Set;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,13 +40,13 @@ public class ChooseSessionModeService implements ChooseSessionModeUseCase {
         Event event = locked.event();
         if (locked.schedule().isEmpty()) {
             EventSchedule started = event.startSchedule(command.sessionMode(), command.defaultOperatingHours(), locked.now());
-            return editing.saveChanged(locked, started, Set.of(), operationSummary(started));
+            return editing.saveChanged(locked, started, Map.of(), operationSummary(started));
         }
         EventSchedule schedule = locked.schedule().get();
-        Set<Long> sessionIdsBefore = ScheduleResults.sessionIdsOf(schedule);
+        Map<Long, EventScheduleEditing.SessionPlacement> placementsBefore = EventScheduleEditing.placementsOf(schedule);
         if (!event.changeSessionMode(schedule, command.sessionMode(), command.defaultOperatingHours(), locked.now())) {
             return ScheduleResults.of(schedule);
         }
-        return editing.saveChanged(locked, schedule, sessionIdsBefore, operationSummary(schedule));
+        return editing.saveChanged(locked, schedule, placementsBefore, operationSummary(schedule));
     }
 }

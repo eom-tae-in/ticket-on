@@ -13,8 +13,10 @@ import com.ticketon.application.organizer.port.in.RecordStaffOperationUseCase;
 import com.ticketon.application.organizer.port.in.StaffPermissionResult;
 import com.ticketon.application.organizer.port.out.OrganizerRepository;
 import com.ticketon.domain.event.Event;
+import com.ticketon.domain.event.EventPricesChanged;
 import com.ticketon.domain.event.FloorPlan;
 import com.ticketon.domain.event.Zone;
+import com.ticketon.domain.event.ZoneBasePrice;
 import com.ticketon.domain.event.ZoneCapacity;
 import com.ticketon.domain.event.ZoneCapacityChanged;
 import com.ticketon.domain.event.ZoneName;
@@ -30,7 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 구역 수정(위저드 3단계) — 고치는 규칙(바뀌는 칸마다 수정 범위, 저장된 종류로 정원 확인, 이름 겹침, 같은 값이면 바꾸지 않음)은
  * {@link Event#changeZone}이 갖고, 여기서는 권한을 확인하고 줄을 잠가 읽은 뒤, 바뀌었으면 도면 · 행사를 저장하고 조작 기록을 남긴다. 수량형의
- * 정원이 바뀌었으면 재고에 알린다({@link ZoneCapacityChanged}, #54).
+ * 정원이 바뀌었으면 재고에 알리고({@link ZoneCapacityChanged}, #54), 기본가가 바뀌었으면 가격에 알린다({@link EventPricesChanged}, #51 — 바뀐
+ * 기본가로 회차 조정 · 묶음권 · 조기예매 · 쿠폰을 적용해 0원이 되면 가격이 막고 이 저장도 되돌려진다).
  * <p>
  * <b>한 트랜잭션이다.</b> 잠금 순서와 재확인은 구역 추가와 같다({@link EventEditingLocks}). 지금과 같은 값이면(자동 임시저장을 여러 번 해도) 저장도
  * 알림도 기록도 하지 않는다.
@@ -76,6 +79,7 @@ public class ChangeZoneService implements ChangeZoneUseCase {
         Event event = EventEditingLocks.lockEvent(eventRepository, permission, command.eventId());
         FloorPlan floorPlan = floorPlanRepository.findByEventId(command.eventId());
         Optional<ZoneCapacity> capacityBefore = floorPlan.zone(command.zoneId()).capacity();
+        ZoneBasePrice basePriceBefore = floorPlan.zone(command.zoneId()).basePrice();
 
         if (event.changeZone(floorPlan, command.zoneId(), command.settings(), now)) {
             floorPlanRepository.save(floorPlan, now);
@@ -84,6 +88,9 @@ public class ChangeZoneService implements ChangeZoneUseCase {
             if (!changed.capacity().equals(capacityBefore)) {
                 eventPublisher.publishEvent(new ZoneCapacityChanged(command.eventId(), command.zoneId(),
                         changed.capacity().orElseThrow()));
+            }
+            if (!changed.basePrice().equals(basePriceBefore)) {
+                eventPublisher.publishEvent(new EventPricesChanged(command.eventId()));
             }
             recordStaffOperationUseCase.record(new RecordStaffOperationCommand(permission, StaffOperationTargetKind.EVENT,
                     command.eventId(), operationSummary(changed.name()), now));

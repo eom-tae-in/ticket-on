@@ -322,7 +322,8 @@ public final class EventSchedule {
     }
 
     /**
-     * 회차의 가격 조정을 바꾼다. 조정한 가격의 계산과, 판매 중 가격 변경을 신규 예매부터 적용하는 일은 가격 계산(#48)이 한다.
+     * 회차의 가격 조정을 바꾼다. 조정한 가격의 계산은 가격 도메인의 회차 가격(SessionPrice)이 하고, 판매 중에 바꾼 가격은 신규 예매부터 적용된다 —
+     * 이미 산 표의 금액은 티켓이 직접 갖는다(docs/14). 조정한 가격이 0원 이하가 되는지는 저장한 뒤 가격 점검(#51)이 본다.
      *
      * @return 바뀌었는지 — 지금과 같으면 false
      * @throws NotFoundException 일정에 없는 회차면({@link EventErrorCode#SESSION_NOT_FOUND})

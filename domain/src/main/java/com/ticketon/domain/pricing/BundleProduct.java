@@ -24,6 +24,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 /**
  * 묶음권 상품 — 날짜 N개를 묶은 상품(docs/05 "묶음권 (수량형 전용)", docs/14 "묶음권 상품은 날짜를, 티켓은 회차를 가리킵니다"). 3일 행사에서
@@ -173,6 +174,10 @@ public final class BundleProduct {
      * </ul>
      * 확인 필요 (#223) — 옮겨 간 날짜를 이미 묶고 있으면(회차형에서 묶은 두 날짜가 합쳐지면) 따라가지 않는다. 따라가면 3일권이 말없이 2일권이 된다.
      * 지워진 날짜에는 고를 회차가 없어 그 묶음권은 팔리지 않고, 주최자가 날짜를 다시 고른다({@link #reconfigure}).
+     * <p>
+     * 확인 필요 (#223) — 날짜를 옮긴 것이 아니라 <b>지운</b> 경우(회차 · 날짜 삭제)에도 따라갈 날짜가 없어 묶음권은 지운 날짜를 그대로 가리킨다. 그
+     * 묶음권은 판매가 멈추고(docs/05 "한 날짜라도 들어갈 회차가 없으면 그 묶음권은 판매가 멈춥니다", 시작 가격 없음), 주최자가 날짜를 다시 고르거나
+     * 묶음권을 지운다. 날짜 삭제를 막거나 묶음권을 말없이 고치지 않는다.
      *
      * @param retiredDateId 지워진 날짜
      * @param movedToDateId 그 날짜의 회차가 옮겨 간 날짜
@@ -210,15 +215,77 @@ public final class BundleProduct {
      */
     public Optional<Money> startingPrice(EventSchedule schedule, FloorPlan floorPlan, Set<Long> bookableSessionIds) {
         requireSameEvent(schedule, floorPlan);
-        Set<Long> bookable = Set.copyOf(Objects.requireNonNull(bookableSessionIds, "bookableSessionIds"));
-        Predicate<EventSession> selectable = session -> !session.isCancelled()
-                && session.id().isPresent() && bookable.contains(session.id().getAsLong());
-        return floorPlan.zones().stream()
-                .filter(zone -> zone.id().isPresent() && terms.zoneIds().contains(zone.id().getAsLong()))
+        Predicate<EventSession> selectable = selectableAmong(bookableSessionIds);
+        return soldZones(floorPlan)
                 .map(zone -> cheapestDayPrices(terms, zone, schedule, selectable))
                 .flatMap(Optional::stream)
                 .map(dayPrices -> dayPrices.bundlePrice(terms.discountRate()))
                 .min(Comparator.naturalOrder());
+    }
+
+    /**
+     * 그 구역 하나에서 가장 싼 회차 조합의 묶음권 가격 — 시작 가격({@link #startingPrice})을 구역 하나로 좁힌 것이다. 조기예매가 구역별로 꺼져 있을
+     * 때 그 조기예매가 닿는 가장 낮은 가격을 내는 데 쓴다({@link EventPriceTable#lowestPriceReachedBy}).
+     *
+     * @param bookableSessionIds 고를 수 있는 회차 — 시작 가격과 같다
+     * @return 그 구역의 시작 가격. 이 묶음권을 팔지 않거나 도면에서 지워진 구역이거나, 한 날짜라도 고를 회차가 없으면 비어 있다
+     * @throws RuleViolationException 그 조합이 0원이 되면({@link PricingErrorCode#BUNDLE_PRICE_NOT_POSITIVE})
+     */
+    public Optional<Money> cheapestPriceIn(long zoneId, EventSchedule schedule, FloorPlan floorPlan, Set<Long> bookableSessionIds) {
+        requireSameEvent(schedule, floorPlan);
+        Predicate<EventSession> selectable = selectableAmong(bookableSessionIds);
+        return soldZones(floorPlan)
+                .filter(zone -> zone.id().getAsLong() == zoneId)
+                .findFirst()
+                .flatMap(zone -> cheapestDayPrices(terms, zone, schedule, selectable))
+                .map(dayPrices -> dayPrices.bundlePrice(terms.discountRate()));
+    }
+
+    /**
+     * 지금 할인율이 구역마다 가장 싼 회차 조합(취소되지 않은 회차)에 적용해도 1원 이상 남기는지 — 만들 때 · 바꿀 때의 확인({@link #create})을 그 뒤에
+     * 다시 묻는다. 구역 기본가나 회차 조정을 낮추면 98 · 99% 같은 할인율에서 0원이 될 수 있어, 가격을 바꾼 뒤 점검한다
+     * ({@link EventPriceTable#requirePricesStayPositive}).
+     */
+    public boolean leavesPositivePrice(EventSchedule schedule, FloorPlan floorPlan) {
+        requireSameEvent(schedule, floorPlan);
+        return soldZones(floorPlan)
+                .map(zone -> cheapestDayPrices(terms, zone, schedule, session -> !session.isCancelled()))
+                .flatMap(Optional::stream)
+                .allMatch(dayPrices -> dayPrices.leavesPositivePrice(terms.discountRate()));
+    }
+
+    /**
+     * 도면에서 지워진 구역을 대상 구역에서 뺀다 — 지워진 구역은 팔리지 않으므로, 대상 구역 목록이 늘 도면에 있는 구역만 가리키게 한다. 화면이 받은
+     * 설정을 그대로 다시 보내도 "지워진 구역"으로 막히지 않는다.
+     * <p>
+     * 구역 삭제는 막지 않는다 — 구역을 지울 수 있는지는 취소 · 회수되지 않은 티켓이 걸렸는지 하나로 정한다(docs/04 "회차 · 구역 삭제 — 티켓이 있으면
+     * 불가", docs/99 D "수정 제한의 기준"). 확인 필요 (#223) — 그 구역이 이 묶음권의 <b>하나뿐인 대상 구역</b>이면 빼지 않고 지운 구역을 그대로
+     * 가리키게 둔다(지운 구역 줄은 남는다). 대상 구역은 하나 이상이어야 해서({@link BundleProductTerms}) 뺄 수 없고, 묶음권을 말없이 지우면
+     * 주최자가 만든 상품이 사라진다. 그 묶음권은 팔 구역이 없어 날짜를 지운 묶음권처럼 판매가 멈춘다(docs/05 "한 날짜라도 들어갈 회차가 없으면 그
+     * 묶음권은 판매가 멈춥니다", 시작 가격 없음 — {@link #startingPrice}). 주최자가 다른 구역을 골라 고치거나 묶음권을 지운다. 구역이 하나도 남지
+     * 않는 묶음권의 처리는 문서에 없다.
+     *
+     * @return 뺐는지 — 그 구역에서 팔지 않았거나, 하나뿐인 대상 구역이라 남겨 두었으면 false
+     */
+    public boolean dropRemovedZone(long zoneId) {
+        if (!terms.zoneIds().contains(zoneId) || terms.zoneIds().size() == 1) {
+            return false;
+        }
+        Set<Long> remainingZoneIds = new HashSet<>(terms.zoneIds());
+        remainingZoneIds.remove(zoneId);
+        terms = new BundleProductTerms(terms.name(), terms.dateIds(), remainingZoneIds, terms.discountRate());
+        return true;
+    }
+
+    /** 도면에 있는(지워지지 않은) 대상 구역 — 도면 순서. */
+    private Stream<Zone> soldZones(FloorPlan floorPlan) {
+        return floorPlan.zones().stream()
+                .filter(zone -> zone.id().isPresent() && terms.zoneIds().contains(zone.id().getAsLong()));
+    }
+
+    private static Predicate<EventSession> selectableAmong(Set<Long> bookableSessionIds) {
+        Set<Long> bookable = Set.copyOf(Objects.requireNonNull(bookableSessionIds, "bookableSessionIds"));
+        return session -> !session.isCancelled() && session.id().isPresent() && bookable.contains(session.id().getAsLong());
     }
 
     /**

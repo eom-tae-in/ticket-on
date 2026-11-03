@@ -170,6 +170,35 @@ public final class EarlyBird {
     }
 
     /**
+     * 도면에서 지워진 구역을 적용 범위의 끈 구역에서 지운다 — 지워진 구역은 팔리지 않아 그 기록은 닿는 티켓을 바꾸지 않는다. 그래서 끝난 조기예매도
+     * 지우고({@link #reconfigure}의 확인을 거치지 않는다), 임박 단계도 그대로다. 끈 구역 목록이 늘 도면에 있는 구역만 가리키게 해, 화면이 받은 설정을
+     * 그대로 다시 보내도 바뀐 것으로 보이지 않게 한다.
+     *
+     * @return 지웠는지 — 그 구역을 끄지 않았으면 false
+     */
+    public boolean dropRemovedZone(long zoneId) {
+        if (!terms.scope().excludedZoneIds().contains(zoneId)) {
+            return false;
+        }
+        terms = new EarlyBirdTerms(terms.discount(), terms.period(), terms.quantity(), terms.scope().forgetZone(zoneId));
+        return true;
+    }
+
+    /**
+     * 지운 묶음권 상품을 적용 범위의 끈 상품에서 지운다 — 까닭과 규칙은 {@link #dropRemovedZone}과 같다.
+     *
+     * @return 지웠는지 — 그 상품을 끄지 않았으면 false
+     */
+    public boolean dropRemovedBundleProduct(long bundleProductId) {
+        TicketProduct product = TicketProduct.bundle(bundleProductId);
+        if (!terms.scope().excludedProducts().contains(product)) {
+            return false;
+        }
+        terms = new EarlyBirdTerms(terms.discount(), terms.period(), terms.quantity(), terms.scope().forgetProduct(product));
+        return true;
+    }
+
+    /**
      * 티켓 N장의 몫을 잡는다 — 진행 중일 때만, 남은 몫만큼. 잡은 만큼 사용 수가 늘고 줄지 않는다. 묶음권 1장도 1장으로 센다.
      *
      * @param ticketCount 몫을 원하는 티켓 수, 1 이상

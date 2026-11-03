@@ -18,7 +18,7 @@ package com.ticketon.domain.event;
  *       초대권이다(docs/03 "초대권은 무료 발권").</li>
  * </ul>
  * 조정한 가격을 계산하는 일(퍼센트 적용 시 100원 단위 내림, 조정 뒤 가격이 0원 이하가 되는 조정 막기)은 가격 도메인(pricing)의 회차
- * 가격(SessionPrice, #48)이 한다. 저장할 때 막는 일은 #51에 넘긴다. 회차별 조정은
+ * 가격(SessionPrice)이 한다. 저장할 때 막는 일은 저장한 뒤 가격 점검(#51)이 한다 — 그 행사의 모든 구역 × 회차에 적용해 본다. 회차별 조정은
  * 기본 가격을 정하는 단계라 조기예매 · 쿠폰 같은 할인과 겹치는 것이 아니다(docs/05 "할인 중복 규칙").
  */
 public sealed interface SessionPriceAdjustment {

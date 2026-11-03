@@ -24,7 +24,7 @@ public record SessionPriceAdjustmentResponse(
         @Schema(description = "퍼센트 조정 — 퍼센트일 때만, 빼면 음수", example = "-20", requiredMode = NOT_REQUIRED, nullable = true)
         Integer percent) {
 
-    static SessionPriceAdjustmentResponse from(SessionPriceAdjustmentResult result) {
+    public static SessionPriceAdjustmentResponse from(SessionPriceAdjustmentResult result) {
         return new SessionPriceAdjustmentResponse(PriceAdjustmentKindCode.from(result.kind()), result.amount(), result.percent());
     }
 }

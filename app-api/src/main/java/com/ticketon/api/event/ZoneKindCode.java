@@ -21,7 +21,7 @@ public enum ZoneKindCode {
         this.kind = kind;
     }
 
-    static ZoneKindCode from(ZoneKind kind) {
+    public static ZoneKindCode from(ZoneKind kind) {
         for (ZoneKindCode code : values()) {
             if (code.kind == kind) {
                 return code;

@@ -15,7 +15,26 @@ import java.time.LocalTime;
  * 패키지를 부르지 않는다). 그런 제안은 그 도메인 패키지에 두고 설명 첫머리에 같은 "확인 필요 (#이슈 번호)"를 적은 뒤, 아래 목록에 위치를 남긴다.
  * <ul>
  *   <li>확인 필요 (#223) — 묶음권 할인율을 예매가 열린 뒤 바꿀 수 있는지, 판매 중에 조기예매 · 쿠폰 · 묶음권을 새로 만들 수 있는지(조기예매 ·
- *       쿠폰을 고칠 때의 하한은 docs/99 E "가격 · 할인"에 있음): {@code domain.event.EventEditTarget#PRICE}.</li>
+ *       쿠폰을 고칠 때의 하한은 docs/99 E "가격 · 할인"에 있음). 지금은 가격 변경으로 다뤄 예매가 열린 뒤에도 하고 판매가 끝나면 막는다:
+ *       {@code domain.event.EventEditTarget#PRICE}, {@code domain.event.Event#savePricingStep}.</li>
+ *   <li>확인 필요 (#223) — 모든 구역을 끄거나 1일권과 모든 묶음권을 꺼서 아무 티켓에도 닿지 않는 조기예매는 받지 않는다:
+ *       {@code domain.pricing.EventPriceTable#requireEarlyBirdApplicable}.</li>
+ *   <li>확인 필요 (#223) — 도면에서 구역을 지우면 묶음권 상품의 대상 구역에서 빼되, 그 구역이 묶음권의 하나뿐인 구역이면 빼지 않고 지운 구역을
+ *       그대로 가리키게 두어 그 묶음권의 판매가 멈춘다(구역 삭제는 막지 않고, 묶음권을 말없이 지우지도 않음):
+ *       {@code domain.pricing.BundleProduct#dropRemovedZone}.</li>
+ *   <li>확인 필요 (#223) — 묶은 날짜를 옮긴 것이 아니라 지우면(회차 · 날짜 삭제) 묶음권은 지운 날짜를 그대로 가리켜 판매가 멈추고, 주최자가 날짜를
+ *       다시 고른다: {@code domain.pricing.BundleProduct#followMovedDate}.</li>
+ *   <li>확인 필요 (#223) — 4단계 가격 미리보기와 묶음권 시작 가격은 예매가 마감된 회차도 고를 수 있는 회차로 본다(취소된 회차만 뺀다):
+ *       {@code domain.pricing.EventPriceTable}.</li>
+ *   <li>확인 필요 (#223) — 4단계에서 조기예매 · 쿠폰 · 묶음권을 아무것도 더하지 않고 넘기면 4단계가 저장된 것이 없어 진행 단계가 3단계에서 5단계로
+ *       건너뛴다("4/7 단계"가 보이지 않음). '넘기기' 저장은 만들지 않았다: {@code domain.event.Event#savePricingStep}.</li>
+ *   <li>확인 필요 (#223) — 지운 쿠폰의 코드로 새 쿠폰을 발급하면 다른 쿠폰이라 1인 1회 · 선착순 횟수가 새로 시작한다:
+ *       {@code domain.pricing.Coupon#issueAmong}.</li>
+ *   <li>확인 필요 (#223) — 가격(구역 기본가 · 회차 조정)을 바꾸거나 구역 · 회차를 더한 뒤 묶음권 · 조기예매 · 쿠폰을 적용해 0원이 되는 가격이 생기면
+ *       막는다. 끝난 조기예매 · 유효 기간이 끝난 쿠폰은 보지 않는다: {@code domain.pricing.EventPriceTable#requirePricesStayPositive}.</li>
+ *   <li>확인 필요 (#223) — 위저드 4단계 저장과 가격 점검의 오류 문구(조기예매 · 쿠폰 · 묶음권을 찾을 수 없음, 쿠폰 코드 겹침, 닿지 않는 조기예매,
+ *       가격을 바꿔 0원이 되는 할인). 0원이 되는 할인의 문구는 묶음권을 더하거나 할인율을 바꿀 때도 "가격을 높이거나"로 나간다:
+ *       {@code domain.pricing.PricingErrorCode}.</li>
  *   <li>확인 필요 (#223) — 재입장 끄기 · 연령 제한 올리기를 막을 때의 오류 문구:
  *       {@code domain.event.EventErrorCode#REENTRY_TURN_OFF_LOCKED_AFTER_BOOKING_OPENED},
  *       {@code #AGE_RESTRICTION_RAISE_LOCKED_AFTER_BOOKING_OPENED}.</li>
