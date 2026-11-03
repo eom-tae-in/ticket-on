@@ -133,7 +133,7 @@ class TicketDisplayTest {
         }
 
         @Test
-        @DisplayName("입장 기록이 있어도 공연이 끝나면 '공연 종료'다 — 1년 전 공연에 '입장 완료'를 붙이지 않는다")
+        @DisplayName("입장 기록이 있어도 공연이 끝나면 '공연 종료'다 — 1년 전 공연에 '입장 완료'를 붙이지 않는다 (docs/99 E \"티켓\")")
         void endedWinsOverEntered() {
             TicketDisplay display = TicketFixtures.designatedTicket().display(MARCH_14_TIMES, true, at(3, 15, 10, 0));
 
@@ -159,6 +159,18 @@ class TicketDisplayTest {
             assertThat(pass.hasAllSessionsEnded(FESTIVAL_TIMES, at(5, 5, 22, 0))).isTrue();
             assertThat(pass.display(FESTIVAL_TIMES, true, at(5, 5, 22, 0)).status()).isEqualTo(TicketDisplayStatus.PERFORMANCE_ENDED);
             assertThat(pass.display(FESTIVAL_TIMES, true, at(5, 5, 22, 0)).showsQrAndShareButtons()).isFalse();
+        }
+
+        @Test
+        @DisplayName("포기한 날도 그날 종료 시각이 지나야 끝난 것으로 센다 — 5/5를 포기한 3일권도 5/5 22:00까지 버튼이 남는다 (docs/99 E \"티켓\")")
+        void forfeitedDayCountsOnlyAfterItsEnd() {
+            Ticket pass = TicketFixtures.festivalPass();
+            pass.forfeitSession(SESSION_MAY_5, at(5, 1, 12, 0));
+
+            assertThat(pass.hasAllSessionsEnded(FESTIVAL_TIMES, at(5, 4, 23, 0))).isFalse();
+            assertThat(pass.display(FESTIVAL_TIMES, true, at(5, 4, 23, 0)).showsQrAndShareButtons()).isTrue();
+            assertThat(pass.display(FESTIVAL_TIMES, true, at(5, 5, 21, 59)).showsQrAndShareButtons()).isTrue();
+            assertThat(pass.display(FESTIVAL_TIMES, true, at(5, 5, 22, 0)).status()).isEqualTo(TicketDisplayStatus.PERFORMANCE_ENDED);
         }
 
         @Test

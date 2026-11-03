@@ -79,11 +79,11 @@ class TicketLabelTest {
     }
 
     @Nested
-    @DisplayName("지운 블록의 좌석 — 취소 · 회수된 티켓만 남은 블록 (#37 인계)")
+    @DisplayName("지운 블록의 좌석 — 취소 · 회수된 티켓만 남은 블록 (docs/99 E \"행사 · 배치도\")")
     class RemovedBlock {
 
         @Test
-        @DisplayName("지운 블록의 좌석은 남은 블록이 하나여도 블록 이름을 붙인다 — 남은 블록의 같은 번호 좌석과 섞이지 않게")
+        @DisplayName("지운 블록의 좌석은 남은 블록이 하나여도 기록에 남은 블록 이름을 붙인다 — 남은 블록의 같은 번호 좌석과 섞이지 않게")
         void alwaysNamesRemovedBlock() {
             PointedSeat removed = new PointedSeat(BlockName.of("2층"), ROW_12_SEAT_7, true);
 

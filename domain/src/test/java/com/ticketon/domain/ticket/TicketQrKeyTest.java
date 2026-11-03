@@ -134,7 +134,7 @@ class TicketQrKeyTest {
         }
 
         @Test
-        @DisplayName("겹치면 취소 → 행사 종료 → 재발행 순이다 — 취소된 티켓은 새 링크를 받아도 소용없다")
+        @DisplayName("겹치면 취소 → 행사 종료 → 재발행 순이다 — 취소된 티켓은 새 링크를 받아도 소용없다 (docs/99 E \"티켓\")")
         void overlappingReasons() {
             Ticket reissuedThenCancelled = TicketFixtures.designatedTicket();
             reissuedThenCancelled.reissueKey(NEW_KEY, NOW);
