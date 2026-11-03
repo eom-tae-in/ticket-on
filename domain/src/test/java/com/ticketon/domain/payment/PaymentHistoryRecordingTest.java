@@ -8,9 +8,11 @@ import static com.ticketon.domain.payment.PaymentHistoryFixtures.MARCH_5;
 import static com.ticketon.domain.payment.PaymentHistoryFixtures.MARCH_8;
 import static com.ticketon.domain.payment.PaymentHistoryFixtures.MAY_1;
 import static com.ticketon.domain.payment.PaymentHistoryFixtures.MAY_2;
+import static com.ticketon.domain.payment.PaymentHistoryFixtures.MAY_6;
 import static com.ticketon.domain.payment.PaymentHistoryFixtures.OTHER_BOOKING;
 import static com.ticketon.domain.payment.PaymentHistoryFixtures.SESSION_MARCH_14;
 import static com.ticketon.domain.payment.PaymentHistoryFixtures.SESSION_MARCH_15;
+import static com.ticketon.domain.payment.PaymentHistoryFixtures.SESSION_MAY_3;
 import static com.ticketon.domain.payment.PaymentHistoryFixtures.SESSION_MAY_4;
 import static com.ticketon.domain.payment.PaymentHistoryFixtures.SESSION_MAY_5;
 import static com.ticketon.domain.payment.PaymentHistoryFixtures.ZONE_A;
@@ -362,6 +364,125 @@ class PaymentHistoryRecordingTest {
 
             assertThat(delay.kind()).isEqualTo(PaymentHistoryEntryKind.DELAY_REFUND);
             assertThat(delay.cause()).isEqualTo(PaymentHistoryCause.performanceDelay(SESSION_MARCH_14));
+        }
+
+        @Test
+        @DisplayName("그날 몫(46,500)을 돌려준 티켓 · 회차에는 그 회차 지연 환급(4,650)을 더 남기지 않는다 — 다른 날의 지연 환급은 된다")
+        void noDelayRefundAfterBundleDayOfTheSameSession() {
+            Ticket pass = festivalPass(1, 1);
+            PaymentHistory history = PaymentHistory.startWithBookingPayment(List.of(pass), MAY_1);
+            history.recordBundleDayRefund(List.of(pass), SESSION_MAY_4, MAY_2);
+            pass.recordPartialRefund(Money.of(46_500));
+
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> history.recordDelayRefund(List.of(pass), SESSION_MAY_4, Money.of(4_650), MAY_6));
+            assertThat(history.recordDelayRefund(List.of(pass), SESSION_MAY_3, Money.of(3_720), MAY_6).amount())
+                    .isEqualTo(Money.of(3_720));
+            assertThat(history.netPaidAmount()).isEqualTo(Money.of(79_980));
+        }
+
+        @Test
+        @DisplayName("확인 필요 (#223) — 지연 환급(4,650)을 받은 회차의 그날 몫은 지금은 그날 몫 전액(46,500)이다")
+        void bundleDayAfterDelayRefundIsFullShare() {
+            Ticket pass = festivalPass(1, 1);
+            PaymentHistory history = PaymentHistory.startWithBookingPayment(List.of(pass), MAY_1);
+            history.recordDelayRefund(List.of(pass), SESSION_MAY_4, Money.of(4_650), MAY_6);
+            pass.recordPartialRefund(Money.of(4_650));
+
+            PaymentHistoryEntry dayShare = history.recordBundleDayRefund(List.of(pass), SESSION_MAY_4, MAY_6);
+
+            assertThat(dayShare.amount()).isEqualTo(Money.of(46_500));
+            assertThat(history.netPaidAmount()).isEqualTo(Money.of(79_050));
+        }
+    }
+
+    @Nested
+    @DisplayName("부분 환불 대조 — 티켓에 남은 부분 환불이 내역과 맞아야 취소 · 변경 환불을 남긴다 (docs/08 \"기준 금액\")")
+    class PartialRefundReconciliation {
+
+        @Test
+        @DisplayName("3일권 2장 중 1장이 그날 몫 46,500을 받았는데 티켓에 남기지 않았으면 전체 취소 환불을 남기지 않는다")
+        void missingPartialRefundOnTicket() {
+            Ticket forfeited = festivalPass(1, 1);
+            Ticket other = festivalPass(2, 2);
+            PaymentHistory history = PaymentHistory.startWithBookingPayment(List.of(forfeited, other), MAY_1);
+            forfeited.forfeitSession(SESSION_MAY_4, MAY_1);
+            history.recordBundleDayRefund(List.of(forfeited), SESSION_MAY_4, MAY_1);
+            List<Ticket> cancelledPasses = List.of(
+                    cancelled(forfeited, TicketCancellationReason.AUDIENCE_CANCELLATION, MAY_2),
+                    cancelled(other, TicketCancellationReason.AUDIENCE_CANCELLATION, MAY_2));
+
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> history.recordCancellationRefund(cancelledPasses, Money.of(260_400), MAY_2));
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> history.recordCancellationRefund(cancelledPasses, Money.of(213_900), MAY_2));
+            assertThat(history.entries()).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("그날 몫을 티켓에 남겼으면 기준 금액 83,700 + 130,200 = 213,900원까지 돌려준다 — 결제 금액 전부 260,400원은 넘는다")
+        void recordedPartialRefund() {
+            Ticket forfeited = festivalPass(1, 1);
+            Ticket other = festivalPass(2, 2);
+            PaymentHistory history = PaymentHistory.startWithBookingPayment(List.of(forfeited, other), MAY_1);
+            forfeited.forfeitSession(SESSION_MAY_4, MAY_1);
+            PaymentHistoryEntry dayShare = history.recordBundleDayRefund(List.of(forfeited), SESSION_MAY_4, MAY_1);
+            forfeited.recordPartialRefund(dayShare.amount());
+            List<Ticket> cancelledPasses = List.of(
+                    cancelled(forfeited, TicketCancellationReason.AUDIENCE_CANCELLATION, MAY_2),
+                    cancelled(other, TicketCancellationReason.AUDIENCE_CANCELLATION, MAY_2));
+
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> history.recordCancellationRefund(cancelledPasses, Money.of(260_400), MAY_2));
+            history.recordCancellationRefund(cancelledPasses, Money.of(213_900), MAY_2);
+
+            assertThat(history.netPaidAmount()).isEqualTo(Money.ZERO);
+        }
+
+        @Test
+        @DisplayName("내역에 없는 부분 환불이 티켓에 남아 있어도 맞지 않는다")
+        void partialRefundNotInHistory() {
+            Ticket pass = festivalPass(1, 1);
+            PaymentHistory history = PaymentHistory.startWithBookingPayment(List.of(pass), MAY_1);
+            pass.recordPartialRefund(Money.of(46_500));
+            cancelled(pass, TicketCancellationReason.AUDIENCE_CANCELLATION, MAY_2);
+
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> history.recordCancellationRefund(List.of(pass), Money.of(83_700), MAY_2));
+        }
+
+        @Test
+        @DisplayName("지연 환급은 그 티켓 혼자인 줄이면 정확히, 여럿인 줄이면 그 줄 금액까지로 대조한다")
+        void delayRefundLines() {
+            Ticket alone = seatTicket(1, 1, ZONE_R, 1207, undiscounted(50_000));
+            Ticket first = seatTicket(2, 2, ZONE_R, 1208, undiscounted(50_000));
+            Ticket second = seatTicket(3, 3, ZONE_R, 1209, undiscounted(50_000));
+            PaymentHistory history = PaymentHistory.startWithBookingPayment(List.of(alone, first, second), MARCH_1);
+            history.recordDelayRefund(List.of(alone), SESSION_MARCH_14, Money.of(5_000), MARCH_15);
+            history.recordDelayRefund(List.of(first, second), SESSION_MARCH_14, Money.of(10_000), MARCH_15);
+            first.recordPartialRefund(Money.of(5_000));
+            second.recordPartialRefund(Money.of(5_000));
+
+            assertThatIllegalArgumentException().isThrownBy(() -> history.recordCancellationRefund(
+                    List.of(cancelled(alone, TicketCancellationReason.PERFORMANCE_STOPPED, MARCH_15)), Money.of(45_000), MARCH_15));
+            history.recordCancellationRefund(List.of(
+                    cancelled(first, TicketCancellationReason.PERFORMANCE_STOPPED, MARCH_15),
+                    cancelled(second, TicketCancellationReason.PERFORMANCE_STOPPED, MARCH_15)), Money.of(90_000), MARCH_15);
+
+            assertThat(history.totalOf(PaymentHistoryEntryKind.REFUND)).isEqualTo(Money.of(90_000));
+        }
+
+        @Test
+        @DisplayName("변경하는 기존 티켓도 대조한다 — 내역에 없는 부분 환불이 남은 티켓은 변경 기록을 남기지 않는다")
+        void changeReconciles() {
+            Ticket replaced = seatTicket(1, 1, ZONE_R, 1210, undiscounted(50_000));
+            PaymentHistory history = PaymentHistory.startWithBookingPayment(List.of(replaced), MARCH_1);
+            replaced.recordPartialRefund(Money.of(5_000));
+            cancelled(replaced, TicketCancellationReason.SEAT_CHANGE, MARCH_8);
+
+            assertThatIllegalArgumentException().isThrownBy(() -> history.recordChange(List.of(replaced), Money.of(45_000),
+                    List.of(seatTicket(2, 2, ZONE_A, 1503, undiscounted(30_000))), MARCH_8));
+            assertThat(history.entries()).hasSize(1);
         }
     }
 

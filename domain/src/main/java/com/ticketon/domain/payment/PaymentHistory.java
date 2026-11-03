@@ -4,6 +4,7 @@ import com.ticketon.domain.payment.PaymentHistoryCause.BookingPayment;
 import com.ticketon.domain.payment.PaymentHistoryCause.BundleDayShare;
 import com.ticketon.domain.payment.PaymentHistoryCause.Cancellation;
 import com.ticketon.domain.payment.PaymentHistoryCause.ChangePayment;
+import com.ticketon.domain.payment.PaymentHistoryCause.PerformanceDelay;
 import com.ticketon.domain.pricing.Money;
 import com.ticketon.domain.ticket.Ticket;
 import com.ticketon.domain.ticket.TicketCancellation;
@@ -43,7 +44,8 @@ import java.util.function.Predicate;
  *   <li>첫 줄은 예매 결제이고 하나뿐이다. 그 뒤의 결제는 모두 변경 결제다.</li>
  *   <li>좌석 변경 환불 바로 뒤에는 같은 시각, 같은 장수의 변경 결제가 붙는다.</li>
  *   <li>환불 · 지연 환급 · 배상의 대상은 이 내역에서 결제한 티켓이다. 같은 돈을 두 번 돌려주지 않는다 — 티켓마다 결제 한 번, 취소 환불 한 번, 그날
- *       몫은 회차마다 한 번, 지연 환급은 회차마다 한 번이고, 취소 환불한 티켓에는 그 뒤 그날 몫 · 지연 환급이 없다.</li>
+ *       몫은 회차마다 한 번, 지연 환급은 회차마다 한 번이고, 취소 환불한 티켓에는 그 뒤 그날 몫 · 지연 환급이 없다. 그날 몫을 돌려준 회차에는 그
+ *       회차의 지연 환급이 없다 — 그날 몫보다 많이 돌려주게 된다.</li>
  *   <li>배상은 같은 까닭의 환불을 받은 티켓에만, 까닭마다 한 번 붙는다. 불가항력 확인으로 보류됐던 배상은 환불보다 늦게 붙는다(docs/04 "불가항력이면
  *       배상이 없습니다" — 환불은 기다리지 않는다).</li>
  *   <li>돌려준 돈(환불 · 지연 환급)이 실 결제액을 넘지 않는다.</li>
@@ -123,12 +125,16 @@ public final class PaymentHistory {
      * 배상이 붙으면 {@link #recordCompensation}으로 따로 한 줄을 남긴다.
      * <p>
      * 환불액은 공제율을 적용한 금액이다(#78). 환불액이 0원이면 돈이 움직이지 않으므로 이 줄을 남기지 않는다 — 취소는 티켓에 남는다.
+     * <p>
+     * 이미 일부를 돌려받은 티켓(그날 몫 · 지연 환급)은 환불 기준액이 그만큼 줄어 있어야 한다 — 이 내역이 돌려준 부분 금액과 티켓에 남은 부분 환불을
+     * 대조해, 흐름이 {@link Ticket#recordPartialRefund}를 빠뜨려 같은 돈을 두 번 돌려주는 일을 막는다.
      *
      * @param cancelledTickets 이번에 같은 사유로 취소한 이 예매 건의 티켓들
      * @param amount           돌려준 금액, 1원 이상이고 그 티켓들의 환불 기준액({@link Ticket#refundBaseAmount}) 합 이하
      * @return 새 줄 — 저장 전
      * @throws IllegalArgumentException 티켓이 이 예매 건의 저장한 티켓이 아니거나, 취소되지 않았거나, 사유가 서로 다르거나 좌석 변경이면(변경은
-     *                                  {@link #recordChange}), 금액이 범위 밖이거나, 이미 환불한 티켓이면
+     *                                  {@link #recordChange}), 티켓에 남은 부분 환불이 이 내역과 맞지 않거나, 금액이 범위 밖이거나, 이미 환불한
+     *                                  티켓이면
      */
     public PaymentHistoryEntry recordCancellationRefund(List<Ticket> cancelledTickets, Money amount, Instant now) {
         Objects.requireNonNull(amount, "amount");
@@ -138,6 +144,7 @@ public final class PaymentHistory {
         if (reason == TicketCancellationReason.SEAT_CHANGE) {
             throw new IllegalArgumentException("좌석 변경은 환불 한 줄과 결제 한 줄을 함께 남깁니다(recordChange): 예매 건 " + bookingId);
         }
+        requirePartialRefundsOnTickets(tickets);
         requireWithin(amount, refundBaseTotalOf(tickets), "환불 기준액");
         return add(PaymentHistoryEntry.record(PaymentHistoryEntryKind.REFUND, PaymentHistoryCause.cancellation(reason),
                 amount, now, idsOf(tickets)));
@@ -159,7 +166,8 @@ public final class PaymentHistory {
      * @param newTickets      변경으로 발급해 저장한 새 티켓들 — 결제액은 그 결제 금액의 합이다(변경 시점의 현재 가격)
      * @return 환불 줄, 결제 줄 차례 — 저장 전
      * @throws IllegalArgumentException 티켓이 이 예매 건의 저장한 티켓이 아니거나, 기존 티켓이 '좌석 변경'으로 취소되지 않았거나, 새 티켓이
-     *                                  취소됐거나, 장수가 다르거나, 묶음권이 있거나, 금액이 범위 밖이면
+     *                                  취소됐거나, 장수가 다르거나, 묶음권이 있거나, 기존 티켓에 남은 부분 환불이 이 내역과 맞지 않거나, 금액이
+     *                                  범위 밖이면
      */
     public List<PaymentHistoryEntry> recordChange(List<Ticket> replacedTickets, Money refundAmount, List<Ticket> newTickets,
             Instant now) {
@@ -177,6 +185,7 @@ public final class PaymentHistory {
             throw new IllegalArgumentException("변경한 기존 티켓은 '좌석 변경'으로 취소됩니다: 예매 건 " + bookingId);
         }
         requireLive(issued, "변경 결제");
+        requirePartialRefundsOnTickets(replaced);
         requireWithin(refundAmount, refundBaseTotalOf(replaced), "환불 기준액");
         PaymentHistoryEntry refund = PaymentHistoryEntry.record(PaymentHistoryEntryKind.REFUND,
                 PaymentHistoryCause.cancellation(TicketCancellationReason.SEAT_CHANGE), refundAmount, now, idsOf(replaced));
@@ -199,7 +208,11 @@ public final class PaymentHistory {
      * 3일권 130,200원 — 토요일(5/4) 취소  환불 130,200 × 50,000 ÷ 140,000 = 46,500원
      * </pre>
      * 10% 배상은 {@link #recordCompensation}으로 따로 남긴다(불가항력이면 관리자 확인까지 보류). 돌려준 그날 몫을 티켓에 남기는 일
-     * ({@link Ticket#recordPartialRefund})은 흐름이 한다.
+     * ({@link Ticket#recordPartialRefund})은 흐름이 한다 — 빠뜨리면 그 뒤 취소 · 변경 기록이 막힌다.
+     * <p>
+     * 확인 필요 (#223) — 그 회차의 지연 환급을 이미 받은 티켓에 나중에 그날 몫을 돌려줄 때(늦게 시작한 뒤 중단된 날 등) 그날 몫에서 지연 환급을
+     * 빼는지 문서에 없다. 지금은 그날 몫 전액을 돌려준다. 반대 순서(그날 몫 뒤 그 회차 지연 환급)는 그날 몫보다 많이 돌려주게 되어 막는다
+     * ({@link #recordDelayRefund}).
      *
      * @param bundleTickets 그 회차를 가리키는, 취소되지 않은 이 예매 건의 묶음권 티켓들
      * @return 새 줄 — 저장 전
@@ -218,13 +231,17 @@ public final class PaymentHistory {
 
     /**
      * 공연 지연 환급 한 줄을 남긴다 — 주최자 사정으로 30분 이상 늦게 시작한 회차에 입장한 티켓마다 결제 금액의 10%(묶음권은 그날 몫의 10%).
-     * 티켓은 그대로 유효하다(docs/08 "공연 지연"). 입장 기록으로 대상을 고르고 금액을 계산하는 일은 지연 처리 흐름(#96)이 한다.
+     * 티켓은 그대로 유효하다(docs/08 "공연 지연"). 입장 기록으로 대상을 고르고 금액을 계산하는 일은 지연 처리 흐름(#96)이 한다. 돌려준 금액을
+     * 티켓마다 남기는 일({@link Ticket#recordPartialRefund})도 흐름이 한다.
+     * <p>
+     * 묶음권에서 그 회차의 그날 몫을 이미 돌려받은 티켓은 대상이 아니다 — 그날 입장료를 전부 돌려받았는데 10%를 더 주면 그날 몫보다 많이
+     * 돌려준다(같은 돈을 두 번 돌려주지 않음, docs/08 "기준 금액"). 흐름이 그런 티켓을 넘기면 프로그램 오류다.
      *
      * @param enteredTickets 그 회차에 입장한, 취소되지 않은 이 예매 건의 티켓들
      * @param amount         돌려준 금액, 1원 이상이고 그 티켓들의 결제 금액 합 이하
      * @return 새 줄 — 저장 전
      * @throws IllegalArgumentException 티켓이 이 예매 건의 저장한 티켓이 아니거나, 그 회차를 가리키지 않거나, 취소됐거나, 금액이 범위 밖이거나,
-     *                                  그 회차의 지연 환급을 이미 받았으면
+     *                                  그 회차의 지연 환급을 이미 받았거나, 그 회차의 그날 몫을 이미 돌려받았으면
      */
     public PaymentHistoryEntry recordDelayRefund(List<Ticket> enteredTickets, long sessionId, Money amount, Instant now) {
         Objects.requireNonNull(amount, "amount");
@@ -305,6 +322,43 @@ public final class PaymentHistory {
         return entry;
     }
 
+    /**
+     * 이 내역이 그 티켓에 돌려준 부분 금액과 티켓에 남은 부분 환불({@link Ticket#partiallyRefundedAmount})이 맞는지 본다. 흐름이
+     * {@link Ticket#recordPartialRefund}를 빠뜨리면 환불 기준액이 줄지 않아, 그날 몫을 받은 3일권을 전체 취소할 때 결제 금액 전부를 다시 돌려준다 —
+     * 같은 돈을 두 번 돌려주지 않는다(docs/08 "기준 금액", "부분 취소").
+     * <ul>
+     *   <li>그날 몫은 티켓마다 금액을 안다({@link Ticket#dayShare}) — 정확히 맞아야 한다.</li>
+     *   <li>지연 환급은 줄 금액이 대상 티켓 몫의 합이다 — 그 티켓 혼자인 줄은 정확히, 여럿인 줄은 그 줄 금액까지를 범위로 본다.</li>
+     * </ul>
+     */
+    private void requirePartialRefundsOnTickets(List<Ticket> tickets) {
+        for (Ticket ticket : tickets) {
+            long ticketId = ticket.id().orElseThrow();
+            Money least = Money.ZERO;
+            Money most = Money.ZERO;
+            for (PaymentHistoryEntry entry : entries) {
+                if (!entry.ticketIds().contains(ticketId)) {
+                    continue;
+                }
+                if (entry.kind() == PaymentHistoryEntryKind.REFUND && entry.cause() instanceof BundleDayShare dayShare) {
+                    Money share = ticket.dayShare(dayShare.sessionId());
+                    least = least.plus(share);
+                    most = most.plus(share);
+                } else if (entry.kind() == PaymentHistoryEntryKind.DELAY_REFUND) {
+                    most = most.plus(entry.amount());
+                    if (entry.ticketIds().size() == 1) {
+                        least = least.plus(entry.amount());
+                    }
+                }
+            }
+            Money recorded = ticket.partiallyRefundedAmount();
+            if (recorded.isLessThan(least) || recorded.isGreaterThan(most)) {
+                throw new IllegalArgumentException("티켓에 남은 부분 환불이 내역과 맞지 않습니다 — 그날 몫 · 지연 환급을 티켓에 남겼는지 보세요: 티켓 "
+                        + ticket.number() + ", 티켓 " + recorded + ", 내역 " + least + (least.equals(most) ? "" : "~" + most));
+            }
+        }
+    }
+
     /** 이 예매 건의 저장한 티켓들인지 보고 티켓 순번 순서로 돌려준다. */
     private List<Ticket> ownTickets(List<Ticket> tickets) {
         Objects.requireNonNull(tickets, "tickets");
@@ -372,6 +426,10 @@ public final class PaymentHistory {
                 requireAllIn(entry, paidTicketIds, "이 예매 건에서 결제하지 않은 티켓입니다");
                 requireNoneIn(entry, ticketIdsOf(previous, PaymentHistory::isCancellationRefund), "이미 취소해 환불한 티켓입니다");
                 requireNoneIn(entry, sameKindAndCause, "같은 까닭으로 이미 돌려준 티켓입니다");
+                if (entry.cause() instanceof PerformanceDelay delay) {
+                    requireNoneIn(entry, ticketIdsOf(previous, earlier -> isBundleDayRefundOf(earlier, delay.sessionId())),
+                            "그 회차의 그날 몫을 이미 돌려준 티켓입니다 — 지연 환급을 더 하면 그날 몫보다 많이 돌려줍니다");
+                }
             }
             case COMPENSATION -> {
                 requireAllIn(entry, ticketIdsOf(previous,
@@ -402,6 +460,11 @@ public final class PaymentHistory {
 
     private static boolean isCancellationRefund(PaymentHistoryEntry entry) {
         return entry.kind() == PaymentHistoryEntryKind.REFUND && entry.cause() instanceof Cancellation;
+    }
+
+    private static boolean isBundleDayRefundOf(PaymentHistoryEntry entry, long sessionId) {
+        return entry.kind() == PaymentHistoryEntryKind.REFUND
+                && entry.cause() instanceof BundleDayShare dayShare && dayShare.sessionId() == sessionId;
     }
 
     private static Set<Long> ticketIdsOf(List<PaymentHistoryEntry> entries, Predicate<PaymentHistoryEntry> condition) {

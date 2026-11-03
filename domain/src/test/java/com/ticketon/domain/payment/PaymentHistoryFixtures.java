@@ -49,6 +49,7 @@ final class PaymentHistoryFixtures {
     static final Instant MARCH_15 = Instant.parse("2026-03-15T03:00:00Z");
     static final Instant MAY_1 = Instant.parse("2026-05-01T03:00:00Z");
     static final Instant MAY_2 = Instant.parse("2026-05-02T03:00:00Z");
+    static final Instant MAY_6 = Instant.parse("2026-05-06T03:00:00Z");
 
     private PaymentHistoryFixtures() {
     }

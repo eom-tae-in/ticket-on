@@ -97,6 +97,20 @@ class PaymentHistoryRestoreTest {
     }
 
     @Test
+    @DisplayName("그날 몫을 돌려준 티켓 · 회차에 그 회차 지연 환급이 뒤따르지 않는다")
+    void noDelayRefundAfterBundleDayOfTheSameSession() {
+        PaymentHistoryEntry booking = payment(1, PaymentHistoryCause.bookingPayment(), 130_200, MARCH_1, 1L);
+        PaymentHistoryEntry dayShare = entry(2, PaymentHistoryEntryKind.REFUND, PaymentHistoryCause.bundleDayShare(504), 46_500,
+                MARCH_5, 1L);
+
+        assertThatIllegalArgumentException().isThrownBy(() -> PaymentHistory.restore(BOOKING.id(), List.of(booking, dayShare,
+                entry(3, PaymentHistoryEntryKind.DELAY_REFUND, PaymentHistoryCause.performanceDelay(504), 4_650, MARCH_8, 1L))));
+        assertThat(PaymentHistory.restore(BOOKING.id(), List.of(booking, dayShare,
+                entry(3, PaymentHistoryEntryKind.DELAY_REFUND, PaymentHistoryCause.performanceDelay(503), 3_720, MARCH_8, 1L)))
+                .netPaidAmount()).isEqualTo(Money.of(79_980));
+    }
+
+    @Test
     @DisplayName("돌려준 돈이 실 결제액을 넘지 않는다 — 지연 환급 뒤 전액 환불")
     void netPaidNeverNegative() {
         assertThatIllegalArgumentException().isThrownBy(() -> PaymentHistory.restore(BOOKING.id(), List.of(

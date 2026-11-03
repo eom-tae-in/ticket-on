@@ -59,6 +59,8 @@ import java.time.LocalTime;
  *       없는 예매 결제는 설명이 없다. 문서 예시 "3/1 결제 165,000원"에 설명이 없는 것은 할인이 없었다는 뜻일 수도, 할인은 [상세](결제 상세)에서
  *       보인다는 뜻일 수도 있다 — 뒤의 뜻이면 이 요약을 목록 줄에서 빼고 결제 상세(#76)에서 장마다 보인다:
  *       {@code domain.payment.PaymentHistoryDescriptionSource#appliedDiscountSummaryOf}.</li>
+ *   <li>확인 필요 (#223) — 묶음권에서 그 회차의 지연 환급을 이미 받은 티켓에 나중에 그날 몫을 돌려줄 때 그날 몫에서 지연 환급을 빼지 않고 그날 몫
+ *       전액을 돌려준다(반대 순서 — 그날 몫 뒤 그 회차 지연 환급 — 는 막는다): {@code domain.payment.PaymentHistory#recordBundleDayRefund}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
