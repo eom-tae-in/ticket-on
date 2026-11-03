@@ -116,7 +116,8 @@ class OrganizerReviewIntegrationTest {
             assertThat(review.status()).isEqualTo(OrganizerApplicationStatusCode.UNDER_REVIEW);
             assertThat(review.applicantStaffAccountId()).isEqualTo(junghoon);
             assertThat(review.form().contactPhoneNumber()).isEqualTo("010-2345-6789");
-            assertThat(review.form().settlementAccount().accountNumber()).isEqualTo("123456-78-901234");
+            assertThat(review.form().settlementAccount().maskedAccountNumber()).isEqualTo("******-**-**1234");
+            assertThat(admin.get(REVIEW_PATH + applicationId).body()).doesNotContain("123456-78-901234");
             assertThat(review.checklist()).extracting(OrganizerApplicationReviewResponse.ReviewChecklistItem::label)
                     .containsExactly("연락처로 통화 확인", "링크·이력으로 실재 확인", "행사 계획이 구체적임");
             assertThat(review.similarClosedOrganizers()).isEmpty();

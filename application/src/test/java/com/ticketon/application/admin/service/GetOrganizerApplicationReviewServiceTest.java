@@ -74,7 +74,7 @@ class GetOrganizerApplicationReviewServiceTest {
                 "인디 페스티벌 3회 개최. 2027년 5월 3일권 페스티벌 계획.", BusinessStatus.BUSINESS,
                 new OrganizerApplicationReviewResult.BusinessInformation("늦여름 레코드", "최여름", "서울특별시 마포구 와우산로 12",
                         "02-123-4567", "1234567890"),
-                new OrganizerApplicationReviewResult.SettlementAccount("신한은행", "110-123-456789", "늦여름 레코드")));
+                new OrganizerApplicationReviewResult.MaskedSettlementAccount("신한은행", "***-***-**6789", "늦여름 레코드")));
     }
 
     @Test
