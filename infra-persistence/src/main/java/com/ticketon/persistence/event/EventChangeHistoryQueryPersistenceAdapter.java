@@ -14,8 +14,8 @@ import org.jooq.DSLContext;
 import org.springframework.stereotype.Component;
 
 /**
- * 행사 변경 이력 조회 어댑터 — 변경 이력 표(event_change_history — V26)를 회차(event_session — V24) · 날짜(event_date)와 한 문장으로 읽어 관리자가
- * 볼 칸만 돌려준다. 회차 출연의 회차 날짜 · 시작 시각은 지금 값이다 — 지운 회차도 줄이 남아 있어 읽힌다.
+ * 행사 변경 이력 조회 어댑터 — 변경 이력 표(event_change_history — V26 · V27)를 회차(event_session — V24) · 날짜(event_date)와 한 문장으로
+ * 읽어 관리자가 볼 칸만 돌려준다. 회차 출연의 회차 날짜 · 시작 시각은 지금 값이다 — 지운 회차도 줄이 남아 있어 읽힌다.
  */
 @Component
 public class EventChangeHistoryQueryPersistenceAdapter implements EventChangeHistoryQueryPort {

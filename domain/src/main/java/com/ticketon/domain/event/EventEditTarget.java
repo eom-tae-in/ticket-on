@@ -44,7 +44,7 @@ public enum EventEditTarget {
     /**
      * 상세 안내 · 지도 링크 · 공개용 연락처 — 예매가 열린 뒤에도 자유 변경. 조건이 아니라 안내라서, 막으면 정훈이 "주차 불가" 한 줄을 못 넣는다
      * (docs/04 "산 사람의 조건은 관객에게 유리한 쪽으로만 바꿉니다"). 변경 이력을 남긴다(docs/03 "상세 안내 · 지도 링크 · 공개용 연락처도 이력을
-     * 남깁니다", 이력 저장은 #231). 장소(공연장 이름 · 주소)는 {@link #VENUE}의 승인 절차 그대로다.
+     * 남깁니다", {@link EventChangeHistory#basicInformationVersions}). 장소(공연장 이름 · 주소)는 {@link #VENUE}의 승인 절차 그대로다.
      */
     VENUE_GUIDE_AND_CONTACT(ALLOWED, false, false),
 

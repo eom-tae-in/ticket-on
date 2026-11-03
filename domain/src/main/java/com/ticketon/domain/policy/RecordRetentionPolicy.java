@@ -9,7 +9,10 @@ import java.time.Period;
  */
 public final class RecordRetentionPolicy {
 
-    /** 제목·소개·포스터·회차 출연 변경 이력 — 행사 종료 후 6개월(전자상거래법 표시·광고 기록). docs/03 "보관은 행사가 끝난 날부터 6개월", docs/11 "데이터 보관" */
+    /**
+     * 제목·소개·포스터·회차 출연·상세 안내·지도 링크·공개용 연락처 변경 이력 — 행사 종료 후 6개월(전자상거래법 표시·광고 기록). docs/99 C "보관
+     * 기간", docs/03 "보관은 행사가 끝난 날부터 6개월", docs/11 "데이터 보관"
+     */
     public static final Period CHANGE_HISTORY_RETENTION_AFTER_EVENT_END = Period.ofMonths(6);
 
     /** 입장 기록·티켓 없는 입장 기록 — 행사 종료 30일 후 통째로 삭제. 집계 숫자만 남긴다. docs/10 "검표 기록 보관", docs/11 "데이터 보관" */

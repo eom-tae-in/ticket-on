@@ -23,6 +23,8 @@ import java.time.LocalTime;
  *       예매가 열린 뒤의 변경만 말함): {@code domain.event.EventChangeHistory#isRecorded}.</li>
  *   <li>확인 필요 (#46) — 출연이 비어 있는 회차는 첫 버전을 쌓지 않는다(나중에 적으면 바꾸기 전이 빈 버전이 쌓임):
  *       {@code domain.event.EventChangeHistory#firstVersions}.</li>
+ *   <li>확인 필요 (#223) — 상세 안내 · 지도 링크 · 공개용 연락처도 출연과 같이, 판매를 시작한 순간 비어 있는 칸은 첫 버전을 쌓지 않는다(나중에
+ *       적으면 바꾸기 전이 빈 버전이 쌓임). 작성 중의 변경을 쌓지 않는 것도 다른 칸과 같다: {@code domain.event.EventChangeHistory#firstVersions}.</li>
  *   <li>확인 필요 (#46) — '운영자가 행사 제목을 바꿈' 알림도 이력과 같이 판매를 시작한 뒤의 변경에만 보낸다(작성 중 제목 수정마다 소유자에게
  *       메일이 가지 않게): {@code domain.event.EventChangeHistory#notifiesOwner}.</li>
  *   <li>확인 필요 (#46) — 변경 이력은 행사가 끝난 날(한국 날짜) + 6개월까지 보관하고 그다음 날부터 지운다. 회차가 모두 취소돼 끝난 날을 알 수 없는
@@ -41,8 +43,8 @@ import java.time.LocalTime;
 public final class ProposedPolicy {
 
     /**
-     * 확인 필요 (#46, 문서에 없음) — 보관 기간이 지난 행사 변경 이력(제목 · 소개 · 포스터 · 회차 출연)을 지우는 정해진 시각 작업이 매일 도는 시각(한국
-     * 시각). 행사가 끝난 날 + 6개월({@link RecordRetentionPolicy#CHANGE_HISTORY_RETENTION_AFTER_EVENT_END})까지 보관하고 그다음 날 이 시각의 작업이
+     * 확인 필요 (#46, 문서에 없음) — 보관 기간이 지난 행사 변경 이력(제목 · 소개 · 포스터 · 회차 출연 · 상세 안내 · 지도 링크 · 공개용 연락처)을
+     * 지우는 정해진 시각 작업이 매일 도는 시각(한국 시각). 행사가 끝난 날 + 6개월({@link RecordRetentionPolicy#CHANGE_HISTORY_RETENTION_AFTER_EVENT_END})까지 보관하고 그다음 날 이 시각의 작업이
      * 지운다 — 10/14에 끝난 행사는 4/14까지 보관하고 4/15 04:00 작업이 지운다. 지울지는 한국 날짜로 판정하므로 이 시각이 그날의 판정을 바꾸지 않는다.
      * 오전 4시를 제안한다: 사람에게 보내는 것이 없는 정리 작업이라 이용이 가장 적은 새벽에 돌려 행사 줄을 잠깐 잡는 일(편집과 차례로 처리)이 편집과
      * 거의 겹치지 않게 했고, 날짜가 바뀐 뒤라 그날 지울 이력을 바로 지운다. 작성 중 행사 30일 미수정 알림의 오전 10시
