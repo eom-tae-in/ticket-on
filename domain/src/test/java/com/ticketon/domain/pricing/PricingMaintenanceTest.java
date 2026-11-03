@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ticketon.common.KoreanTime;
 import com.ticketon.domain.error.RuleViolationException;
+import com.ticketon.domain.event.FloorPlan;
 import com.ticketon.domain.event.SessionPriceAdjustment;
 import com.ticketon.domain.event.ZoneBasePrice;
 import com.ticketon.domain.policy.Percent;
@@ -71,13 +72,17 @@ class PricingMaintenanceTest {
         }
 
         @Test
-        @DisplayName("하나뿐인 대상 구역은 빼지 않고 막는다 — 팔 구역 없는 묶음권을 남기지 않는다 (확인 필요 #223)")
+        @DisplayName("하나뿐인 대상 구역은 빼지 않고 지운 구역을 그대로 가리킨다 — 구역 삭제는 막지 않고, 팔 구역이 없어 시작 가격이 없다 (확인 필요 #223)")
         void onlyZoneIsKept() {
             BundleProduct pass = BundleProduct.restore(71L, FESTIVAL_EVENT_ID, terms(Set.of(MAY_3, MAY_4), Set.of(STANDING_A), 3));
+            FloorPlan withoutStandingA = FloorPlan.restore(FESTIVAL_EVENT_ID, festivalFloorPlan().zones().stream()
+                    .filter(zone -> zone.id().getAsLong() != STANDING_A).toList(), List.of(), null);
 
-            assertThatThrownBy(() -> pass.dropRemovedZone(STANDING_A)).isInstanceOfSatisfying(RuleViolationException.class,
-                    exception -> assertThat(exception.errorCode()).isEqualTo(PricingErrorCode.BUNDLE_ONLY_ZONE));
+            assertThat(pass.dropRemovedZone(STANDING_A)).isFalse();
+
             assertThat(pass.terms().zoneIds()).containsExactly(STANDING_A);
+            assertThat(pass.startingPrice(festivalSchedule(), withoutStandingA, Set.of(SESSION_MAY_3, SESSION_MAY_4))).isEmpty();
+            assertThat(pass.leavesPositivePrice(festivalSchedule(), withoutStandingA)).isTrue();
         }
     }
 

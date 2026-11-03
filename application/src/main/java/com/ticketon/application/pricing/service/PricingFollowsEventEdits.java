@@ -17,8 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  *   <li><b>날짜를 옮기면</b>({@link EventDateMoved}) 그 날짜를 묶은 묶음권이 옮겨 간 날짜를 묶는다({@link BundleProduct#followMovedDate}) —
  *       빠지면 연기한 날짜를 묶은 묶음권이 지워진 날짜를 가리켜 말없이 팔리지 않는다(docs/04 "연기된 회차도 계속 팝니다").</li>
- *   <li><b>구역을 지우면</b>({@link ZoneRemoved}) 묶음권의 대상 구역에서 빼고({@link BundleProduct#dropRemovedZone} — 하나뿐인 구역이면 막아 구역
- *       삭제도 되돌려진다, 확인 필요 #223), 조기예매가 그 구역을 꺼 둔 기록을 지운다({@link EarlyBird#dropRemovedZone}).</li>
+ *   <li><b>구역을 지우면</b>({@link ZoneRemoved}) 묶음권의 대상 구역에서 빼고({@link BundleProduct#dropRemovedZone} — 하나뿐인 구역이면 남겨
+ *       두어 그 묶음권의 판매가 멈춘다, 확인 필요 #223), 조기예매가 그 구역을 꺼 둔 기록을 지운다({@link EarlyBird#dropRemovedZone}). 구역 삭제는
+ *       막지 않는다 — 막는 기준은 티켓이 걸렸는지 하나다(docs/04, docs/99 D "수정 제한의 기준").</li>
  * </ul>
  * <b>발행한 유스케이스의 트랜잭션 안에서 동기로 돈다</b>(도메인 이벤트 규약, #42) — 함께 커밋되거나 함께 되돌려진다. 발행한 흐름이 이미 행사 줄을
  * FOR UPDATE로 쥐고 있어 가격 줄을 따로 잠그지 않는다. 바뀐 것이 없으면 쓰지 않는다.
@@ -44,10 +45,6 @@ class PricingFollowsEventEdits {
         }
     }
 
-    /**
-     * @throws com.ticketon.domain.error.RuleViolationException 지운 구역이 어느 묶음권의 하나뿐인 대상 구역이면
-     *                                                          ({@link com.ticketon.domain.pricing.PricingErrorCode#BUNDLE_ONLY_ZONE})
-     */
     @EventListener
     @Transactional(propagation = Propagation.MANDATORY)
     public void zoneRemoved(ZoneRemoved notice) {

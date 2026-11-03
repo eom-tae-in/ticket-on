@@ -19,12 +19,13 @@ import java.time.LocalTime;
  *       {@code domain.event.EventEditTarget#PRICE}, {@code domain.event.Event#savePricingStep}.</li>
  *   <li>확인 필요 (#223) — 모든 구역을 끄거나 1일권과 모든 묶음권을 꺼서 아무 티켓에도 닿지 않는 조기예매는 받지 않는다:
  *       {@code domain.pricing.EventPriceTable#requireEarlyBirdApplicable}.</li>
- *   <li>확인 필요 (#223) — 도면에서 구역을 지우면 묶음권 상품의 대상 구역에서 빼고, 그 구역이 묶음권의 하나뿐인 구역이면 구역 삭제를 막는다(팔
- *       구역 없는 묶음권을 남기거나 묶음권을 말없이 지우지 않음): {@code domain.pricing.BundleProduct#dropRemovedZone}.</li>
+ *   <li>확인 필요 (#223) — 도면에서 구역을 지우면 묶음권 상품의 대상 구역에서 빼되, 그 구역이 묶음권의 하나뿐인 구역이면 빼지 않고 지운 구역을
+ *       그대로 가리키게 두어 그 묶음권의 판매가 멈춘다(구역 삭제는 막지 않고, 묶음권을 말없이 지우지도 않음):
+ *       {@code domain.pricing.BundleProduct#dropRemovedZone}.</li>
  *   <li>확인 필요 (#223) — 가격(구역 기본가 · 회차 조정)을 바꾸거나 구역 · 회차를 더한 뒤 묶음권 · 조기예매 · 쿠폰을 적용해 0원이 되는 가격이 생기면
  *       막는다. 끝난 조기예매 · 유효 기간이 끝난 쿠폰은 보지 않는다: {@code domain.pricing.EventPriceTable#requirePricesStayPositive}.</li>
  *   <li>확인 필요 (#223) — 위저드 4단계 저장과 가격 점검의 오류 문구(조기예매 · 쿠폰 · 묶음권을 찾을 수 없음, 쿠폰 코드 겹침, 닿지 않는 조기예매,
- *       하나뿐인 구역의 묶음권, 가격을 바꿔 0원이 되는 할인): {@code domain.pricing.PricingErrorCode}.</li>
+ *       가격을 바꿔 0원이 되는 할인): {@code domain.pricing.PricingErrorCode}.</li>
  *   <li>확인 필요 (#223) — 재입장 끄기 · 연령 제한 올리기를 막을 때의 오류 문구:
  *       {@code domain.event.EventErrorCode#REENTRY_TURN_OFF_LOCKED_AFTER_BOOKING_OPENED},
  *       {@code #AGE_RESTRICTION_RAISE_LOCKED_AFTER_BOOKING_OPENED}.</li>

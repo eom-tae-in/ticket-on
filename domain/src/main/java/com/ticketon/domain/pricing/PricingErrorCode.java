@@ -118,12 +118,6 @@ public enum PricingErrorCode implements ErrorCode {
     EARLY_BIRD_SCOPE_EMPTY("조기예매를 적용할 구역과 상품을 하나 이상 남겨 주세요."),
 
     /**
-     * 지우려는 구역이 어느 묶음권 상품의 하나뿐인 대상 구역이다({@link BundleProduct#dropRemovedZone}). 빼면 팔 구역이 없는 묶음권이 남고, 묶음권을
-     * 말없이 지우면 주최자가 만든 상품이 사라진다. 확인 필요 (#223) — 구역이 하나도 남지 않는 묶음권의 처리는 문서에 없다. 문구도 문서에 없다.
-     */
-    BUNDLE_ONLY_ZONE("이 구역에서만 파는 묶음권이 있습니다. 묶음권에 다른 구역을 더하거나 묶음권을 먼저 지워 주세요."),
-
-    /**
      * 구역 기본가 · 회차 가격 조정을 바꾸거나 구역 · 회차를 더한 뒤, 묶음권 할인율이나 조기예매 · 쿠폰의 할인을 적용하면 0원이 되는 가격이 생긴다
      * ({@link EventPriceTable#requirePricesStayPositive}). 할인을 정할 때 막는 것({@link #DISCOUNT_MAKES_PRICE_ZERO},
      * {@link #BUNDLE_PRICE_NOT_POSITIVE})과 같은 까닭이다 — 막지 않으면 관객이 예매하는 순간 주최자용 문구로 막힌다. 바꾸는 쪽은 가격이라 할인을

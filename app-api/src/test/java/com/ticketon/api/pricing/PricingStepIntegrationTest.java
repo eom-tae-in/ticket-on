@@ -273,30 +273,34 @@ class PricingStepIntegrationTest {
     }
 
     @Test
-    @DisplayName("구역을 지우면 묶음권 · 조기예매에서 빠지고, 묶음권의 하나뿐인 구역이면 409 BUNDLE_ONLY_ZONE으로 구역 삭제도 되돌려진다")
+    @DisplayName("구역을 지우면 묶음권 · 조기예매에서 빠지고, 묶음권의 하나뿐인 구역이면 그 구역을 가리킨 채 남아 시작 가격이 없다(판매 멈춤) — 구역 삭제는 막지 않는다")
     void zoneRemovalCleansPricing() throws Exception {
         try (Browser dohyunBrowser = new Browser()) {
             dohyunBrowser.logInStaff(dohyunEmail);
             Festival festival = dohyunBrowser.createFestival();
-            long bundleId = jsonMapper.readTree(dohyunBrowser.post(festival.path("/bundle-products"),
-                    bundleBody("3일 통권", festival.allDateIds(), List.of(festival.standingA()), 7)).body()).get("bundleProductId").asLong();
-
-            assertError(dohyunBrowser.delete(festival.path("/zones/" + festival.standingA())), 409, "BUNDLE_ONLY_ZONE");
-            assertThat(jdbcTemplate.queryForObject("SELECT deleted_at IS NULL FROM event_zone WHERE id = ?", Boolean.class,
-                    festival.standingA())).isTrue();
-
             long standingB = jsonMapper.readTree(dohyunBrowser.post(festival.path("/zones"), Map.of("kind", "QUANTITY", "name", "스탠딩B",
                     "color", "#30A46C", "basePrice", 30_000, "capacity", 500)).body()).get("zoneId").asLong();
-            assertThat(dohyunBrowser.put(festival.path("/bundle-products/" + bundleId),
-                    bundleBody("3일 통권", festival.allDateIds(), List.of(festival.standingA(), standingB), 7)).statusCode()).isEqualTo(200);
+            long threeDayPass = jsonMapper.readTree(dohyunBrowser.post(festival.path("/bundle-products"),
+                    bundleBody("3일 통권", festival.allDateIds(), List.of(festival.standingA(), standingB), 7)).body()).get("bundleProductId")
+                    .asLong();
+            long weekendPass = jsonMapper.readTree(dohyunBrowser.post(festival.path("/bundle-products"),
+                    bundleBody("주말 2일권", List.of(festival.dateId("2027-05-04"), festival.dateId("2027-05-05")),
+                            List.of(festival.standingA()), 3)).body()).get("bundleProductId").asLong();
             HttpResponse<String> earlyBird = dohyunBrowser.post(festival.path("/early-birds"), earlyBirdBody("RATE", 10,
                     "2027-04-01T00:00:00+09:00", "2027-04-21T00:00:00+09:00", null, List.of(festival.standingA())));
             assertThat(earlyBird.statusCode()).isEqualTo(201);
 
             assertThat(dohyunBrowser.delete(festival.path("/zones/" + festival.standingA())).statusCode()).isEqualTo(204);
 
+            assertThat(jdbcTemplate.queryForObject("SELECT deleted_at IS NOT NULL FROM event_zone WHERE id = ?", Boolean.class,
+                    festival.standingA())).isTrue();
             JsonNode step = dohyunBrowser.pricingStep(festival);
+            assertThat(step.get("bundleProducts")).extracting(bundle -> bundle.get("bundleProductId").asLong())
+                    .containsExactly(threeDayPass, weekendPass);
             assertThat(longs(step.get("bundleProducts").get(0).get("zoneIds"))).containsExactly(standingB);
+            assertThat(step.get("bundleProducts").get(0).get("startingPrice").asLong()).isEqualTo(83_700);
+            assertThat(longs(step.get("bundleProducts").get(1).get("zoneIds"))).containsExactly(festival.standingA());
+            assertThat(step.get("bundleProducts").get(1).get("startingPrice").isNull()).isTrue();
             assertThat(step.get("earlyBirds").get(0).get("excludedZoneIds")).isEmpty();
         }
     }

@@ -254,19 +254,18 @@ public final class BundleProduct {
      * 도면에서 지워진 구역을 대상 구역에서 뺀다 — 지워진 구역은 팔리지 않으므로, 대상 구역 목록이 늘 도면에 있는 구역만 가리키게 한다. 화면이 받은
      * 설정을 그대로 다시 보내도 "지워진 구역"으로 막히지 않는다.
      * <p>
-     * 확인 필요 (#223) — 그 구역이 이 묶음권의 <b>하나뿐인 대상 구역</b>이면 빼지 않고 막는다. 빼면 팔 구역이 없는 묶음권이 남고(대상 구역은 하나
-     * 이상, {@link BundleProductTerms}), 묶음권을 말없이 지우면 주최자가 만든 상품이 사라진다. 주최자가 묶음권에 다른 구역을 더하거나 묶음권을 먼저
-     * 지운 뒤 구역을 지운다. 구역이 하나도 남지 않을 때의 처리는 문서에 없다.
+     * 구역 삭제는 막지 않는다 — 구역을 지울 수 있는지는 취소 · 회수되지 않은 티켓이 걸렸는지 하나로 정한다(docs/04 "회차 · 구역 삭제 — 티켓이 있으면
+     * 불가", docs/99 D "수정 제한의 기준"). 확인 필요 (#223) — 그 구역이 이 묶음권의 <b>하나뿐인 대상 구역</b>이면 빼지 않고 지운 구역을 그대로
+     * 가리키게 둔다(지운 구역 줄은 남는다). 대상 구역은 하나 이상이어야 해서({@link BundleProductTerms}) 뺄 수 없고, 묶음권을 말없이 지우면
+     * 주최자가 만든 상품이 사라진다. 그 묶음권은 팔 구역이 없어 날짜를 지운 묶음권처럼 판매가 멈춘다(docs/05 "한 날짜라도 들어갈 회차가 없으면 그
+     * 묶음권은 판매가 멈춥니다", 시작 가격 없음 — {@link #startingPrice}). 주최자가 다른 구역을 골라 고치거나 묶음권을 지운다. 구역이 하나도 남지
+     * 않는 묶음권의 처리는 문서에 없다.
      *
-     * @return 뺐는지 — 그 구역에서 팔지 않았으면 false
-     * @throws RuleViolationException 하나뿐인 대상 구역이면({@link PricingErrorCode#BUNDLE_ONLY_ZONE})
+     * @return 뺐는지 — 그 구역에서 팔지 않았거나, 하나뿐인 대상 구역이라 남겨 두었으면 false
      */
     public boolean dropRemovedZone(long zoneId) {
-        if (!terms.zoneIds().contains(zoneId)) {
+        if (!terms.zoneIds().contains(zoneId) || terms.zoneIds().size() == 1) {
             return false;
-        }
-        if (terms.zoneIds().size() == 1) {
-            throw new RuleViolationException(PricingErrorCode.BUNDLE_ONLY_ZONE, "묶음권 " + id + ", 구역 " + zoneId);
         }
         Set<Long> remainingZoneIds = new HashSet<>(terms.zoneIds());
         remainingZoneIds.remove(zoneId);
