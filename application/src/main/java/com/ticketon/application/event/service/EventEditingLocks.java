@@ -12,7 +12,7 @@ import com.ticketon.domain.event.Event;
 import com.ticketon.domain.event.EventErrorCode;
 
 /**
- * 행사를 만들거나 고치는 흐름(행사 만들기, 위저드 단계 저장, 포스터 올리기, 일정 편집, 구역 · 입구 추가 · 수정 · 삭제, 배치도 편집)의 시작 — 이
+ * 행사를 만들거나 고치는 흐름(행사 만들기 · 복제, 위저드 단계 저장, 포스터 올리기, 일정 편집, 구역 · 입구 추가 · 수정 · 삭제, 배치도 편집)의 시작 — 이
  * 흐름들이 같은 잠금 순서와 같은 재확인을 쓰게 한곳에 둔다. 잠금 순서는 운영진 계정 줄 → 주최자 줄 → 행사 줄 → 일정 · 도면 · 입구 줄이다
  * (organizer 서비스의 {@link StaffAccountLocks} 표).
  * <ol>
@@ -26,6 +26,8 @@ import com.ticketon.domain.event.EventErrorCode;
  *       소속이 끝난 뒤의 조작이 처리 · 기록되지 않는다. 두 줄을 쥔 동안에는 그 사람의 소속이 바뀌지 않는다.</li>
  *   <li>(고칠 때) 행사 줄을 FOR UPDATE로 잠그고 읽는다 — 같은 행사의 단계 저장 · 포스터 올리기 · 일정 · 구역 · 입구 저장끼리 차례로 처리된다.
  *       다른 주최자의 행사는 없는 것으로 다룬다. 일정 · 도면과 입구 목록은 행사 줄을 잡은 뒤에 읽고 고친다 — 그 줄들은 따로 잠그지 않는다.</li>
+ *   <li>(복제할 때) 원본 행사 줄에 외래 키 확인 잠금(FOR KEY SHARE)을 걸고 읽는다 — 원본은 고치지 않으므로 원본의 편집만 막고, 그 뒤 원본의 도면 ·
+ *       입구 목록을 읽는다. 다른 주최자의 행사는 없는 것으로 다룬다.</li>
  * </ol>
  */
 final class EventEditingLocks {
@@ -61,7 +63,22 @@ final class EventEditingLocks {
     static Event lockEvent(EventRepository eventRepository, StaffPermissionResult permission, long eventId) {
         return eventRepository.findByIdForUpdate(eventId)
                 .filter(event -> permission.covers(event.organizerId()))
-                .orElseThrow(() -> new NotFoundException(EventErrorCode.EVENT_NOT_FOUND,
-                        "행사 " + eventId + ", 주최자 " + permission.organizerId()));
+                .orElseThrow(() -> eventNotFound(permission, eventId));
+    }
+
+    /**
+     * 그 주최자의 행사 줄에 외래 키 확인 잠금(FOR KEY SHARE)을 걸고 읽는다 — {@link #lockOrganizer} 다음에 부른다. 그 행사를 고치지 않고 딸린 줄(도면 ·
+     * 입구 목록)까지 읽는 흐름(행사 복제)이 쓴다. 그 행사의 편집(행사 줄 FOR UPDATE)만 막아, 읽는 동안 편집이 커밋되지 않는다.
+     *
+     * @throws NotFoundException 없거나 지운 행사, 다른 주최자의 행사면({@link EventErrorCode#EVENT_NOT_FOUND})
+     */
+    static Event keyShareEvent(EventRepository eventRepository, StaffPermissionResult permission, long eventId) {
+        return eventRepository.findByIdForKeyShare(eventId)
+                .filter(event -> permission.covers(event.organizerId()))
+                .orElseThrow(() -> eventNotFound(permission, eventId));
+    }
+
+    private static NotFoundException eventNotFound(StaffPermissionResult permission, long eventId) {
+        return new NotFoundException(EventErrorCode.EVENT_NOT_FOUND, "행사 " + eventId + ", 주최자 " + permission.organizerId());
     }
 }

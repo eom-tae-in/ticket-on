@@ -63,7 +63,8 @@ import org.springframework.stereotype.Component;
  * 단위가 아닌 앞섬은 저장하지 않는다(들어오는 어댑터가 분으로 받는다).
  * <p>
  * 위저드 단계 저장은 {@link #findByIdForUpdate}({@code SELECT … FOR UPDATE})로 행사 줄을 잠그고 읽은 뒤 저장하므로, 저장은 조건 없이 그 행사의
- * 칸을 모두 지금 값으로 쓴다. 공개 주소 · 주최자는 바뀌지 않아 처음 넣을 때만 쓴다. 지운 행사(deleted_at)는 찾지도 저장하지도 않는다.
+ * 칸을 모두 지금 값으로 쓴다. 공개 주소 · 주최자는 바뀌지 않아 처음 넣을 때만 쓴다. 지운 행사(deleted_at)는 찾지도 저장하지도 않는다. 행사를
+ * 고치지 않고 딸린 줄까지 읽는 흐름(행사 복제)은 {@link #findByIdForKeyShare}({@code SELECT … FOR KEY SHARE})로 편집만 막는다.
  * <p>
  * 포스터는 열쇠만 둔다 — 파일은 파일 저장소에 있다. 포스터 열쇠는 유일 칸이라(event_poster_file_key_uk) 두 행사가 같은 파일을 가리키지 않는다.
  */
@@ -105,6 +106,11 @@ public class EventPersistenceAdapter implements EventRepository {
     @Override
     public Optional<Event> findByIdForUpdate(long id) {
         return find(eventRow(id).forUpdate());
+    }
+
+    @Override
+    public Optional<Event> findByIdForKeyShare(long id) {
+        return find(eventRow(id).forKeyShare());
     }
 
     @Override

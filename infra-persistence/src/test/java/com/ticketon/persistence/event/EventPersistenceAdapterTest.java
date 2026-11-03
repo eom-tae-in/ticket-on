@@ -314,6 +314,37 @@ class EventPersistenceAdapterTest {
     }
 
     @Test
+    @DisplayName("외래 키 확인 잠금으로 읽는 동안 다른 트랜잭션은 그 행사 줄을 FOR UPDATE로 잠그지 못하고, 외래 키 확인 잠금은 함께 걸 수 있다 — 행사 복제가 읽는 동안 편집만 기다린다")
+    void findByIdForKeyShareBlocksOnlyForUpdate() throws Exception {
+        long id = adapter.add(newSpringPlay()).id().getAsLong();
+        assertThat(adapter.findByIdForKeyShare(id).orElseThrow().basicInformation()).isEqualTo(springPlay());
+        assertThat(adapter.findByIdForKeyShare(id + 1000)).isEmpty();
+        CountDownLatch keyShared = new CountDownLatch(1);
+        CountDownLatch checked = new CountDownLatch(1);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<Boolean> holder = executor.submit(() -> inOwnTransaction(transactionAdapter -> {
+                boolean found = transactionAdapter.findByIdForKeyShare(id).isPresent();
+                keyShared.countDown();
+                assertThat(checked.await(10, TimeUnit.SECONDS)).isTrue();
+                return found;
+            }));
+            assertThat(keyShared.await(10, TimeUnit.SECONDS)).isTrue();
+
+            assertThatExceptionOfType(DataAccessException.class)
+                    .isThrownBy(() -> dsl.selectFrom(EVENT).where(EVENT.ID.eq(id)).forUpdate().noWait().fetch())
+                    .satisfies(lockNotAvailable -> assertThat(lockNotAvailable.sqlState()).isEqualTo("55P03"));
+            assertThat(dsl.selectFrom(EVENT).where(EVENT.ID.eq(id)).forKeyShare().noWait().fetch()).hasSize(1);
+            checked.countDown();
+
+            assertThat(holder.get(30, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            checked.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     @DisplayName("지운 행사는 찾지 않고 저장하지 않는다")
     void deletedEventIsAbsent() {
         long id = adapter.add(newSpringPlay()).id().getAsLong();
@@ -321,6 +352,7 @@ class EventPersistenceAdapterTest {
 
         assertThat(adapter.findById(id)).isEmpty();
         assertThat(adapter.findByIdForUpdate(id)).isEmpty();
+        assertThat(adapter.findByIdForKeyShare(id)).isEmpty();
         assertThatIllegalArgumentException().isThrownBy(() -> adapter.save(storedIn(id, EventStatus.DRAFT, null, List.of())));
     }
 

@@ -2,6 +2,7 @@ package com.ticketon.domain.event;
 
 import java.util.Objects;
 import java.util.OptionalLong;
+import java.util.function.LongUnaryOperator;
 
 /**
  * 좌석 — 블록 안의 개별 자리(docs/14 "1층 — 도면"). 블록 안의 번호({@link SeatNumber}), 배정된 구역, 속성({@link SeatAttribute}), 활성 여부를 갖는다.
@@ -54,6 +55,17 @@ public final class Seat {
             throw new IllegalArgumentException("좌석 id는 1 이상이어야 합니다: " + id);
         }
         return new Seat(id, number, zoneId, attribute, active);
+    }
+
+    /**
+     * 이 좌석을 복사한 새 좌석 — 번호 · 속성 · 활성이 같고 id가 없다(행사 복제, {@link FloorPlan#copyBlocksFrom}). 배정된 구역은 복사본 도면의 구역으로
+     * 바꿔 가리킨다.
+     *
+     * @param copiedZoneIdOf 원본 구역 id → 복사본 도면에서 그 구역을 복사한 구역의 id
+     */
+    Seat copy(LongUnaryOperator copiedZoneIdOf) {
+        Long copiedZoneId = zoneId == null ? null : copiedZoneIdOf.applyAsLong(zoneId);
+        return new Seat(null, number, copiedZoneId, attribute, active);
     }
 
     /** 저장 전이면 비어 있다. */

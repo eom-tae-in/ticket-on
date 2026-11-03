@@ -58,6 +58,20 @@ public final class EventEntrances {
     }
 
     /**
+     * 행사 복제 — 이 입구 목록을 복제본 행사의 새 목록으로 복사한다(docs/04 "행사 복제 — 가져오는 것: 입구 목록"). 입구는 이름이 같은 새 입구(id
+     * 없음)이고 더한 순서 그대로다. 지운 입구는 목록에 없으므로 복사하지 않는다. 원본과 줄을 같이 쓰지 않아, 복제본의 입구를 고쳐도 원본은 그대로다.
+     *
+     * @param newEventId 복제본 행사의 id
+     * @throws IllegalArgumentException 이 목록의 행사 id를 넘기면
+     */
+    public EventEntrances copyFor(long newEventId) {
+        if (newEventId == eventId) {
+            throw new IllegalArgumentException("복제본은 다른 행사입니다: 행사 " + eventId);
+        }
+        return new EventEntrances(newEventId, entrances.stream().map(Entrance::copy).toList());
+    }
+
+    /**
      * 입구를 더한다.
      *
      * @return 더한 입구(아직 id 없음)

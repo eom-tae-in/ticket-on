@@ -66,6 +66,11 @@ public final class Zone {
         return new Zone(id, kind, name, color, basePrice, capacity);
     }
 
+    /** 이 구역을 복사한 새 구역 — 종류 · 이름 · 색 · 기본가 · 정원이 같고 id가 없다(행사 복제, {@link FloorPlan#copyZonesFor}). */
+    Zone copy() {
+        return new Zone(null, kind, name, color, basePrice, capacity);
+    }
+
     /** 저장 전이면 비어 있다. */
     public OptionalLong id() {
         return id == null ? OptionalLong.empty() : OptionalLong.of(id);

@@ -39,6 +39,18 @@ public interface EventRepository {
     Optional<Event> findByIdForUpdate(long id);
 
     /**
+     * 지우지 않은 행사를 읽고, 이 트랜잭션이 끝날 때까지 그 줄에 외래 키 확인 잠금(FOR KEY SHARE)을 건다 — 행사를 고치지 않고 그 행사와 딸린 줄
+     * (도면 · 입구 목록)을 여러 문장으로 읽는 동안 고치는 흐름을 막는 일(행사 복제)에 쓴다.
+     * <p>
+     * 그 행사를 고치는 흐름은 모두 먼저 이 줄을 FOR UPDATE로 잠그므로({@link #findByIdForUpdate}), 이 잠금을 쥔 동안 그 행사의 위저드 저장 · 도면 ·
+     * 입구 편집은 기다린다 — 읽기 문장 사이에 편집이 커밋되지 않는다. 앞서 잡은 편집이 있으면 그쪽이 끝날 때까지 기다렸다가 바뀐 값을 읽는다. FOR
+     * UPDATE와만 부딪혀, 그 행사를 가리키는 줄을 넣는 흐름(외래 키 확인 잠금)이나 같은 잠금끼리는 막지 않는다.
+     * <p>
+     * <b>잠금 순서 — 운영진 계정 줄 · 주최자 줄 다음이다</b>({@link #findByIdForUpdate}와 같은 자리).
+     */
+    Optional<Event> findByIdForKeyShare(long id);
+
+    /**
      * 고친 행사를 저장한다 — 행사 줄의 칸을 모두 지금 값으로 쓰고, 취소 규정 구간은 통째로 바꾸고, 판매 중단 이력은 새로 생긴 중단을 넣고 끝난
      * 중단의 끝난 시각을 적는다. {@link #findByIdForUpdate}로 잠그고 읽은 뒤 부른다.
      *

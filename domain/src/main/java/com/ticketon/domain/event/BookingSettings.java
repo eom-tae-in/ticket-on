@@ -73,6 +73,18 @@ public record BookingSettings(Instant bookingOpensAt, LeadTime bookingCloseLeadT
     }
 
     /**
+     * 예매 오픈 시각만 비운 설정 — 행사를 복제할 때 쓴다({@link Event#duplicate}). 나머지(예매 종료 · 검표 시작의 앞섬, 매수 제한, 회차 선택 제약,
+     * 재입장, 연령 제한)는 그대로다 — 회차 시각을 기준으로 앞서는 시간이라 날짜가 바뀌어도 그대로 맞는다.
+     * <p>
+     * 확인 필요 (#223) — 오픈 시각은 날짜가 박힌 시각이라 가져오지 않는 날짜 · 회차와 같게 보았다. 조기예매를 "기간이 과거"라 가져오지 않는 것과 같은
+     * 까닭이다(docs/04 "행사 복제"). 비우면 처음 값처럼 판매를 시작하는 순간 연다(docs/99 E "행사 · 배치도").
+     */
+    public BookingSettings withoutBookingOpenTime() {
+        return new BookingSettings(null, bookingCloseLeadTime, checkinOpenLeadTime, seatsPerSelection, ticketsPerPerson, sessionChoice,
+                reentry, ageRestriction);
+    }
+
+    /**
      * 이 설정을 그 설정으로 바꾸면 바뀌는 수정 항목 — 상태별 수정 범위 표({@link EventEditScope})가 판정하는 단위로 나눈다.
      * <ul>
      *   <li>오픈 시각 → {@link EventEditTarget#BOOKING_OPEN_TIME}</li>

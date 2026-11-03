@@ -24,6 +24,11 @@ public final class Entrance {
         return new Entrance(null, name);
     }
 
+    /** 이 입구를 복사한 새 입구 — 이름이 같고 id가 없다(행사 복제, {@link EventEntrances#copyFor}). */
+    Entrance copy() {
+        return newEntrance(name);
+    }
+
     /** 저장소에서 읽은 값으로 입구를 되살린다. */
     public static Entrance restore(long id, EntranceName name) {
         if (id < 1) {
