@@ -122,11 +122,12 @@ class TicketQrKeyTest {
             assertThat(ShareLinkInvalidReason.RECALLED.guidance()).contains("초대해 주신 분께 확인해 주세요.");
         }
 
-        @Test
-        @DisplayName("회차 취소 · 행사 취소 · 공연 중단으로 취소된 초대권은 예매 티켓과 같이 '취소된 티켓입니다'다 — 회수만 따로 알린다")
-        void invitationCancelledWithSession() {
+        @ParameterizedTest
+        @EnumSource(value = TicketCancellationReason.class, names = {"SESSION_CANCELLED", "EVENT_CANCELLED", "PERFORMANCE_STOPPED"})
+        @DisplayName("회차 취소 · 행사 취소 · 공연 중단으로 취소된 초대권은 예매 티켓과 같이 '취소된 티켓입니다'다 — 회수만 따로 알린다 (docs/09 \"회차가 취소되거나 바뀌면\")")
+        void invitationCancelledWithSession(TicketCancellationReason reason) {
             Ticket ticket = TicketFixtures.invitationTicket();
-            ticket.cancel(TicketCancellationReason.SESSION_CANCELLED, NOW);
+            ticket.cancel(reason, NOW);
 
             assertThat(ticket.shareLinkInvalidReason(KEY, EventStatus.ON_SALE)).contains(ShareLinkInvalidReason.CANCELLED);
         }
