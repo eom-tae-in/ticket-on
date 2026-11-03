@@ -126,6 +126,11 @@ final class EventWizardScene {
                 organizerRepository, eventRepository, categoryRepository, posterStorage, tokenGenerator, clock);
     }
 
+    DuplicateEventService duplicateEventService() {
+        return new DuplicateEventService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
+                organizerRepository, eventRepository, floorPlanRepository, entranceRepository, posterStorage, tokenGenerator, clock);
+    }
+
     SaveEventBasicInformationService saveEventBasicInformationService() {
         return new SaveEventBasicInformationService(checkStaffPermissionService, recordStaffOperationService,
                 staffAccountRepository, organizerRepository, eventRepository, categoryRepository, posterStorage, historyRecorder(),
