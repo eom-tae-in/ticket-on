@@ -24,6 +24,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
+import org.springframework.session.jdbc.JdbcIndexedSessionRepository;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.RequestBuilder;
@@ -77,6 +79,9 @@ class LoginSessionIntegrationTest {
     private FindByIndexNameSessionRepository<? extends Session> sessionRepository;
 
     @Autowired
+    private JdbcIndexedSessionRepository jdbcSessionRepository;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
@@ -93,11 +98,68 @@ class LoginSessionIntegrationTest {
         Map<String, ? extends Session> sessions = sessionRepository.findByPrincipalName("AUDIENCE:101");
         assertThat(sessions).hasSize(1);
         assertThat(sessions.values().iterator().next().getMaxInactiveInterval())
-                .isEqualTo(TimePolicy.LOGIN_SESSION_IDLE_TIMEOUT);
+                .isEqualTo(TimePolicy.AUDIENCE_LOGIN_IDLE_TIMEOUT);
 
         mockMvc.perform(get("/api/audience/test").cookie(sessionCookie))
                 .andExpect(status().isOk())
                 .andExpect(content().string("AUDIENCE:101"));
+    }
+
+    @Test
+    @DisplayName("비활성 만료는 관객 30일, 운영진 · 관리자 30분이고, 검표 계정은 없다 (docs/01)")
+    void idleTimeoutFollowsAccountKind() throws Exception {
+        logIn(AccountKind.AUDIENCE, 301);
+        logIn(AccountKind.STAFF, 301);
+        logIn(AccountKind.ADMIN, 301);
+        logIn(AccountKind.CHECKIN, 301);
+
+        assertThat(idleTimeoutOf("AUDIENCE:301")).isEqualTo(Duration.ofDays(30));
+        assertThat(idleTimeoutOf("STAFF:301")).isEqualTo(Duration.ofMinutes(30));
+        assertThat(idleTimeoutOf("ADMIN:301")).isEqualTo(Duration.ofMinutes(30));
+        assertThat(idleTimeoutOf("CHECKIN:301")).isNegative();
+    }
+
+    @Test
+    @DisplayName("검표 계정의 세션은 정리 작업이 돌아도 지워지지 않고, 오래 놓아 둔 뒤에도 그대로 들어간다 (docs/01 \"검표 계정\")")
+    void checkinSessionSurvivesCleanUp() throws Exception {
+        Cookie tablet = logIn(AccountKind.CHECKIN, 302);
+        Cookie staff = logIn(AccountKind.STAFF, 302);
+        jdbcTemplate.update("UPDATE spring_session SET last_access_time = last_access_time - ? WHERE principal_name IN (?, ?)",
+                Duration.ofDays(365).toMillis(), "CHECKIN:302", "STAFF:302");
+        jdbcTemplate.update("UPDATE spring_session SET expiry_time = last_access_time + max_inactive_interval * 1000 "
+                + "WHERE principal_name = ?", "STAFF:302");
+
+        jdbcSessionRepository.cleanUpExpiredSessions();
+
+        assertThat(sessionRepository.findByPrincipalName("STAFF:302")).isEmpty();
+        mockMvc.perform(get("/api/checkin/test").cookie(tablet))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/organizer/test").cookie(staff))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("관객 · 검표 계정의 쿠키는 브라우저를 닫아도 남고, 운영진 · 관리자의 쿠키는 닫으면 사라진다")
+    void cookieLifetimeFollowsAccountKind() throws Exception {
+        assertThat(logIn(AccountKind.AUDIENCE, 303).getMaxAge()).isPositive();
+        assertThat(logIn(AccountKind.CHECKIN, 303).getMaxAge()).isPositive();
+        assertThat(logIn(AccountKind.STAFF, 303).getMaxAge()).isNegative();
+        assertThat(logIn(AccountKind.ADMIN, 303).getMaxAge()).isNegative();
+    }
+
+    @Test
+    @DisplayName("정지 · 탈퇴로 세션을 끊으면 비활성 만료가 길어도 바로 끊긴다 (docs/01)")
+    void terminationIgnoresIdleTimeout() throws Exception {
+        Cookie audience = logIn(AccountKind.AUDIENCE, 304);
+        Cookie tablet = logIn(AccountKind.CHECKIN, 304);
+
+        sessionTerminationPort.terminateAllSessions(AccountRef.of(AccountKind.AUDIENCE, 304));
+        sessionTerminationPort.terminateAllSessions(AccountRef.of(AccountKind.CHECKIN, 304));
+
+        mockMvc.perform(get("/api/audience/test").cookie(audience))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/checkin/test").cookie(tablet))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -158,6 +220,12 @@ class LoginSessionIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(400);
         assertThat(errorResponseOf(response)).isEqualTo(ErrorResponse.of(ApiErrorCode.INVALID_INPUT));
+    }
+
+    private Duration idleTimeoutOf(String principalName) {
+        Map<String, ? extends Session> sessions = sessionRepository.findByPrincipalName(principalName);
+        assertThat(sessions).hasSize(1);
+        return sessions.values().iterator().next().getMaxInactiveInterval();
     }
 
     private Cookie logIn(AccountKind kind, long id) throws Exception {

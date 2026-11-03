@@ -88,8 +88,11 @@ public final class TimePolicy {
     /** 작성 중 행사 알림을 보내는 시각 — 매일 오전 10시. 메일을 받는 사람이 일을 시작하는 때다. docs/99 C "작성 중 행사 알림" */
     public static final LocalTime DRAFT_EVENT_IDLE_NOTICE_RUN_TIME = LocalTime.of(10, 0);
 
-    /** 로그인 세션 비활성 만료 — 마지막 요청 뒤 이만큼 요청이 없으면 다시 로그인한다. docs/01 "로그인 유지와 링크 유효 시간", docs/99 C "로그인 유지" */
-    public static final Duration LOGIN_SESSION_IDLE_TIMEOUT = Duration.ofMinutes(30);
+    /** 관객 로그인 비활성 만료 — 오픈 정각이나 입구에서 로그인 화면이 끼면 안 된다. docs/01 "로그인 유지와 링크 유효 시간", docs/99 C "로그인 유지" */
+    public static final Duration AUDIENCE_LOGIN_IDLE_TIMEOUT = Duration.ofDays(30);
+
+    /** 주최자 쪽 · 관리자 로그인 비활성 만료 — 돈과 개인정보를 다루는 화면이라 짧게 둔다. 검표 계정은 만료가 없다. docs/01 "로그인 유지와 링크 유효 시간", docs/99 C "로그인 유지" */
+    public static final Duration STAFF_AND_ADMIN_LOGIN_IDLE_TIMEOUT = Duration.ofMinutes(30);
 
     /** 가입 이메일 인증 링크 유효 시간 — 주최자 쪽 가입도 같다. docs/01 "로그인 유지와 링크 유효 시간", docs/99 C "가입 이메일 인증 링크" */
     public static final Duration EMAIL_VERIFICATION_LINK_VALIDITY = Duration.ofHours(24);

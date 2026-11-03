@@ -49,10 +49,10 @@ class LoginSessionSettingsTest {
         }
 
         @Test
-        @DisplayName("비활성 만료는 정책 숫자 모음의 제안값(30분)이다 — 확인 필요 #8")
-        void idleTimeoutComesFromPolicy() {
-            assertThat(sessionTimeout.getTimeout()).isEqualTo(TimePolicy.LOGIN_SESSION_IDLE_TIMEOUT);
-            assertThat(TimePolicy.LOGIN_SESSION_IDLE_TIMEOUT).isEqualTo(Duration.ofMinutes(30));
+        @DisplayName("로그인 전 세션의 비활성 만료는 가장 짧은 30분이다 — 로그인하면 계정 종류의 값으로 바뀐다")
+        void idleTimeoutBeforeLoginComesFromPolicy() {
+            assertThat(sessionTimeout.getTimeout()).isEqualTo(TimePolicy.STAFF_AND_ADMIN_LOGIN_IDLE_TIMEOUT);
+            assertThat(TimePolicy.STAFF_AND_ADMIN_LOGIN_IDLE_TIMEOUT).isEqualTo(Duration.ofMinutes(30));
         }
     }
 
