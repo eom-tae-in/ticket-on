@@ -159,7 +159,8 @@ class EventChangeHistoryRecordingTest {
     class FirstVersion {
 
         @Test
-        @DisplayName("제목 · 소개 · 포스터와 출연을 적은 11/14의 출연이 10/15 10:00부터 지금 버전으로 쌓인다 — 바꾼 사람은 판매를 시작한 운영자(푸른바람)")
+        @DisplayName("제목 · 소개 · 포스터 · 상세 안내 · 지도 링크 · 공개용 연락처와 출연을 적은 11/14의 출연이 10/15 10:00부터 지금 버전으로 쌓인다 — "
+                + "바꾼 사람은 판매를 시작한 운영자(푸른바람)")
         void recordsPublishedContent() {
             startSalesByPlanner();
 
@@ -173,6 +174,12 @@ class EventChangeHistoryRecordingTest {
                                     springPlayItems().introduction()), NOW, null, "푸른바람", false),
                             tuple(new EventChangeHistoryVersion(EventChangeHistoryTarget.POSTER, null, null, DRAFT_POSTER_TOKEN + ".jpg"),
                                     NOW, null, "푸른바람", false),
+                            tuple(new EventChangeHistoryVersion(EventChangeHistoryTarget.VENUE_DETAILS, null, null, "지하 1층, 주차 불가"),
+                                    NOW, null, "푸른바람", false),
+                            tuple(new EventChangeHistoryVersion(EventChangeHistoryTarget.MAP_LINK, null, null,
+                                    "https://map.example/place/12"), NOW, null, "푸른바람", false),
+                            tuple(new EventChangeHistoryVersion(EventChangeHistoryTarget.PUBLIC_CONTACT, null, null,
+                                    "twelve-months@example.com"), NOW, null, "푸른바람", false),
                             tuple(new EventChangeHistoryVersion(EventChangeHistoryTarget.SESSION_PERFORMERS, novemberFourteenth, null,
                                     "주연: 김배우"), NOW, null, "푸른바람", false));
             assertThat(scene.historyRepository.versionsOf(springPlay)).allSatisfy(stored ->
@@ -188,7 +195,7 @@ class EventChangeHistoryRecordingTest {
                     new RecordChangeHistoryFirstVersionCommand(
                             new StaffPermissionResult(scene.twelveMonths, JUNGHOON, StaffRole.OWNER, StaffAction.EDIT_EVENT), springPlay,
                             FIRST_CHANGE)));
-            assertThat(scene.historyRepository.versionsOf(springPlay)).hasSize(4);
+            assertThat(scene.historyRepository.versionsOf(springPlay)).hasSize(7);
         }
 
         @Test
@@ -273,7 +280,7 @@ class EventChangeHistoryRecordingTest {
             scene.clock.moveTo(FIRST_CHANGE);
             changeTitle(PLANNER, "2026 봄 정기공연 〈열두 번째 달〉");
 
-            assertThat(scene.historyRepository.versionsOf(springPlay)).hasSize(4);
+            assertThat(scene.historyRepository.versionsOf(springPlay)).hasSize(7);
         }
 
         @Test
@@ -325,7 +332,7 @@ class EventChangeHistoryRecordingTest {
                     BlockName.fromInput("1층").orElse(null)));
 
             assertThat(scene.floorPlanRepository.findByEventId(springPlay).block(blockId).name().value()).isEqualTo("1층");
-            assertThat(scene.historyRepository.versionsOf(springPlay)).hasSize(4);
+            assertThat(scene.historyRepository.versionsOf(springPlay)).hasSize(7);
         }
     }
 

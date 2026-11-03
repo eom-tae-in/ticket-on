@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
+import com.ticketon.domain.organizer.ExternalLink;
 import com.ticketon.domain.organizer.StaffRole;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -69,6 +70,14 @@ class EventChangeHistoryTest {
                 information.venue(), information.venueDetails(), information.mapLink(), information.publicContact());
     }
 
+    /** 상세 안내 · 지도 링크 · 공개용 연락처만 바꾼 기본 정보 — null이면 비운다. */
+    private static EventBasicInformation guided(EventBasicInformation information, String venueDetails, String mapLink,
+            String publicContact) {
+        return new EventBasicInformation(information.title(), information.type(), information.category(), information.introduction(),
+                information.venue(), venueDetails, mapLink == null ? null : ExternalLink.of(mapLink),
+                publicContact == null ? null : EventPublicContact.of(publicContact));
+    }
+
     @Nested
     @DisplayName("언제 쌓나")
     class WhenRecorded {
@@ -97,12 +106,35 @@ class EventChangeHistoryTest {
         }
 
         @Test
-        @DisplayName("블록 이름은 대상 칸이 아니다 — 대상은 제목 · 소개 · 포스터 · 회차 출연 넷뿐이다 (docs/03, docs/99 B)")
+        @DisplayName("블록 이름은 대상 칸이 아니다 — 대상은 제목 · 소개 · 포스터 · 상세 안내 · 지도 링크 · 공개용 연락처 · 회차 출연 일곱뿐이다 "
+                + "(docs/03, docs/99 B · D)")
         void blockNameIsNotTarget() {
             assertThat(Arrays.asList(EventChangeHistoryTarget.values())).containsExactly(EventChangeHistoryTarget.TITLE,
-                    EventChangeHistoryTarget.INTRODUCTION, EventChangeHistoryTarget.POSTER, EventChangeHistoryTarget.SESSION_PERFORMERS);
+                    EventChangeHistoryTarget.INTRODUCTION, EventChangeHistoryTarget.POSTER, EventChangeHistoryTarget.VENUE_DETAILS,
+                    EventChangeHistoryTarget.MAP_LINK, EventChangeHistoryTarget.PUBLIC_CONTACT, EventChangeHistoryTarget.SESSION_PERFORMERS);
             assertThat(Arrays.stream(EventChangeHistoryTarget.values()).filter(EventChangeHistoryTarget::isPerSession))
                     .containsExactly(EventChangeHistoryTarget.SESSION_PERFORMERS);
+        }
+
+        @Test
+        @DisplayName("비울 수 있는 칸은 선택 칸인 상세 안내 · 지도 링크 · 공개용 연락처 · 회차 출연이고, 글로 보일 때 가리는 칸은 공개용 연락처뿐이다")
+        void optionalAndMaskedTargets() {
+            assertThat(Arrays.stream(EventChangeHistoryTarget.values()).filter(EventChangeHistoryTarget::allowsEmptyContent))
+                    .containsExactly(EventChangeHistoryTarget.VENUE_DETAILS, EventChangeHistoryTarget.MAP_LINK,
+                            EventChangeHistoryTarget.PUBLIC_CONTACT, EventChangeHistoryTarget.SESSION_PERFORMERS);
+            assertThat(Arrays.stream(EventChangeHistoryTarget.values()).filter(EventChangeHistoryTarget::masksContent))
+                    .containsExactly(EventChangeHistoryTarget.PUBLIC_CONTACT);
+        }
+
+        @Test
+        @DisplayName("작성 중에 상세 안내 · 지도 링크 · 공개용 연락처를 고쳐도 쌓지 않는다")
+        void draftGuideChangesAreNotRecorded() {
+            Event draft = springPlayIn(EventStatus.DRAFT);
+            EventBasicInformation before = draft.basicInformation();
+
+            draft.saveBasicInformationStep(guided(before, "지하 2층", "https://map.example/place/99", "010-1234-5678"), LAST_MODIFIED_AT);
+
+            assertThat(EventChangeHistory.basicInformationVersions(draft, before)).isEmpty();
         }
     }
 
@@ -111,8 +143,9 @@ class EventChangeHistoryTest {
     class FirstVersions {
 
         @Test
-        @DisplayName("제목 · 소개 · 포스터와 출연이 적힌 회차(3/14 김배우)의 출연이 바꾸기 전 없이 쌓인다 — 출연을 비운 3/15는 쌓지 않는다")
-        void titleIntroductionPosterAndWrittenPerformers() {
+        @DisplayName("제목 · 소개 · 포스터 · 상세 안내 · 지도 링크 · 공개용 연락처와 출연이 적힌 회차(3/14 김배우)의 출연이 바꾸기 전 없이 쌓인다 — "
+                + "출연을 비운 3/15는 쌓지 않는다")
+        void titleIntroductionPosterGuideAndWrittenPerformers() {
             Event published = springPlayIn(EventStatus.AWAITING_OPEN);
 
             assertThat(EventChangeHistory.firstVersions(published, doubleCastSchedule())).containsExactly(
@@ -120,13 +153,37 @@ class EventChangeHistoryTest {
                     new EventChangeHistoryVersion(EventChangeHistoryTarget.INTRODUCTION, null, null,
                             twelveMonthsSpringPlay().introduction()),
                     new EventChangeHistoryVersion(EventChangeHistoryTarget.POSTER, null, null, POSTER.fileKey()),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.VENUE_DETAILS, null, null, "지하 1층, 주차 불가"),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.MAP_LINK, null, null, "https://map.example/place/12"),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.PUBLIC_CONTACT, null, null, "twelve-months@example.com"),
                     new EventChangeHistoryVersion(EventChangeHistoryTarget.SESSION_PERFORMERS, 101L, null, "주연: 김배우"));
         }
 
         @Test
         @DisplayName("오픈 시각이 지나 곧바로 판매 중이 됐어도 같다")
         void alsoWhenOpenedRightAway() {
-            assertThat(EventChangeHistory.firstVersions(springPlayIn(EventStatus.ON_SALE), doubleCastSchedule())).hasSize(4);
+            assertThat(EventChangeHistory.firstVersions(springPlayIn(EventStatus.ON_SALE), doubleCastSchedule())).hasSize(7);
+        }
+
+        @Test
+        @DisplayName("비어 있는 상세 안내 · 지도 링크 · 공개용 연락처는 첫 버전을 쌓지 않는다 — 지도 링크만 적었으면 지도 링크만 (확인 필요 #223)")
+        void emptyGuideHasNoFirstVersion() {
+            Event published = springPlayIn(EventStatus.AWAITING_OPEN);
+            EventBasicInformation information = published.basicInformation();
+            published.saveBasicInformationStep(guided(information, null, null, null), LAST_MODIFIED_AT);
+
+            assertThat(EventChangeHistory.firstVersions(published, doubleCastSchedule())).extracting(EventChangeHistoryVersion::target)
+                    .containsExactly(EventChangeHistoryTarget.TITLE, EventChangeHistoryTarget.INTRODUCTION, EventChangeHistoryTarget.POSTER,
+                            EventChangeHistoryTarget.SESSION_PERFORMERS);
+
+            published.saveBasicInformationStep(guided(information, null, "https://map.example/place/12", null), LAST_MODIFIED_AT);
+
+            List<EventChangeHistoryVersion> mapLinkOnly = EventChangeHistory.firstVersions(published, doubleCastSchedule());
+            assertThat(mapLinkOnly).extracting(EventChangeHistoryVersion::target)
+                    .containsExactly(EventChangeHistoryTarget.TITLE, EventChangeHistoryTarget.INTRODUCTION, EventChangeHistoryTarget.POSTER,
+                            EventChangeHistoryTarget.MAP_LINK, EventChangeHistoryTarget.SESSION_PERFORMERS);
+            assertThat(mapLinkOnly).contains(new EventChangeHistoryVersion(EventChangeHistoryTarget.MAP_LINK, null, null,
+                    "https://map.example/place/12"));
         }
 
         @Test
@@ -182,15 +239,88 @@ class EventChangeHistoryTest {
         }
 
         @Test
-        @DisplayName("상세 안내 · 연락처처럼 대상이 아닌 칸만 바꾸면 쌓지 않는다")
+        @DisplayName("장소 · 카테고리처럼 대상이 아닌 칸만 바꾸면 쌓지 않는다")
         void nonTargetFields() {
             Event published = springPlayIn(EventStatus.AWAITING_OPEN);
             EventBasicInformation before = published.basicInformation();
 
-            published.saveBasicInformationStep(new EventBasicInformation(before.title(), before.type(), before.category(),
-                    before.introduction(), before.venue(), "지하 1층, 주차 가능", before.mapLink(), null), LAST_MODIFIED_AT);
+            published.saveBasicInformationStep(new EventBasicInformation(before.title(), before.type(),
+                    EventCategoryCatalog.initial().select(EventType.PERFORMANCE, "뮤지컬", null), before.introduction(),
+                    new Venue("△△소극장", "서울특별시 강남구 테헤란로 7"), before.venueDetails(), before.mapLink(), before.publicContact()),
+                    LAST_MODIFIED_AT);
 
             assertThat(EventChangeHistory.basicInformationVersions(published, before)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("판매 중에 상세 안내에 \"주차 불가\" 한 줄을 넣으면 바꾸기 전 · 뒤가 담긴 상세 안내 버전 하나 (docs/04 \"막으면 정훈이 '주차 불가' 한 줄을 "
+                + "못 넣습니다\")")
+        void venueDetailsChange() {
+            Event published = springPlayIn(EventStatus.ON_SALE);
+            published.saveBasicInformationStep(guided(published.basicInformation(), "지하 1층", "https://map.example/place/12",
+                    "twelve-months@example.com"), LAST_MODIFIED_AT);
+            EventBasicInformation before = published.basicInformation();
+
+            published.saveBasicInformationStep(guided(before, "지하 1층, 주차 불가", "https://map.example/place/12",
+                    "twelve-months@example.com"), LAST_MODIFIED_AT);
+
+            assertThat(EventChangeHistory.basicInformationVersions(published, before)).containsExactly(
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.VENUE_DETAILS, null, "지하 1층", "지하 1층, 주차 불가"));
+        }
+
+        @Test
+        @DisplayName("지도 링크 · 공개용 연락처를 바꾸면 칸마다 하나씩 — 바꾸기 전 · 뒤 주소와 연락처가 담긴다")
+        void mapLinkAndPublicContactChange() {
+            Event published = springPlayIn(EventStatus.ON_SALE);
+            EventBasicInformation before = published.basicInformation();
+
+            published.saveBasicInformationStep(guided(before, "지하 1층, 주차 불가", "https://map.example/place/34", "010-1234-5678"),
+                    LAST_MODIFIED_AT);
+
+            assertThat(EventChangeHistory.basicInformationVersions(published, before)).containsExactly(
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.MAP_LINK, null, "https://map.example/place/12",
+                            "https://map.example/place/34"),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.PUBLIC_CONTACT, null, "twelve-months@example.com",
+                            "010-1234-5678"));
+        }
+
+        @Test
+        @DisplayName("세 칸을 비우면 바꾼 뒤가 빈 버전, 비어 있던 세 칸을 채우면 바꾸기 전이 빈 버전이다 — 제목 · 소개와 함께 바꾸면 칸 차례대로")
+        void clearAndFillGuide() {
+            Event published = springPlayIn(EventStatus.ON_SALE);
+            EventBasicInformation filled = published.basicInformation();
+
+            published.saveBasicInformationStep(guided(filled, null, null, null), LAST_MODIFIED_AT);
+            assertThat(EventChangeHistory.basicInformationVersions(published, filled)).containsExactly(
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.VENUE_DETAILS, null, "지하 1층, 주차 불가", null),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.MAP_LINK, null, "https://map.example/place/12", null),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.PUBLIC_CONTACT, null, "twelve-months@example.com", null));
+
+            EventBasicInformation cleared = published.basicInformation();
+            published.saveBasicInformationStep(introduced(titled(filled, "○○밴드 앵콜공연"), "주연: 이배우"), LAST_MODIFIED_AT);
+            assertThat(EventChangeHistory.basicInformationVersions(published, cleared)).containsExactly(
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.TITLE, null, "2026 봄 정기공연 〈열두 번째 달〉", "○○밴드 앵콜공연"),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.INTRODUCTION, null, twelveMonthsSpringPlay().introduction(),
+                            "주연: 이배우"),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.VENUE_DETAILS, null, null, "지하 1층, 주차 불가"),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.MAP_LINK, null, null, "https://map.example/place/12"),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.PUBLIC_CONTACT, null, null, "twelve-months@example.com"));
+        }
+
+        @Test
+        @DisplayName("앞뒤 공백만 다르거나 비어 있던 상세 안내를 공백으로 다시 보내면 같은 값이라 쌓지 않는다")
+        void sameGuideAddsNothing() {
+            Event published = springPlayIn(EventStatus.ON_SALE);
+            EventBasicInformation before = published.basicInformation();
+
+            published.saveBasicInformationStep(guided(before, "  지하 1층, 주차 불가 ", " https://map.example/place/12",
+                    "twelve-months@example.com  "), LAST_MODIFIED_AT);
+            assertThat(EventChangeHistory.basicInformationVersions(published, before)).isEmpty();
+
+            published.saveBasicInformationStep(guided(before, null, null, null), LAST_MODIFIED_AT);
+            EventBasicInformation cleared = published.basicInformation();
+            published.saveBasicInformationStep(guided(before, "   ", null, null), LAST_MODIFIED_AT);
+            assertThat(EventChangeHistory.basicInformationVersions(published, cleared)).isEmpty();
         }
 
         @Test
@@ -249,6 +379,16 @@ class EventChangeHistoryTest {
             assertThat(EventChangeHistory.notifiesOwner(
                     new EventChangeHistoryVersion(EventChangeHistoryTarget.TITLE, null, null, "○○밴드 단독공연"), StaffRole.OPERATOR))
                     .isFalse();
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = EventChangeHistoryTarget.class, names = {"VENUE_DETAILS", "MAP_LINK", "PUBLIC_CONTACT"})
+        @DisplayName("운영자가 상세 안내 · 지도 링크 · 공개용 연락처를 바꾸거나 비워도 알리지 않는다 — 알림은 제목뿐이다")
+        void guideChangesDoNotNotify(EventChangeHistoryTarget target) {
+            assertThat(EventChangeHistory.notifiesOwner(new EventChangeHistoryVersion(target, null, "https://map.example/place/12",
+                    "https://map.example/place/34"), StaffRole.OPERATOR)).isFalse();
+            assertThat(EventChangeHistory.notifiesOwner(new EventChangeHistoryVersion(target, null, "https://map.example/place/12", null),
+                    StaffRole.OPERATOR)).isFalse();
         }
     }
 
@@ -358,6 +498,32 @@ class EventChangeHistoryTest {
                     () -> new EventChangeHistoryVersion(EventChangeHistoryTarget.TITLE, null, "○○밴드 단독공연", "○○밴드 단독공연"));
             assertThatIllegalArgumentException().isThrownBy(
                     () -> new EventChangeHistoryVersion(EventChangeHistoryTarget.SESSION_PERFORMERS, 101L, null, null));
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = EventChangeHistoryTarget.class, names = {"VENUE_DETAILS", "MAP_LINK", "PUBLIC_CONTACT"})
+        @DisplayName("상세 안내 · 지도 링크 · 공개용 연락처는 비울 수 있고 행사에 하나인 칸이라 회차가 없다 — 비어 있던 칸을 그대로 두면 버전이 아니다")
+        void guideContentRules(EventChangeHistoryTarget target) {
+            assertThat(new EventChangeHistoryVersion(target, null, "지하 1층", null).newContent()).isNull();
+            assertThat(new EventChangeHistoryVersion(target, null, null, "지하 1층").previousContent()).isNull();
+            assertThatIllegalArgumentException().isThrownBy(() -> new EventChangeHistoryVersion(target, 101L, null, "지하 1층"));
+            assertThatIllegalArgumentException().isThrownBy(() -> new EventChangeHistoryVersion(target, null, null, null));
+        }
+
+        @Test
+        @DisplayName("공개용 연락처 버전은 글로 보일 때 연락처를 가린다 — 다른 칸은 내용을 그대로 싣고, 같은지는 값으로 본다")
+        void publicContactIsMaskedInText() {
+            EventChangeHistoryVersion contactChange = new EventChangeHistoryVersion(EventChangeHistoryTarget.PUBLIC_CONTACT, null,
+                    "twelve-months@example.com", "010-1234-5678");
+
+            assertThat(contactChange.toString()).doesNotContain("twelve-months@example.com").doesNotContain("010-1234-5678")
+                    .contains("PUBLIC_CONTACT", "****");
+            assertThat(new EventChangeHistoryVersion(EventChangeHistoryTarget.PUBLIC_CONTACT, null, null, "010-1234-5678").toString())
+                    .contains("previousContent=null", "newContent=****");
+            assertThat(contactChange).isEqualTo(new EventChangeHistoryVersion(EventChangeHistoryTarget.PUBLIC_CONTACT, null,
+                    "twelve-months@example.com", "010-1234-5678"));
+            assertThat(new EventChangeHistoryVersion(EventChangeHistoryTarget.VENUE_DETAILS, null, "지하 1층", "지하 1층, 주차 불가")
+                    .toString()).contains("지하 1층, 주차 불가");
         }
     }
 }

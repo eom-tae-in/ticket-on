@@ -11,17 +11,20 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * 제목 · 소개 · 포스터 · 회차 출연의 변경 이력 규칙 — 무엇을 언제 쌓고, 언제 지우는가(docs/03 "제목 · 소개 · 포스터는 변경 이력을 남깁니다",
- * "보관은 행사가 끝난 날부터 6개월", docs/02 "출연 (선택)").
+ * 제목 · 소개 · 포스터 · 상세 안내 · 지도 링크 · 공개용 연락처 · 회차 출연의 변경 이력 규칙 — 무엇을 언제 쌓고, 언제 지우는가(docs/03 "제목 · 소개 ·
+ * 포스터는 변경 이력을 남깁니다", "상세 안내 · 지도 링크 · 공개용 연락처도 이력을 남깁니다", "보관은 행사가 끝난 날부터 6개월", docs/02 "출연
+ * (선택)", docs/99 D "변경 이력 대상").
  * <p>
  * 예매가 열린 뒤에도 이 칸들은 자유롭게 바꾸지만 <b>덮어쓰면 안 된다</b>. 주요 출연자 교체는 환불 사유인데(소비자분쟁해결기준) 지금 버전만 남아
  * 있으면 관객이 무엇을 보고 샀는지 확인할 방법이 없다. 주최자가 [출연자 변경 알림]을 보내지 않아 관객이 신고하면 관리자가 이 이력으로 확인한다.
- * 그래서 버전마다 유효 기간과 함께 쌓아({@link EventChangeHistoryVersion}) 예매 시각과 대조한다.
+ * 그래서 버전마다 유효 기간과 함께 쌓아({@link EventChangeHistoryVersion}) 예매 시각과 대조한다. 상세 안내 · 지도 링크 · 공개용 연락처는 예매가
+ * 열린 뒤에도 자유롭게 고치게 했으므로(docs/04 "예매가 열린 뒤(판매 중) 수정 범위") 같은 행사 페이지의 표시로 함께 보관한다. 이 칸들을 고칠 때
+ * '예매자에게 알릴까요?' 창은 띄우지 않는다.
  * <table>
  *   <caption>언제 무엇을 쌓나</caption>
  *   <tr><th>때</th><th>쌓는 것</th><th></th></tr>
- *   <tr><td>판매를 시작해 판매 대기로 넘어간 순간(공개된 순간)</td><td>그때의 제목 · 소개 · 포스터와 출연이 적힌 회차의 출연 — 첫 버전</td>
- *       <td>{@link #firstVersions}</td></tr>
+ *   <tr><td>판매를 시작해 판매 대기로 넘어간 순간(공개된 순간)</td><td>그때의 제목 · 소개 · 포스터, 적혀 있는 상세 안내 · 지도 링크 · 공개용
+ *       연락처, 출연이 적힌 회차의 출연 — 첫 버전</td><td>{@link #firstVersions}</td></tr>
  *   <tr><td>그 뒤 바꿀 때마다</td><td>바뀐 칸마다 새 버전</td><td>{@link #basicInformationVersions}, {@link #posterVersion},
  *       {@link #performersVersion}</td></tr>
  *   <tr><td>작성 중에 바꿀 때</td><td>쌓지 않는다</td><td>{@link #isRecorded}</td></tr>
@@ -50,14 +53,18 @@ public final class EventChangeHistory {
     }
 
     /**
-     * 판매를 시작해 판매 대기로 넘어간 순간(공개된 순간)의 첫 버전들 — 제목 · 소개 · 포스터, 그리고 출연이 적힌 회차마다 그 출연. 판매를 시작하는
-     * 흐름이 행사를 판매 대기로 바꾼 뒤(곧바로 판매 중이 됐어도) 부른다.
+     * 판매를 시작해 판매 대기로 넘어간 순간(공개된 순간)의 첫 버전들 — 제목 · 소개 · 포스터, 적혀 있는 상세 안내 · 지도 링크 · 공개용 연락처,
+     * 그리고 출연이 적힌 회차마다 그 출연. 판매를 시작하는 흐름이 행사를 판매 대기로 바꾼 뒤(곧바로 판매 중이 됐어도) 부른다.
      * <p>
      * 출연이 비어 있는 회차는 첫 버전을 쌓지 않는다 — 비어 있는 출연은 보인 것이 없다. 그 회차에 나중에 출연을 적으면 바꾸기 전이 빈 새 버전이
      * 쌓여, 그 전에는 출연이 보이지 않았다는 것이 드러난다. 판매를 시작한 뒤 더한 회차도 같다.
+     * <p>
+     * 확인 필요 (#223) — 상세 안내 · 지도 링크 · 공개용 연락처도 출연과 같이, 판매를 시작한 순간 비어 있는 칸은 첫 버전을 쌓지 않는다. 문서는 이
+     * 칸들도 이력을 남긴다고만 하고 비어 있을 때의 첫 버전을 적지 않았다. 나중에 적으면 바꾸기 전이 빈 새 버전이 쌓여 그 전에는 보이지 않았다는
+     * 것이 드러나므로, 빈 첫 버전 없이도 관객이 본 것을 대조할 수 있다.
      *
      * @param schedule 이 행사의 일정
-     * @return 대상 칸 차례(제목 · 소개 · 포스터 · 회차 출연), 회차 출연은 일정의 회차 차례
+     * @return 대상 칸 차례(제목 · 소개 · 포스터 · 상세 안내 · 지도 링크 · 공개용 연락처 · 회차 출연), 회차 출연은 일정의 회차 차례
      * @throws IllegalStateException    판매를 시작하지 않았거나 포스터가 없으면(판매 시작 직전 검증이 막는다), 저장 전 행사 · 회차면
      * @throws IllegalArgumentException 다른 행사의 일정이면
      */
@@ -77,6 +84,9 @@ public final class EventChangeHistory {
         versions.add(EventChangeHistoryVersion.first(EventChangeHistoryTarget.TITLE, basicInformation.title().value()));
         versions.add(EventChangeHistoryVersion.first(EventChangeHistoryTarget.INTRODUCTION, basicInformation.introduction()));
         versions.add(EventChangeHistoryVersion.first(EventChangeHistoryTarget.POSTER, poster.fileKey()));
+        addFirstIfWritten(versions, EventChangeHistoryTarget.VENUE_DETAILS, basicInformation.venueDetails());
+        addFirstIfWritten(versions, EventChangeHistoryTarget.MAP_LINK, mapLinkOf(basicInformation));
+        addFirstIfWritten(versions, EventChangeHistoryTarget.PUBLIC_CONTACT, publicContactOf(basicInformation));
         for (EventSession session : schedule.sessions()) {
             long sessionId = session.id().orElseThrow(() -> new IllegalStateException("저장 전 회차입니다: 행사 " + eventId));
             session.performers().ifPresent(performers ->
@@ -86,11 +96,14 @@ public final class EventChangeHistory {
     }
 
     /**
-     * 기본 정보를 바꾼 뒤 쌓을 새 버전 — 제목 · 소개 중 바뀐 것마다. 장소 · 유형 · 카테고리 · 상세 안내 등은 대상이 아니다. 작성 중이면 없다.
+     * 기본 정보를 바꾼 뒤 쌓을 새 버전 — 제목 · 소개 · 상세 안내 · 지도 링크 · 공개용 연락처 중 바뀐 것마다. 장소 · 유형 · 카테고리는 대상이
+     * 아니다. 작성 중이면 없다.
+     * <p>
+     * 상세 안내 · 지도 링크 · 공개용 연락처는 선택 칸이라 비어 있던 칸을 채우면 바꾸기 전이, 비우면 바꾼 뒤가 빈(null) 버전이다.
      *
      * @param event  기본 정보를 바꾼 뒤의 행사
      * @param before 바꾸기 전 기본 정보
-     * @return 제목 · 소개 차례
+     * @return 제목 · 소개 · 상세 안내 · 지도 링크 · 공개용 연락처 차례
      */
     public static List<EventChangeHistoryVersion> basicInformationVersions(Event event, EventBasicInformation before) {
         Objects.requireNonNull(before, "before");
@@ -99,14 +112,11 @@ public final class EventChangeHistory {
         }
         EventBasicInformation after = event.basicInformation();
         List<EventChangeHistoryVersion> versions = new ArrayList<>();
-        if (!before.title().equals(after.title())) {
-            versions.add(new EventChangeHistoryVersion(EventChangeHistoryTarget.TITLE, null, before.title().value(),
-                    after.title().value()));
-        }
-        if (!before.introduction().equals(after.introduction())) {
-            versions.add(new EventChangeHistoryVersion(EventChangeHistoryTarget.INTRODUCTION, null, before.introduction(),
-                    after.introduction()));
-        }
+        addIfChanged(versions, EventChangeHistoryTarget.TITLE, before.title().value(), after.title().value());
+        addIfChanged(versions, EventChangeHistoryTarget.INTRODUCTION, before.introduction(), after.introduction());
+        addIfChanged(versions, EventChangeHistoryTarget.VENUE_DETAILS, before.venueDetails(), after.venueDetails());
+        addIfChanged(versions, EventChangeHistoryTarget.MAP_LINK, mapLinkOf(before), mapLinkOf(after));
+        addIfChanged(versions, EventChangeHistoryTarget.PUBLIC_CONTACT, publicContactOf(before), publicContactOf(after));
         return List.copyOf(versions);
     }
 
@@ -216,6 +226,31 @@ public final class EventChangeHistory {
                 .map(version -> new EventPoster(version.previousContent()))
                 .distinct()
                 .toList();
+    }
+
+    /** 행사에 하나인 선택 칸의 첫 버전 — 적혀 있을 때만. */
+    private static void addFirstIfWritten(List<EventChangeHistoryVersion> versions, EventChangeHistoryTarget target, String content) {
+        if (content != null) {
+            versions.add(EventChangeHistoryVersion.first(target, content));
+        }
+    }
+
+    /** 행사에 하나인 칸의 새 버전 — 바꾸기 전과 바꾼 뒤가 다를 때만. 비어 있으면 null로 견준다. */
+    private static void addIfChanged(List<EventChangeHistoryVersion> versions, EventChangeHistoryTarget target, String before,
+            String after) {
+        if (!Objects.equals(before, after)) {
+            versions.add(new EventChangeHistoryVersion(target, null, before, after));
+        }
+    }
+
+    /** 지도 링크의 이력 내용 — 주소. 없으면 null. */
+    private static String mapLinkOf(EventBasicInformation basicInformation) {
+        return basicInformation.mapLink() == null ? null : basicInformation.mapLink().value();
+    }
+
+    /** 공개용 연락처의 이력 내용 — 적은 그대로. 없으면 null. */
+    private static String publicContactOf(EventBasicInformation basicInformation) {
+        return basicInformation.publicContact() == null ? null : basicInformation.publicContact().value();
     }
 
     private static long savedIdOf(Event event) {

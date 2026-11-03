@@ -54,8 +54,8 @@ import java.util.Set;
  * 열린 적이 없어 판매 대기와 같다. 이 판정은 저장된 상태로 하므로, 시간이 움직이는 상태의 행사는 먼저 {@link #advanceByTime}으로 지금 시각을
  * 반영한다. 위저드 단계 저장({@link #saveBasicInformationStep}, {@link #saveBookingStep}, 구역 · 입구 저장)은 바뀐 항목마다, 포스터
  * 바꾸기({@link #changePoster})는 포스터에 이 판정을 건다. 낱낱의 수정 메서드(기본 정보 · 공개 수준 · 예매 설정 · 취소 규정)에 이 판정을 거는 일은
- * 수정 유스케이스가 한다(#65). 제목 · 소개 · 포스터 · 회차 출연의 변경 이력은 수정 유스케이스가 바꾸기 전 값과 바꾼 행사로
- * {@link EventChangeHistory}에 물어 쌓는다.
+ * 수정 유스케이스가 한다(#65). 제목 · 소개 · 포스터 · 상세 안내 · 지도 링크 · 공개용 연락처 · 회차 출연의 변경 이력은 수정 유스케이스가 바꾸기
+ * 전 값과 바꾼 행사로 {@link EventChangeHistory}에 물어 쌓는다.
  * <p>
  * <b>삭제</b>는 상태가 아니라 팔린 표나 초대권이 있었는지로 정한다({@link #requireDeletable}). 누가 지울 수 있는지는 판매를 시작했는지로 갈린다
  * ({@link #deleteAction}).

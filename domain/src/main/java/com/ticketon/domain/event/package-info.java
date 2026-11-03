@@ -25,7 +25,7 @@
  * 이긴다. "매진"은 상태가 아니라 잔여가 0인 순간의 표시다. 판매 중단은 주최자 중단과 관리자 조치를 나눠 이력
  * ({@link com.ticketon.domain.event.SalesPause})으로 남기고, 관리자 조치가 걸린 동안 주최자는 재개할 수 없다.
  * <p>
- * 제목 · 소개 · 포스터 · 회차 출연은 판매를 시작한 뒤 덮어쓰지 않고 버전마다 유효 기간과 함께 쌓아, 관객이 무엇을 보고 샀는지를 예매 시각과
- * 대조한다({@link com.ticketon.domain.event.EventChangeHistory}). 블록 이름은 대상이 아니고, 이력은 행사가 끝난 날부터 6개월 보관한다.
+ * 제목 · 소개 · 포스터 · 상세 안내 · 지도 링크 · 공개용 연락처 · 회차 출연은 판매를 시작한 뒤 덮어쓰지 않고 버전마다 유효 기간과 함께 쌓아,
+ * 관객이 무엇을 보고 샀는지를 예매 시각과 대조한다({@link com.ticketon.domain.event.EventChangeHistory}). 블록 이름은 대상이 아니고, 이력은 행사가 끝난 날부터 6개월 보관한다.
  */
 package com.ticketon.domain.event;

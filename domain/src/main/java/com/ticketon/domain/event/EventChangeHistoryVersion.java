@@ -10,15 +10,17 @@ import java.util.Objects;
  * 유효하다 — "3/1~3/10 유효"처럼 예매 시각과 대조하면 관객이 어느 버전을 보고 샀는지 안다. 유효 기간 · 바꾼 사람 · 통지 발송 여부는 쌓는 쪽이
  * 함께 남긴다.
  * <ul>
- *   <li><b>첫 버전</b> — 판매를 시작해 공개된 순간의 내용이다. 바꾸기 전이 없다. 출연이 적힌 회차만 쌓는다
- *       ({@link EventChangeHistory#firstVersions}).</li>
+ *   <li><b>첫 버전</b> — 판매를 시작해 공개된 순간의 내용이다. 바꾸기 전이 없다. 선택 칸(상세 안내 · 지도 링크 · 공개용 연락처 · 회차 출연)은
+ *       적혀 있는 것만 쌓는다({@link EventChangeHistory#firstVersions}).</li>
  *   <li><b>바뀐 버전</b> — 바꾸기 전과 바꾼 뒤가 다르다. 같으면 바뀐 것이 아니라 쌓지 않는다.</li>
  * </ul>
+ * 공개용 연락처의 버전은 {@link #toString}에 내용을 싣지 않는다({@link EventChangeHistoryTarget#masksContent}). 같은지는 값으로 본다.
  *
  * @param target          대상 칸
  * @param sessionId       회차 출연이면 그 회차의 id. 행사에 하나인 칸이면 null
- * @param previousContent 바꾸기 전 내용. 첫 버전이거나, 비어 있던 회차 출연을 채웠으면 null
- * @param newContent      바꾼 뒤 내용 — 제목 · 소개는 글 그대로, 포스터는 파일 열쇠, 출연은 한 줄 그대로. 회차 출연을 비웠으면 null
+ * @param previousContent 바꾸기 전 내용. 첫 버전이거나, 비어 있던 선택 칸(상세 안내 · 지도 링크 · 공개용 연락처 · 회차 출연)을 채웠으면 null
+ * @param newContent      바꾼 뒤 내용 — 제목 · 소개 · 상세 안내는 글 그대로, 포스터는 파일 열쇠, 지도 링크는 주소, 공개용 연락처는 적은 그대로,
+ *                        출연은 한 줄 그대로. 선택 칸을 비웠으면 null
  */
 public record EventChangeHistoryVersion(EventChangeHistoryTarget target, Long sessionId, String previousContent,
         String newContent) {
@@ -43,7 +45,7 @@ public record EventChangeHistoryVersion(EventChangeHistoryTarget target, Long se
         }
     }
 
-    /** 첫 버전 — 행사에 하나인 칸이 판매를 시작해 공개된 순간의 내용. */
+    /** 첫 버전 — 행사에 하나인 칸이 판매를 시작해 공개된 순간의 내용. 비어 있는 선택 칸은 첫 버전이 없다(내용이 없으면 막는다). */
     static EventChangeHistoryVersion first(EventChangeHistoryTarget target, String content) {
         return new EventChangeHistoryVersion(target, null, null, content);
     }
@@ -51,5 +53,15 @@ public record EventChangeHistoryVersion(EventChangeHistoryTarget target, Long se
     /** 첫 버전 — 판매를 시작해 공개된 순간 그 회차에 적혀 있던 출연. */
     static EventChangeHistoryVersion firstOfSession(long sessionId, String performers) {
         return new EventChangeHistoryVersion(EventChangeHistoryTarget.SESSION_PERFORMERS, sessionId, null, performers);
+    }
+
+    @Override
+    public String toString() {
+        return "EventChangeHistoryVersion[target=" + target + ", sessionId=" + sessionId + ", previousContent="
+                + shown(previousContent) + ", newContent=" + shown(newContent) + "]";
+    }
+
+    private String shown(String content) {
+        return content != null && target.masksContent() ? "****" : content;
     }
 }

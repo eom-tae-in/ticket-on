@@ -98,12 +98,12 @@ class PurgeExpiredEventChangeHistoryServiceTest {
     @DisplayName("11/14에 끝난 봄 정기공연은 5/14 23:59에는 남기고, 6개월 + 1일인 5/15에 이력을 모두 지운다 — 12/20에 끝나는 가을 낭독회는 남긴다")
     void purgesSixMonthsAndADayAfterEventEnd() {
         assertThat(purgeAt(LAST_DAY_KEPT).purgedEventIds()).isEmpty();
-        assertThat(scene.historyRepository.versionsOf(springPlay)).hasSize(4);
+        assertThat(scene.historyRepository.versionsOf(springPlay)).hasSize(7);
 
         assertThat(purgeAt(SIX_MONTHS_AND_A_DAY).purgedEventIds()).containsExactly(springPlay);
 
         assertThat(scene.historyRepository.versionsOf(springPlay)).isEmpty();
-        assertThat(scene.historyRepository.versionsOf(autumnReading)).hasSize(3);
+        assertThat(scene.historyRepository.versionsOf(autumnReading)).hasSize(6);
     }
 
     @Test
@@ -123,7 +123,7 @@ class PurgeExpiredEventChangeHistoryServiceTest {
         purgeAt(SIX_MONTHS_AND_A_DAY);
 
         assertThat(purgeAt(SIX_MONTHS_AND_A_DAY.plusSeconds(60)).purgedEventIds()).isEmpty();
-        assertThat(scene.historyRepository.versionsOf(autumnReading)).hasSize(3);
+        assertThat(scene.historyRepository.versionsOf(autumnReading)).hasSize(6);
     }
 
     @Test
@@ -147,7 +147,7 @@ class PurgeExpiredEventChangeHistoryServiceTest {
                 .withMessageContaining("행사 [" + springPlay + "]")
                 .withMessageContaining("지운 행사 [" + autumnReading + "]");
 
-        assertThat(scene.historyRepository.versionsOf(springPlay)).hasSize(4);
+        assertThat(scene.historyRepository.versionsOf(springPlay)).hasSize(7);
         assertThat(scene.historyRepository.versionsOf(autumnReading)).isEmpty();
     }
 }
