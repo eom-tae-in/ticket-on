@@ -2,7 +2,6 @@ package com.ticketon.domain.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ticketon.domain.policy.ProposedPolicy;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -36,21 +35,18 @@ class NotificationSettingsTest {
 
         @ParameterizedTest(name = "{0}")
         @EnumSource(NotificationPreference.class)
-        @DisplayName("제안 (#13): 거래 알림이라 처음에는 모두 받는다")
+        @DisplayName("거래 알림 세 줄은 처음에 모두 받는다 (docs/12, Figma U8)")
         void receivedByDefault(NotificationPreference preference) {
             assertThat(preference.receivesByDefault()).isTrue();
             assertThat(NotificationSettings.defaultsFor(SEOYUN).receives(preference)).isTrue();
         }
 
         @Test
-        @DisplayName("기본값은 정책 숫자 모음의 '확인 필요' 구역 값을 따른다")
-        void defaultsComeFromProposedPolicy() {
-            assertThat(NotificationPreference.BOOKING_CONFIRMATION.receivesByDefault())
-                    .isEqualTo(ProposedPolicy.BOOKING_CONFIRMATION_NOTICE_RECEIVED_BY_DEFAULT);
-            assertThat(NotificationPreference.DAY_BEFORE_REMINDER.receivesByDefault())
-                    .isEqualTo(ProposedPolicy.DAY_BEFORE_REMINDER_RECEIVED_BY_DEFAULT);
-            assertThat(NotificationPreference.BOOKING_OPEN.receivesByDefault())
-                    .isEqualTo(ProposedPolicy.BOOKING_OPEN_NOTICE_RECEIVED_BY_DEFAULT);
+        @DisplayName("예매·취소 확인, 공연 전날 안내, 예매 오픈 알림이 각각 기본으로 받는다 — 리마인더도 꺼져 있지 않다 (docs/99 D)")
+        void eachOfThreeReceivedByDefault() {
+            assertThat(NotificationPreference.BOOKING_CONFIRMATION.receivesByDefault()).isTrue();
+            assertThat(NotificationPreference.DAY_BEFORE_REMINDER.receivesByDefault()).isTrue();
+            assertThat(NotificationPreference.BOOKING_OPEN.receivesByDefault()).isTrue();
         }
 
         @Test
@@ -81,7 +77,7 @@ class NotificationSettingsTest {
         }
 
         @Test
-        @DisplayName("제안 (#13): 예매·취소 확인은 예매 완료·예매 변경 완료·취소·환불 완료를 덮고 결제 실패는 덮지 않는다")
+        @DisplayName("예매·취소 확인은 예매 완료·예매 변경 완료·취소·환불 완료를 덮고 결제 실패는 덮지 않는다")
         void bookingConfirmationCoverage() {
             assertThat(NotificationPreference.BOOKING_CONFIRMATION.coveredKinds()).containsExactlyInAnyOrder(
                     NotificationKind.BOOKING_COMPLETED, NotificationKind.BOOKING_CHANGED,
@@ -90,7 +86,7 @@ class NotificationSettingsTest {
         }
 
         @Test
-        @DisplayName("제안 (#13): 리마인더는 리마인더만, 예매 오픈 알림은 오픈 알림만 덮는다 — 행사 삭제는 덮지 않는다")
+        @DisplayName("공연 전날 안내는 리마인더만, 예매 오픈 알림은 오픈 알림만 덮는다 — 행사 삭제는 덮지 않는다")
         void reminderAndBookingOpenCoverage() {
             assertThat(NotificationPreference.DAY_BEFORE_REMINDER.coveredKinds())
                     .containsExactly(NotificationKind.DAY_BEFORE_REMINDER);
@@ -104,7 +100,7 @@ class NotificationSettingsTest {
     class Receives {
 
         @Test
-        @DisplayName("제안 (#13): 바꾼 적 없는 계정은 모든 종류를 받는다")
+        @DisplayName("바꾼 적 없는 계정은 모든 종류를 받는다")
         void defaultsReceiveEverything() {
             NotificationSettings settings = NotificationSettings.defaultsFor(SEOYUN);
 
