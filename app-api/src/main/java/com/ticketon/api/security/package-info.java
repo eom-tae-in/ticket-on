@@ -67,7 +67,8 @@
  * <h2>세션 쿠키와 CSRF</h2>
  * <ul>
  *   <li>세션 쿠키는 HttpOnly, SameSite=Lax이고 운영 프로필(prod)에서 Secure다(application.yml, application-prod.yml).</li>
- *   <li>비활성 만료 시간은 정책 숫자 모음의 '확인 필요' 구역 값이다({@link com.ticketon.api.security.LoginSessionConfiguration}).</li>
+ *   <li>비활성 만료는 계정 종류마다 다르다 — 관객 30일, 주최자 쪽 · 관리자 30분, 검표 계정은 없음(docs/01 "로그인 유지와 링크 유효 시간",
+ *       {@link com.ticketon.api.security.SessionLogin}). 관객 · 검표 계정은 브라우저를 닫아도 쿠키가 남는다.</li>
  *   <li>쿠키로 로그인하므로 Spring Security 기본 CSRF 보호를 끄지 않는다. 토큰은 기본대로 세션에 둔다. 화면이 토큰을 받아 보내는
  *       방법은 화면과 서버의 연결 방식(같은 출처 프록시 / 별도 도메인)을 정할 때(#136) 함께 정한다.</li>
  *   <li>CORS는 열지 않는다(같은 출처만). 별도 도메인으로 정해지면 그때 허용 출처를 연다(#136).</li>

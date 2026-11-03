@@ -17,6 +17,7 @@ final class FakeEventRepository implements EventRepository {
     private long nextId = 1;
     private int saves;
     private boolean failingSaves;
+    private Runnable beforeNextLock;
 
     FakeEventRepository(RowLockLog rowLockLog) {
         this.rowLockLog = rowLockLog;
@@ -45,8 +46,18 @@ final class FakeEventRepository implements EventRepository {
     /** 메모리 저장소에는 다른 트랜잭션이 없어 잠글 것이 없다 — 잠금 기록에 차례만 남기고 지금 저장된 값을 돌려준다. */
     @Override
     public Optional<Event> findByIdForUpdate(long id) {
+        Runnable beforeLock = beforeNextLock;
+        beforeNextLock = null;
+        if (beforeLock != null) {
+            beforeLock.run();
+        }
         rowLockLog.record("행사 " + id + " FOR UPDATE");
         return findById(id);
+    }
+
+    /** 다음 행사 잠금을 얻기 전에 끝난 다른 편집을 재현한다 — 실제 DB 잠금 검증은 통합 테스트가 맡는다. */
+    void beforeNextLock(Runnable edit) {
+        beforeNextLock = edit;
     }
 
     @Override

@@ -135,7 +135,7 @@ class QuantityZoneStockTest {
         }
 
         @Test
-        @DisplayName("확인 필요 (#53) — 남은 자리보다 많이 확보할 수 없다")
+        @DisplayName("docs/99 E \"재고 · 초대권\" — 남은 자리보다 많이 확보할 수 없다")
         void cannotReserveMoreThanRemaining() {
             QuantityZoneStock stock = standingB(480, 5, 10, 0);
 
@@ -171,7 +171,7 @@ class QuantityZoneStockTest {
         }
 
         @Test
-        @DisplayName("확인 필요 (#53) — 예매가 마감된 뒤에는 확보분을 넘어 안 팔린 일반 자리에서도 건다 (docs/09 \"판매가 끝난 뒤에도 됩니다\")")
+        @DisplayName("docs/99 E \"재고 · 초대권\" — 예매가 마감된 뒤에는 확보분을 넘어 안 팔린 일반 자리에서도 건다 (docs/09 \"판매가 끝난 뒤에도 됩니다\")")
         void afterBookingCloseFromGeneralSeats() {
             QuantityZoneStock stock = standingB(485, 0, 10, 10);
 
@@ -183,7 +183,7 @@ class QuantityZoneStockTest {
         }
 
         @Test
-        @DisplayName("확인 필요 (#53) — 확보분을 넘은 초대권을 회수하면 일반 잔여로 돌아온다, 그 아래는 확보분으로 남는다")
+        @DisplayName("docs/99 E \"재고 · 초대권\" — 확보분을 넘은 초대권을 회수하면 일반 잔여로 돌아온다, 그 아래는 확보분으로 남는다")
         void withdrawReturnsGeneralSeatsFirst() {
             QuantityZoneStock stock = standingB(485, 0, 10, 15);
 
@@ -240,7 +240,7 @@ class QuantityZoneStockTest {
         }
 
         @Test
-        @DisplayName("확인 필요 (#53) — 예매가 열리기 전에도 관계자 확보 · 초대권보다 적게는 줄일 수 없다")
+        @DisplayName("docs/99 E \"재고 · 초대권\" — 예매가 열리기 전에도 관계자 확보 · 초대권보다 적게는 줄일 수 없다")
         void cannotGoBelowTaken() {
             QuantityZoneStock stock = standingB(0, 0, 10, 4);
 

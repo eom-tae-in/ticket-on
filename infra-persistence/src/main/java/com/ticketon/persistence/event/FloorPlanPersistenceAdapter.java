@@ -70,7 +70,7 @@ public class FloorPlanPersistenceAdapter implements FloorPlanRepository {
 
     /**
      * 여러 줄 INSERT 한 문장에 넣는 좌석 수 — PostgreSQL 한 문장의 바인드 값 수 상한(65,535)을 넘지 않게 나눈다. 좌석 한 줄에 값 일곱 개라
-     * 1,000줄이면 7,000개다. 블록 크기 상한(확인 필요 #37)이 바뀌어도 이 값은 그대로 둔다.
+     * 1,000줄이면 7,000개다. 블록 크기 상한이 바뀌어도 이 값은 그대로 둔다.
      */
     private static final int SEAT_INSERT_CHUNK = 1_000;
 

@@ -2,7 +2,7 @@ package com.ticketon.domain.organizer;
 
 import com.ticketon.common.ImageFile;
 import com.ticketon.common.ImageFormat;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
@@ -13,8 +13,8 @@ import java.util.Optional;
  * 넷을 차례로 본다({@link OrganizerLogoImageProblem}). 처음 걸린 것으로 거절한다.
  * <ol>
  *   <li>빈 파일이 아니다.</li>
- *   <li>용량이 상한({@link ProposedPolicy#ORGANIZER_LOGO_MAXIMUM_SIZE}, 확인 필요) 이하다.</li>
- *   <li>형식이 받는 형식({@link ProposedPolicy#ORGANIZER_LOGO_ACCEPTED_FORMATS}, 확인 필요)이다 — <b>올린 쪽이 적은 형식(Content-Type)과 실제
+ *   <li>용량이 상한({@link QuantityPolicy#ORGANIZER_LOGO_MAXIMUM_SIZE}) 이하다.</li>
+ *   <li>형식이 받는 형식({@link QuantityPolicy#ORGANIZER_LOGO_ACCEPTED_FORMATS})이다 — <b>올린 쪽이 적은 형식(Content-Type)과 실제
  *       바이트의 시그니처가 모두</b> 받는 형식이고 서로 같아야 한다. 확장자나 적은 형식만 믿지 않는다.</li>
  *   <li>정사각형이다 — 가로·세로 픽셀이 같다. 크롭은 화면이 하고, 서버는 잘린 결과가 정사각형인지만 본다. 크기는 JDK ImageIO로 그림 머리말만
  *       읽어 확인한다({@link ImageFile}).</li>
@@ -66,11 +66,11 @@ public final class OrganizerLogoImage {
         if (content.length == 0) {
             return Inspection.rejected(OrganizerLogoImageProblem.EMPTY);
         }
-        if (ProposedPolicy.ORGANIZER_LOGO_MAXIMUM_SIZE.isExceededBy(content.length)) {
+        if (QuantityPolicy.ORGANIZER_LOGO_MAXIMUM_SIZE.isExceededBy(content.length)) {
             return Inspection.rejected(OrganizerLogoImageProblem.TOO_LARGE);
         }
         Optional<ImageFormat> declaredFormat = ImageFormat.ofMediaType(declaredMediaType)
-                .filter(ProposedPolicy.ORGANIZER_LOGO_ACCEPTED_FORMATS::contains);
+                .filter(QuantityPolicy.ORGANIZER_LOGO_ACCEPTED_FORMATS::contains);
         Optional<ImageFile> image = ImageFile.inspect(content);
         if (declaredFormat.isEmpty() || image.isEmpty() || image.get().format() != declaredFormat.get()) {
             return Inspection.rejected(OrganizerLogoImageProblem.UNSUPPORTED_FORMAT);

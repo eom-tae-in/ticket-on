@@ -17,7 +17,7 @@ import java.lang.annotation.Target;
  * 같은 규칙({@link OperatingHours#isValid}). 어긋난 칸(closeTime 또는 lastEntryTime)의 오류로 담는다. 운영 시작 · 종료가 다 있고 시각이 모두 분
  * 단위일 때만 본다 — 비었거나 분 단위가 아니면 그 칸의 규칙이 맡는다.
  * <p>
- * 자정을 넘겨 운영하는 날(18:00 ~ 02:00)은 받지 않는다 — 문서에 없다(확인 필요 #36, #135).
+ * 자정을 넘겨 운영하는 날(18:00 ~ 02:00)은 받지 않는다 — 문서에 없다(확인 필요 #36, #223).
  */
 @Documented
 @Target(ElementType.TYPE)

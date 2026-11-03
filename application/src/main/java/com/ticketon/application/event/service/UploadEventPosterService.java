@@ -14,6 +14,8 @@ import com.ticketon.application.organizer.port.in.StaffPermissionResult;
 import com.ticketon.application.organizer.port.out.OrganizerRepository;
 import com.ticketon.common.TokenGenerator;
 import com.ticketon.domain.event.Event;
+import com.ticketon.domain.event.EventChangeHistory;
+import com.ticketon.domain.event.EventChangeHistoryVersion;
 import com.ticketon.domain.event.EventPoster;
 import com.ticketon.domain.event.EventPosterImage;
 import com.ticketon.domain.organizer.StaffAction;
@@ -30,8 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 붙여 파일을 저장하고, 행사를 저장하고, 조작 기록을 남긴다.
  * <p>
  * <b>한 트랜잭션이다.</b> 권한 확인 → 계정 줄(KEY SHARE) → 주최자 줄(KEY SHARE) → 권한 다시 확인 → 행사 줄(FOR UPDATE) → 열쇠 붙여 포스터 바꾸기
- * → 파일 저장 → 행사 저장 → 조작 기록({@link EventEditingLocks}, 위저드 단계 저장과 같은 잠금 순서). 파일 저장소는 트랜잭션에 묶이지 않아,
- * 되돌려지면 새 파일을 지우고 커밋되면 바꾸기 전 포스터의 파일을 지운다({@link PosterFileCleanup}).
+ * → 파일 저장 → 행사 저장 → 변경 이력 → 조작 기록({@link EventEditingLocks}, 위저드 단계 저장과 같은 잠금 순서). 파일 저장소는 트랜잭션에 묶이지
+ * 않아, 되돌려지면 새 파일을 지우고 커밋되면 이력에 남지 않은 바꾸기 전 포스터의 파일을 지운다({@link PosterFileCleanup}).
  * <ul>
  *   <li><b>막힌 요청은 파일을 남기지 않는다</b> — 권한을 다시 확인하고 포스터를 고칠 수 있는지(판매가 끝나면 고정)까지 본 뒤에 파일을 저장한다.</li>
  *   <li>행사 줄을 잠가 읽으므로 두 운영진이 같은 행사에 거의 동시에 올려도 뒤의 요청은 앞의 포스터를 "바꾸기 전 포스터"로 읽어 그 파일을 지운다 —
@@ -40,8 +42,13 @@ import org.springframework.transaction.annotation.Transactional;
  * 수정 범위는 저장된 상태로 판정한다 — 위저드 단계 저장과 같다. 시간이 움직이는 상태(판매 대기 · 판매 중 등)의 행사에 지금 시각을 반영하는 일은
  * 일정(#41)이 생긴 뒤 상태별 설정 잠금(#65)이 더한다.
  * <p>
- * 바꾸기 전 포스터의 파일은 지운다(이 이슈의 범위). 예매가 열린 뒤의 포스터 변경 이력(#46)은 바꾸기 전 포스터를 보관해야 하므로, 그 기능이 이
- * 정리를 이력 보관에 맞춘다.
+ * <b>바꾸기 전 포스터의 파일</b>은 변경 이력에 남는지로 갈린다.
+ * <ul>
+ *   <li><b>판매를 시작한 뒤</b> — 포스터 버전을 쌓고({@link EventChangeHistory#posterVersion}, {@link EventChangeHistoryRecorder}) 바꾸기 전 파일은
+ *       지우지 않는다. 이력의 근거라 보관 기간(행사가 끝난 날부터 6개월) 동안 남기고, 보관 기간이 지나 이력을 지울 때 함께 지운다
+ *       ({@link PurgeExpiredEventChangeHistoryService}).</li>
+ *   <li><b>작성 중</b> — 이력을 쌓지 않으므로 커밋된 뒤 바로 지운다. 공개 전 포스터는 관객이 본 적이 없다.</li>
+ * </ul>
  */
 @Service
 public class UploadEventPosterService implements UploadEventPosterUseCase {
@@ -55,12 +62,13 @@ public class UploadEventPosterService implements UploadEventPosterUseCase {
     private final EventRepository eventRepository;
     private final EventPosterStoragePort posterStorage;
     private final TokenGenerator tokenGenerator;
+    private final EventChangeHistoryRecorder historyRecorder;
     private final Clock clock;
 
     public UploadEventPosterService(CheckStaffPermissionUseCase checkStaffPermissionUseCase,
             RecordStaffOperationUseCase recordStaffOperationUseCase, StaffAccountRepository staffAccountRepository,
             OrganizerRepository organizerRepository, EventRepository eventRepository, EventPosterStoragePort posterStorage,
-            TokenGenerator tokenGenerator, Clock clock) {
+            TokenGenerator tokenGenerator, EventChangeHistoryRecorder historyRecorder, Clock clock) {
         this.checkStaffPermissionUseCase = checkStaffPermissionUseCase;
         this.recordStaffOperationUseCase = recordStaffOperationUseCase;
         this.staffAccountRepository = staffAccountRepository;
@@ -68,17 +76,18 @@ public class UploadEventPosterService implements UploadEventPosterUseCase {
         this.eventRepository = eventRepository;
         this.posterStorage = posterStorage;
         this.tokenGenerator = tokenGenerator;
+        this.historyRecorder = historyRecorder;
         this.clock = clock;
     }
 
     @Override
     @Transactional
     public EventWizardResult upload(UploadEventPosterCommand command) {
-        Instant now = clock.instant();
         StaffPermissionResult permission = EventEditingLocks.lockOrganizer(checkStaffPermissionUseCase,
                 staffAccountRepository, organizerRepository,
                 new CheckStaffPermissionQuery(command.actingStaff(), StaffAction.EDIT_EVENT));
         Event event = EventEditingLocks.lockEvent(eventRepository, permission, command.eventId());
+        Instant now = clock.instant();
         EventPosterImage image = command.image();
         EventPoster newPoster = EventPoster.issue(tokenGenerator.urlSafe(EventPoster.TOKEN_LENGTH), image.format());
 
@@ -86,9 +95,13 @@ public class UploadEventPosterService implements UploadEventPosterUseCase {
         posterStorage.store(newPoster, image);
         PosterFileCleanup.deleteOnRollback(posterStorage, newPoster);
         eventRepository.save(event);
+        Optional<EventChangeHistoryVersion> posterVersion = EventChangeHistory.posterVersion(event, previousPoster);
+        historyRecorder.record(permission, command.eventId(), posterVersion.stream().toList(), now);
         recordStaffOperationUseCase.record(new RecordStaffOperationCommand(permission, StaffOperationTargetKind.EVENT,
                 command.eventId(), OPERATION_SUMMARY, now));
-        previousPoster.ifPresent(poster -> PosterFileCleanup.deleteAfterCommit(posterStorage, poster));
+        if (posterVersion.isEmpty()) {
+            previousPoster.ifPresent(poster -> PosterFileCleanup.deleteAfterCommit(posterStorage, poster));
+        }
         return EventWizardResults.of(event, posterStorage);
     }
 }

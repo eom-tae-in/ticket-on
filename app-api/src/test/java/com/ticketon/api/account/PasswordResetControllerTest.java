@@ -246,7 +246,7 @@ class PasswordResetControllerTest {
                 "token       | ''       | 비밀번호 재설정 링크가 올바르지 않습니다.",
                 "newPassword | 1234567  | 비밀번호는 8자 이상 입력해 주세요.",
                 "newPassword | ''       | 비밀번호는 8자 이상 입력해 주세요."})
-        @DisplayName("링크 값이 비었거나 새 비밀번호가 규칙(8자 이상, 확인 필요)에 맞지 않으면 400이고 유스케이스를 부르지 않는다")
+        @DisplayName("링크 값이 비었거나 새 비밀번호가 규칙(8자 이상)에 맞지 않으면 400이고 유스케이스를 부르지 않는다")
         void rejectsInvalidField(String field, String value, String message) throws Exception {
             Map<String, Object> body = resetBody(TOKEN_VALUE, "new-password-5678");
             body.put(field, value);

@@ -155,7 +155,8 @@ class EventWizardIntegrationTest {
             assertThat(defaults.get("bookingCloseLeadMinutes").asInt()).isEqualTo(60);
             assertThat(defaults.get("checkinOpenLeadMinutes").asInt()).isEqualTo(60);
             assertThat(defaults.get("maxSeatsPerSelection").asInt()).isEqualTo(4);
-            assertThat(defaults.get("ticketsPerPersonLimit").isNull()).isTrue();
+            assertThat(defaults.get("ticketsPerPersonLimit").get("maxTickets").asInt()).isEqualTo(4);
+            assertThat(defaults.get("ticketsPerPersonLimit").get("basis").asString()).isEqualTo("PER_DATE");
             assertThat(defaults.get("sessionChoice").asString()).isEqualTo("NONE");
             assertThat(defaults.get("reentryAllowed").asBoolean()).isFalse();
             assertThat(defaults.get("minimumAge").isNull()).isTrue();

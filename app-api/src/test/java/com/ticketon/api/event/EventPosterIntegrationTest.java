@@ -7,7 +7,7 @@ import com.ticketon.api.security.LoginTestController;
 import com.ticketon.application.account.port.out.PasswordHashPort;
 import com.ticketon.common.TestImages;
 import com.ticketon.domain.account.NewPassword;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -32,8 +32,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
@@ -175,7 +175,7 @@ class EventPosterIntegrationTest {
     }
 
     @Test
-    @DisplayName("1:1 그림 · 용량 상한(제안 5MB) 초과 · 그림이 아닌 파일 · 요청 울타리(제안 10MB) 초과는 400이고 파일 · 포스터 · 기록이 남지 않는다")
+    @DisplayName("1:1 그림 · 용량 상한(5MB) 초과 · 그림이 아닌 파일 · 요청 울타리(10MB) 초과는 400이고 파일 · 포스터 · 기록이 남지 않는다")
     void rejectedPostersLeaveNothing() throws Exception {
         Set<String> filesBefore = posterFiles();
         long eventId;
@@ -186,14 +186,14 @@ class EventPosterIntegrationTest {
             expectPosterRejected(operator.uploadPoster(eventId, "poster.png", "image/png", TestImages.png(1200, 1200)),
                     "포스터는 3:4 세로 비율로 잘라 올려 주세요.");
             byte[] overPosterLimit = Arrays.copyOf(TestImages.png(30, 40),
-                    (int) ProposedPolicy.EVENT_POSTER_MAXIMUM_SIZE.bytes() + 1);
+                    (int) QuantityPolicy.EVENT_POSTER_MAXIMUM_SIZE.bytes() + 1);
             expectPosterRejected(operator.uploadPoster(eventId, "poster.png", "image/png", overPosterLimit),
                     "포스터는 5MB 이하로 올려 주세요.");
             expectPosterRejected(operator.uploadPoster(eventId, "poster.jpg", "image/jpeg",
                     "<svg xmlns=\"http://www.w3.org/2000/svg\"/>".getBytes(StandardCharsets.UTF_8)),
                     "포스터는 PNG 또는 JPEG 그림만 올릴 수 있습니다.");
 
-            byte[] overRequestLimit = new byte[(int) ProposedPolicy.UPLOAD_REQUEST_MAXIMUM_SIZE.bytes() + 1];
+            byte[] overRequestLimit = new byte[(int) QuantityPolicy.UPLOAD_REQUEST_MAXIMUM_SIZE.bytes() + 1];
             HttpResponse<String> tooLarge = operator.uploadPoster(eventId, "poster.png", "image/png", overRequestLimit);
             assertThat(tooLarge.statusCode()).isEqualTo(400);
             assertThat(jsonMapper.readValue(tooLarge.body(), ErrorResponse.class).code()).isEqualTo("INVALID_INPUT");

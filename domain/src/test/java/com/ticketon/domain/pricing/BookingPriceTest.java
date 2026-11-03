@@ -71,7 +71,7 @@ class BookingPriceTest {
         }
 
         @Test
-        @DisplayName("정액 0원은 그대로, 가격보다 큰 정액은 0원까지만 (확인 필요 #48)")
+        @DisplayName("정액 0원은 그대로, 가격보다 큰 정액은 0원까지만")
         void fixedAmountBoundaries() {
             assertThat(Discount.fixedAmount(Money.ZERO).applyTo(won(3_000))).isEqualTo(won(3_000));
             assertThat(COUPON_5000.applyTo(won(3_000))).isEqualTo(Money.ZERO);
@@ -172,7 +172,7 @@ class BookingPriceTest {
         }
 
         @Test
-        @DisplayName("50,000원 4매 · 조기예매 2장 + 정액 쿠폰 5,000원 → 장당 1,250원으로 비교 → 35,000 · 35,000 · 48,750 · 48,750 = 167,500원 (확인 필요 #48)")
+        @DisplayName("50,000원 4매 · 조기예매 2장 + 정액 쿠폰 5,000원 → 장당 1,250원으로 비교 → 35,000 · 35,000 · 48,750 · 48,750 = 167,500원")
         void mixedWithFixedCoupon() {
             BookingPrice bookingPrice = BookingPrice.calculate(twoOfFourEarlyBird(), Optional.of(COUPON_5000));
 
@@ -184,7 +184,7 @@ class BookingPriceTest {
         }
 
         @Test
-        @DisplayName("조기예매를 고른 장의 정액 쿠폰 몫은 다른 장으로 옮기지 않는다 — 쿠폰 2,500원만 쓰인다 (확인 필요 #48)")
+        @DisplayName("조기예매를 고른 장의 정액 쿠폰 몫은 다른 장으로 옮기지 않는다 — 쿠폰 2,500원만 쓰인다")
         void earlyBirdTicketShareUnused() {
             BookingPrice bookingPrice = BookingPrice.calculate(twoOfFourEarlyBird(), Optional.of(COUPON_5000));
 
@@ -196,7 +196,7 @@ class BookingPriceTest {
         }
 
         @Test
-        @DisplayName("같으면 조기예매 — 50,000원에 얼리버드 10%와 쿠폰 5,000원이 모두 45,000원 (쿠폰을 남김, 확인 필요 #48)")
+        @DisplayName("같으면 조기예매 — 50,000원에 얼리버드 10%와 쿠폰 5,000원이 모두 45,000원 (쿠폰을 남김)")
         void tieKeepsCoupon() {
             BookingPrice bookingPrice = BookingPrice.calculate(
                     List.of(TicketBeforeDiscount.withEarlyBird(REGULAR, Discount.rate(Percent.of(10)))), Optional.of(COUPON_5000));
@@ -282,7 +282,7 @@ class BookingPriceTest {
         }
 
         @Test
-        @DisplayName("정액 쿠폰이 예매 건 합계보다 크면 합계까지만 — 3,000원 티켓에 5,000원 → 0원 (확인 필요 #48)")
+        @DisplayName("정액 쿠폰이 예매 건 합계보다 크면 합계까지만 — 3,000원 티켓에 5,000원 → 0원")
         void fixedCouponCappedAtTotal() {
             BookingPrice bookingPrice = BookingPrice.calculate(regularTickets(3_000), Optional.of(COUPON_5000));
 

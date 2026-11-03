@@ -224,7 +224,7 @@ class EventWizardStepSaveTest {
     class BookingStep {
 
         @Test
-        @DisplayName("건너뛰면 처음 값 그대로다 — 공개, 1회 4석, 예매 종료 · 검표 시작 1시간 전, 재입장 끔, 연령 제한 없음, 취소 규정은 기준표")
+        @DisplayName("건너뛰면 처음 값 그대로다 — 공개, 1회 4석, 1인 4매 · 날짜별, 예매 종료 · 검표 시작 1시간 전, 재입장 끔, 연령 제한 없음, 취소 규정은 기준표")
         void skippedStepKeepsDefaults() {
             Event event = newSpringPlay();
 
@@ -233,7 +233,7 @@ class EventWizardStepSaveTest {
             assertThat(event.bookingSettings().seatsPerSelection().maxSeats()).isEqualTo(4);
             assertThat(event.bookingSettings().bookingCloseLeadTime().duration()).isEqualTo(Duration.ofHours(1));
             assertThat(event.bookingSettings().checkinOpenLeadTime().duration()).isEqualTo(Duration.ofHours(1));
-            assertThat(event.bookingSettings().ticketsPerPerson().isLimited()).isFalse();
+            assertThat(event.bookingSettings().ticketsPerPerson()).isEqualTo(TicketsPerPersonLimit.of(4, TicketsPerPersonBasis.PER_DATE));
             assertThat(event.bookingSettings().sessionChoice()).isEqualTo(SessionChoiceRestriction.NONE);
             assertThat(event.bookingSettings().reentry()).isEqualTo(ReentrySetting.NOT_ALLOWED);
             assertThat(event.bookingSettings().ageRestriction().isRestricted()).isFalse();

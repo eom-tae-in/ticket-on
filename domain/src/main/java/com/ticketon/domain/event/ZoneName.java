@@ -1,6 +1,6 @@
 package com.ticketon.domain.event;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import java.util.Objects;
 
@@ -12,7 +12,7 @@ import java.util.Objects;
  * 않으면 같은 "R석"이 겹치는지 가려내지 못한다. 블록 이름과 겹칠 수 없고 다른 구역 이름과도 겹칠 수 없다 — 겹치는지는 도면이 본다
  * ({@code FloorPlan}).
  * <p>
- * 맞춘 값이 {@value ProposedPolicy#ZONE_NAME_MAXIMUM_LENGTH}자를 넘으면 받지 않는다({@link ProposedPolicy#ZONE_NAME_MAXIMUM_LENGTH}, 확인
+ * 맞춘 값이 {@value QuantityPolicy#ZONE_NAME_MAXIMUM_LENGTH}자를 넘으면 받지 않는다({@link QuantityPolicy#ZONE_NAME_MAXIMUM_LENGTH}, 확인
  * 필요). 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자).
  *
  * @param value 앞뒤 공백을 걷고 NFC로 맞춘 이름
@@ -26,7 +26,7 @@ public record ZoneName(String value) {
             throw new IllegalArgumentException("구역 이름이 비어 있습니다");
         }
         if (exceedsMaximumLength(value)) {
-            throw new IllegalArgumentException("구역 이름은 " + ProposedPolicy.ZONE_NAME_MAXIMUM_LENGTH + "자 이하여야 합니다");
+            throw new IllegalArgumentException("구역 이름은 " + QuantityPolicy.ZONE_NAME_MAXIMUM_LENGTH + "자 이하여야 합니다");
         }
     }
 
@@ -53,6 +53,6 @@ public record ZoneName(String value) {
     }
 
     private static boolean exceedsMaximumLength(String normalized) {
-        return normalized.codePointCount(0, normalized.length()) > ProposedPolicy.ZONE_NAME_MAXIMUM_LENGTH;
+        return normalized.codePointCount(0, normalized.length()) > QuantityPolicy.ZONE_NAME_MAXIMUM_LENGTH;
     }
 }

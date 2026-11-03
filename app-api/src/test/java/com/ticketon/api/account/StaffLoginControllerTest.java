@@ -474,7 +474,7 @@ class StaffLoginControllerTest {
         }
 
         @Test
-        @DisplayName("닉네임이 20자를 넘으면 400이고 유스케이스를 부르지 않는다 (확인 필요 #15)")
+        @DisplayName("닉네임이 20자를 넘으면 400이고 유스케이스를 부르지 않는다")
         void rejectsTooLongNickname() throws Exception {
             mockMvc.perform(profileRequest("가".repeat(21), null).with(loggedInAs(JUNGHOON)))
                     .andExpect(status().isBadRequest())
@@ -486,7 +486,7 @@ class StaffLoginControllerTest {
         }
 
         @Test
-        @DisplayName("소개가 50자를 넘으면 400이고 유스케이스를 부르지 않는다 (확인 필요 #28)")
+        @DisplayName("소개가 50자를 넘으면 400이고 유스케이스를 부르지 않는다")
         void rejectsTooLongIntroduction() throws Exception {
             mockMvc.perform(profileRequest("조용한고래", "가".repeat(51)).with(loggedInAs(JUNGHOON)))
                     .andExpect(status().isBadRequest())

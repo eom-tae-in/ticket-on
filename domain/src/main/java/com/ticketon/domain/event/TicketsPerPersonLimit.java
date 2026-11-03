@@ -1,5 +1,6 @@
 package com.ticketon.domain.event;
 
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.util.Objects;
 import java.util.OptionalInt;
 
@@ -10,7 +11,7 @@ import java.util.OptionalInt;
  * 사람은 계정으로 센다 — 계정은 전화번호 하나에 하나라 사실상 사람 단위다(docs/06 "집계 기준"). 초대권은 포함하지 않는다. 실제로 세어 막는 일은
  * 예매 자격 판정이 한다.
  * <p>
- * 처음 값은 제한 없음이다({@link #defaultLimit}, 확인 필요 #35).
+ * 처음 값은 4매 · 날짜별이다({@link #defaultLimit}).
  */
 public sealed interface TicketsPerPersonLimit {
 
@@ -30,12 +31,11 @@ public sealed interface TicketsPerPersonLimit {
     }
 
     /**
-     * 확인 필요 (#35, 문서에 없음) — 1인 총 매수의 처음 값. 제한 없음을 제안한다: 1인 총 매수는 문서에 기본값이 없고, 1회 선택 매수(기본 4석)와
-     * 회차 선택 제약(기본 "제한 없음")과 달리 처음부터 걸어 둘 숫자가 정해져 있지 않다. 한 번에 잡는 양은 1회 선택 매수가 이미 막는다
-     * (docs/06 "선점 반복 악용"). 숫자로 정해지면 세는 범위(날짜별 / 행사 전체)의 처음 값도 함께 정한다.
+     * 1인 총 매수의 처음 값 — 4매 · 날짜별(docs/06 "1인 총 매수", Figma O9, docs/99 D). 총 매수가 없으면 4석씩 여러 번 예매해 1회 선택 매수를 그대로
+     * 우회한다. 날짜별이 처음 값인 까닭은 캐스팅을 바꿔 여러 날 보는 관객을 막지 않기 위해서다. 주최자가 제한 없음으로 바꿀 수는 있다.
      */
     static TicketsPerPersonLimit defaultLimit() {
-        return unlimited();
+        return of(QuantityPolicy.DEFAULT_MAX_TICKETS_PER_PERSON, TicketsPerPersonBasis.PER_DATE);
     }
 
     /** 한도가 있는지. */

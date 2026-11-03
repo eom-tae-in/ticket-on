@@ -15,7 +15,7 @@ import static com.ticketon.domain.event.EventStatusFixtures.springPlayIn;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -229,7 +229,7 @@ class EventSalesPauseTest {
         }
 
         @Test
-        @DisplayName("확인 필요 (#38) — 판매 대기에 조치를 걸면 오픈 시각이 와도 열리지 않고, 풀린 뒤 재개하면 시각대로 판매 대기 또는 판매 중")
+        @DisplayName("판매 대기에 조치를 걸면 오픈 시각이 와도 열리지 않고, 풀린 뒤 재개하면 시각대로 판매 대기 또는 판매 중")
         void holdBeforeOpening() {
             Event event = springPlayIn(EventStatus.AWAITING_OPEN);
 
@@ -243,7 +243,7 @@ class EventSalesPauseTest {
         }
 
         @Test
-        @DisplayName("확인 필요 (#38) — 판매 대기에 걸린 조치가 오픈 전에 풀려 재개하면 판매 대기로 돌아간다")
+        @DisplayName("판매 대기에 걸린 조치가 오픈 전에 풀려 재개하면 판매 대기로 돌아간다")
         void resumeBeforeOpeningReturnsToAwaiting() {
             Event event = springPlayIn(EventStatus.AWAITING_OPEN);
             event.holdSales(SalesPauseCause.ADMIN_PAGE_TAKEDOWN, ADMIN_ACCOUNT_ID, singlePerformance(), BEFORE_OPEN);
@@ -325,9 +325,9 @@ class EventSalesPauseTest {
         }
 
         @Test
-        @DisplayName("사유는 한 줄 — 줄바꿈과 " + ProposedPolicy.SALES_PAUSE_REASON_MAXIMUM_LENGTH + "자 초과는 받지 않는다 (확인 필요)")
+        @DisplayName("사유는 한 줄 — 줄바꿈과 " + QuantityPolicy.SALES_PAUSE_REASON_MAXIMUM_LENGTH + "자 초과는 받지 않는다")
         void reasonIsOneShortLine() {
-            String longest = "가".repeat(ProposedPolicy.SALES_PAUSE_REASON_MAXIMUM_LENGTH);
+            String longest = "가".repeat(QuantityPolicy.SALES_PAUSE_REASON_MAXIMUM_LENGTH);
 
             assertThat(SalesPauseReason.fromInput(longest)).isPresent();
             assertThat(SalesPauseReason.isAcceptable(longest + "가")).isFalse();

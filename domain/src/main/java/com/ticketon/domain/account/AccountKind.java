@@ -1,5 +1,9 @@
 package com.ticketon.domain.account;
 
+import com.ticketon.domain.policy.TimePolicy;
+import java.time.Duration;
+import java.util.Optional;
+
 /**
  * 계정 종류 — 계정 4종(docs/01 "계정 4종").
  * <p>
@@ -19,5 +23,25 @@ public enum AccountKind {
     ADMIN,
 
     /** 검표 — 운영진이 행사별로 발급. 검표 화면만. */
-    CHECKIN
+    CHECKIN;
+
+    /**
+     * 마지막 요청 뒤 이만큼 요청이 없으면 로그아웃된다(docs/01 "로그인 유지와 링크 유효 시간"). 비어 있으면 비활성 만료가 없다 — 15시와 19시 30분 회차
+     * 사이에 놓아 둔 검표 태블릿이 끊기면 안 된다. 검표 계정은 마지막 회차 종료 시 잠긴다(docs/01 "검표 계정").
+     */
+    public Optional<Duration> loginIdleTimeout() {
+        return switch (this) {
+            case AUDIENCE -> Optional.of(TimePolicy.AUDIENCE_LOGIN_IDLE_TIMEOUT);
+            case STAFF, ADMIN -> Optional.of(TimePolicy.STAFF_AND_ADMIN_LOGIN_IDLE_TIMEOUT);
+            case CHECKIN -> Optional.empty();
+        };
+    }
+
+    /**
+     * 브라우저를 닫아도 로그인이 남는지 — 관객과 검표 계정. 닫을 때 끊기면 비활성 만료를 길게 둔 뜻이 없다. 공용 PC는 로그아웃으로 끊는다(docs/01). 주최자 쪽 ·
+     * 관리자는 돈과 개인정보를 다루므로 브라우저를 닫으면 끊는다.
+     */
+    public boolean keepsLoginAfterBrowserCloses() {
+        return this == AUDIENCE || this == CHECKIN;
+    }
 }

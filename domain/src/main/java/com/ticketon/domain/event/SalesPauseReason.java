@@ -1,6 +1,6 @@
 package com.ticketon.domain.event;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import java.util.Objects;
 import java.util.Optional;
@@ -12,8 +12,8 @@ import java.util.Optional;
  * 않는다 — 조치의 사유는 정지 기록 · 페이지 내리기가 갖는다.
  * <p>
  * 적은 값에서 앞뒤 공백을 걷고 유니코드 NFC(완성형)로 맞춘다. <b>한 줄</b>이라 줄바꿈은 받지 않는다. 맞춘 값이
- * {@value ProposedPolicy#SALES_PAUSE_REASON_MAXIMUM_LENGTH}자를 넘으면 받지 않는다({@link ProposedPolicy#SALES_PAUSE_REASON_MAXIMUM_LENGTH},
- * 확인 필요). 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자).
+ * {@value QuantityPolicy#SALES_PAUSE_REASON_MAXIMUM_LENGTH}자를 넘으면 받지 않는다({@link QuantityPolicy#SALES_PAUSE_REASON_MAXIMUM_LENGTH}).
+ * 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자).
  *
  * @param value 앞뒤 공백을 걷고 NFC로 맞춘 사유. 비어 있지 않고 줄바꿈이 없다.
  */
@@ -29,7 +29,7 @@ public record SalesPauseReason(String value) {
             throw new IllegalArgumentException("판매 중단 사유는 한 줄로 적습니다");
         }
         if (exceedsMaximumLength(value)) {
-            throw new IllegalArgumentException("판매 중단 사유는 " + ProposedPolicy.SALES_PAUSE_REASON_MAXIMUM_LENGTH + "자 이하여야 합니다");
+            throw new IllegalArgumentException("판매 중단 사유는 " + QuantityPolicy.SALES_PAUSE_REASON_MAXIMUM_LENGTH + "자 이하여야 합니다");
         }
     }
 
@@ -65,6 +65,6 @@ public record SalesPauseReason(String value) {
     }
 
     private static boolean exceedsMaximumLength(String normalized) {
-        return normalized.codePointCount(0, normalized.length()) > ProposedPolicy.SALES_PAUSE_REASON_MAXIMUM_LENGTH;
+        return normalized.codePointCount(0, normalized.length()) > QuantityPolicy.SALES_PAUSE_REASON_MAXIMUM_LENGTH;
     }
 }

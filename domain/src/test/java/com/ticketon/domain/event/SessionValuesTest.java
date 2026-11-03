@@ -174,7 +174,7 @@ class SessionValuesTest {
         }
 
         @Test
-        @DisplayName("100자까지 받고 101자는 받지 않는다 (확인 필요 #36)")
+        @DisplayName("100자까지 받고 101자는 받지 않는다")
         void maximumLength() {
             String hundred = "가".repeat(100);
 

@@ -24,7 +24,7 @@ spring:
 server:
   servlet:
     session:
-      # 로그인 세션 쿠키 (Spring Session). 비활성 만료 시간은 정책 숫자 모음에서 가져온다(LoginSessionConfiguration)
+      # 로그인 세션 쿠키 (Spring Session). 비활성 만료와 쿠키 수명은 계정 종류가 정한다(SessionLogin)
       cookie:
         # 화면 스크립트가 세션 쿠키를 읽지 못하게 한다
         http-only: true

@@ -1,6 +1,6 @@
 package com.ticketon.domain.event;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import java.util.Objects;
 import java.util.Optional;
@@ -14,8 +14,8 @@ import java.util.Optional;
  * 비워 두면 "블록 1", "블록 2"를 붙인다({@link #automatic}).
  * <p>
  * 적은 값에서 앞뒤 공백을 걷고 유니코드 NFC(완성형)로 맞춘다. 한글은 화면에 똑같이 보이는 글자를 자모를 늘어놓은 꼴(NFD)로 적을 수 있어, 맞추지
- * 않으면 같은 "1층" 둘을 가려내지 못한다. 맞춘 값이 {@value ProposedPolicy#BLOCK_NAME_MAXIMUM_LENGTH}자를 넘으면 받지 않는다
- * ({@link ProposedPolicy#BLOCK_NAME_MAXIMUM_LENGTH}, 확인 필요). 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자).
+ * 않으면 같은 "1층" 둘을 가려내지 못한다. 맞춘 값이 {@value QuantityPolicy#BLOCK_NAME_MAXIMUM_LENGTH}자를 넘으면 받지 않는다
+ * ({@link QuantityPolicy#BLOCK_NAME_MAXIMUM_LENGTH}). 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자).
  * <p>
  * 판매 중에도 고칠 수 있고 이미 팔린 표의 표기도 따라 바뀐다 — 이름은 블록 한 곳에만 있고 티켓은 좌석을 가리키기만 한다. 변경 이력은 남기지
  * 않는다(docs/02 "판매 중에도 블록 이름을 고칠 수 있습니다").
@@ -34,7 +34,7 @@ public record BlockName(String value) {
             throw new IllegalArgumentException("블록 이름이 비어 있습니다 — 비운 이름은 '블록 N'을 붙입니다");
         }
         if (exceedsMaximumLength(value)) {
-            throw new IllegalArgumentException("블록 이름은 " + ProposedPolicy.BLOCK_NAME_MAXIMUM_LENGTH + "자 이하여야 합니다");
+            throw new IllegalArgumentException("블록 이름은 " + QuantityPolicy.BLOCK_NAME_MAXIMUM_LENGTH + "자 이하여야 합니다");
         }
     }
 
@@ -82,6 +82,6 @@ public record BlockName(String value) {
     }
 
     private static boolean exceedsMaximumLength(String normalized) {
-        return normalized.codePointCount(0, normalized.length()) > ProposedPolicy.BLOCK_NAME_MAXIMUM_LENGTH;
+        return normalized.codePointCount(0, normalized.length()) > QuantityPolicy.BLOCK_NAME_MAXIMUM_LENGTH;
     }
 }

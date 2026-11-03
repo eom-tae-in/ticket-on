@@ -12,11 +12,11 @@ import java.util.Set;
  * <table>
  *   <caption>예매 설정과 처음 값</caption>
  *   <tr><th>항목</th><th>처음 값</th><th>근거</th></tr>
- *   <tr><td>예매 오픈 시각 — 행사 단위</td><td>없음(판매 시작 즉시 연다, 확인 필요 #35)</td><td>docs/06 "오픈 시각"</td></tr>
+ *   <tr><td>예매 오픈 시각 — 행사 단위</td><td>없음(판매 시작 즉시 연다, docs/99 E "행사 · 배치도")</td><td>docs/06 "오픈 시각"</td></tr>
  *   <tr><td>예매 종료 — 회차 시작 / 종일형 마지막 입장의 N 전</td><td>1시간</td><td>docs/06 "예매 종료"</td></tr>
  *   <tr><td>검표 시작 — 회차 시작 / 종일형 운영 시작의 N 전</td><td>1시간</td><td>docs/03 "검표 시작 시각"</td></tr>
  *   <tr><td>1회 선택 매수</td><td>4석</td><td>docs/06 "1회 선택 매수"</td></tr>
- *   <tr><td>1인 총 매수</td><td>제한 없음(확인 필요 #35)</td><td>docs/06 "1인 총 매수"</td></tr>
+ *   <tr><td>1인 총 매수</td><td>4매 · 날짜별</td><td>docs/06 "1인 총 매수"</td></tr>
  *   <tr><td>회차 선택 제약</td><td>제한 없음</td><td>docs/06 "회차 선택 제약"</td></tr>
  *   <tr><td>재입장</td><td>끔</td><td>docs/03 "재입장 설정"</td></tr>
  *   <tr><td>연령 제한</td><td>없음</td><td>docs/03 "연령 제한"</td></tr>

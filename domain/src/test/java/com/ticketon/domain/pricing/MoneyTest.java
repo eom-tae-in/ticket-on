@@ -93,7 +93,7 @@ class MoneyTest {
         }
 
         @Test
-        @DisplayName("100%는 그대로 — 100원 단위가 아닌 12,345원도 깎지 않는다 (확인 필요 #48)")
+        @DisplayName("100%는 그대로 — 100원 단위가 아닌 12,345원도 깎지 않는다")
         void wholePercentKeepsAmount() {
             assertThat(won(12_345).percentRoundedDown(100)).isEqualTo(won(12_345));
         }

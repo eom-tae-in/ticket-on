@@ -23,7 +23,7 @@ import java.util.function.Function;
  *       구역의 추가 · 삭제와 좌석의 구역 배정 · 활성 변경에는 재고가 할 일이 없다 — 좌석 재고는 구역과 상관없이 좌석마다 있고, 잔여는 도면과 함께
  *       센다({@link SessionInventory#remainingSeatsIn}).</li>
  * </ul>
- * <b>여러 회차에 걸치는 일은 모두 아니면 아무것도 아니다.</b> 한 회차에서라도 막히면 어느 회차도 바꾸지 않는다 — 확인 필요 (#53): 전 회차 일괄
+ * <b>여러 회차에 걸치는 일은 모두 아니면 아무것도 아니다.</b> 한 회차에서라도 막히면 어느 회차도 바꾸지 않는다 (docs/99 E "재고 · 초대권") — 전 회차 일괄
  * 판매 제외에서 한 회차만 팔린 좌석일 때 나머지 회차만 뺄지 문서에 없어, 바뀐 것과 안 바뀐 것이 섞이지 않게 막고 막힌 회차를 알려 준다
  * ({@link #sessionsBlockingExclusion}).
  */
@@ -159,7 +159,7 @@ public final class EventInventory {
 
     /**
      * 회차가 지워졌다(#41 {@code SessionRemoved}) — 그 회차 재고를 뺀다. 티켓이 있는 회차를 지울 수 있는지는 도면 쪽이 먼저 본다(#64).
-     * 확인 필요 (#53) — 재고도 선점 · 티켓이 걸린 회차는 빼지 않는다. 문서는 티켓만 적었지만 결제 중인 선점도 지킨다.
+     * docs/99 E "재고 · 초대권" — 재고도 선점 · 티켓이 걸린 회차는 빼지 않는다. 문서는 티켓만 적었지만 결제 중인 선점도 지킨다.
      *
      * @return 뺀 회차 재고
      * @throws RuleViolationException 선점 · 티켓이 걸려 있으면({@link InventoryErrorCode#TAKEN_INVENTORY_NOT_REMOVABLE})
@@ -190,7 +190,7 @@ public final class EventInventory {
 
     /**
      * 블록이 그 안의 좌석과 함께 지워졌다(#43 {@code SeatBlockRemoved}) — 모든 회차에서 그 좌석들의 재고를 뺀다. 티켓이 걸린 좌석을 지울 수 있는지는
-     * 도면 쪽이 먼저 본다(#64). 확인 필요 (#53) — 재고도 한 회차에서라도 선점 · 티켓이 걸린 좌석이 있으면 아무것도 빼지 않는다.
+     * 도면 쪽이 먼저 본다(#64). docs/99 E "재고 · 초대권" — 재고도 한 회차에서라도 선점 · 티켓이 걸린 좌석이 있으면 아무것도 빼지 않는다.
      *
      * @return 뺀 재고
      * @throws RuleViolationException 선점 · 티켓이 걸린 좌석이 있으면({@link InventoryErrorCode#TAKEN_INVENTORY_NOT_REMOVABLE})
@@ -225,7 +225,7 @@ public final class EventInventory {
 
     /**
      * 수량형 구역이 지워졌다(#42 {@code ZoneRemoved}) — 모든 회차에서 그 구역의 재고를 뺀다. 티켓이 있는 구역을 지울 수 있는지는 도면 쪽이 먼저
-     * 본다(#64). 확인 필요 (#53) — 재고도 한 회차에서라도 판매 · 선점 · 초대 발권이 있으면 아무것도 빼지 않는다. 관계자 확보 수만 있으면 뺀다.
+     * 본다(#64). docs/99 E "재고 · 초대권" — 재고도 한 회차에서라도 판매 · 선점 · 초대 발권이 있으면 아무것도 빼지 않는다. 관계자 확보 수만 있으면 뺀다.
      *
      * @return 뺀 재고
      * @throws RuleViolationException 판매 · 선점 · 초대 발권이 있으면({@link InventoryErrorCode#TAKEN_INVENTORY_NOT_REMOVABLE})

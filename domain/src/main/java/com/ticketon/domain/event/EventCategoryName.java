@@ -1,6 +1,6 @@
 package com.ticketon.domain.event;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import java.util.Objects;
 
@@ -12,8 +12,8 @@ import java.util.Objects;
  * 적은 값에서 앞뒤 공백을 걷고 유니코드 NFC(완성형)로 맞춘다. 한글은 화면에 똑같이 보이는 글자를 완성형과 자모를 늘어놓은 꼴(NFD)로 적을 수
  * 있어, 맞추지 않으면 관리자가 보는 '기타' 장르명 목록에서 같은 "낭독극"이 따로 세어지고 카테고리를 고를 때도 어긋난다.
  * <p>
- * 맞춘 값이 {@value ProposedPolicy#EVENT_CATEGORY_NAME_MAXIMUM_LENGTH}자를 넘으면 받지 않는다
- * ({@link ProposedPolicy#EVENT_CATEGORY_NAME_MAXIMUM_LENGTH}, 확인 필요). 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자).
+ * 맞춘 값이 {@value QuantityPolicy#EVENT_CATEGORY_NAME_MAXIMUM_LENGTH}자를 넘으면 받지 않는다
+ * ({@link QuantityPolicy#EVENT_CATEGORY_NAME_MAXIMUM_LENGTH}). 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자).
  *
  * @param value 앞뒤 공백을 걷고 NFC로 맞춘 이름
  */
@@ -27,7 +27,7 @@ public record EventCategoryName(String value) {
         }
         if (exceedsMaximumLength(value)) {
             throw new IllegalArgumentException(
-                    "카테고리 이름은 " + ProposedPolicy.EVENT_CATEGORY_NAME_MAXIMUM_LENGTH + "자 이하여야 합니다");
+                    "카테고리 이름은 " + QuantityPolicy.EVENT_CATEGORY_NAME_MAXIMUM_LENGTH + "자 이하여야 합니다");
         }
     }
 
@@ -55,6 +55,6 @@ public record EventCategoryName(String value) {
     }
 
     private static boolean exceedsMaximumLength(String normalized) {
-        return normalized.codePointCount(0, normalized.length()) > ProposedPolicy.EVENT_CATEGORY_NAME_MAXIMUM_LENGTH;
+        return normalized.codePointCount(0, normalized.length()) > QuantityPolicy.EVENT_CATEGORY_NAME_MAXIMUM_LENGTH;
     }
 }

@@ -1,7 +1,7 @@
 package com.ticketon.api.event;
 
 import com.ticketon.domain.event.EventCategoryName;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import jakarta.validation.Constraint;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
@@ -14,7 +14,7 @@ import java.lang.annotation.Target;
 
 /**
  * 카테고리 이름 · '기타' 장르명 길이 규칙 — 도메인 {@link EventCategoryName}과 같은 규칙(앞뒤 공백을 걷고 NFC로 맞춘 뒤
- * {@value ProposedPolicy#EVENT_CATEGORY_NAME_MAXIMUM_LENGTH}자 이하, 확인 필요)으로 본다({@link EventCategoryName#isValid}). 칸마다 화면에
+ * {@value QuantityPolicy#EVENT_CATEGORY_NAME_MAXIMUM_LENGTH}자 이하)으로 본다({@link EventCategoryName#isValid}). 칸마다 화면에
  * 띄울 문구를 {@code message}로 적는다.
  * <p>
  * 너무 긴 장르명이 안쪽까지 가면 값 객체가 만들어지지 않아 500이 되므로 여기서 400으로 막는다. 비었거나 공백뿐이면 통과한다 — 카테고리를 골랐는지는

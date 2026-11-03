@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import com.ticketon.domain.organizer.ExternalLink;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -144,9 +144,9 @@ class EventBasicInformationTest {
         }
 
         @Test
-        @DisplayName("제목은 " + ProposedPolicy.EVENT_TITLE_MAXIMUM_LENGTH + "자까지 받는다 (확인 필요) — 글자 수는 사람이 세는 대로")
+        @DisplayName("제목은 " + QuantityPolicy.EVENT_TITLE_MAXIMUM_LENGTH + "자까지 받는다 — 글자 수는 사람이 세는 대로")
         void maximumLength() {
-            String longest = "공".repeat(ProposedPolicy.EVENT_TITLE_MAXIMUM_LENGTH - 1) + "🎭";
+            String longest = "공".repeat(QuantityPolicy.EVENT_TITLE_MAXIMUM_LENGTH - 1) + "🎭";
 
             assertThat(EventTitle.of(longest).value()).isEqualTo(longest);
             assertThat(EventTitle.isValid(longest)).isTrue();

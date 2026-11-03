@@ -7,7 +7,7 @@ import com.ticketon.domain.account.StaffEmailVerificationToken;
 import com.ticketon.domain.notification.EmailMessage;
 import com.ticketon.domain.notification.EmailSubject;
 import com.ticketon.domain.notification.RecipientSide;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 
 /**
  * 가입 이메일 인증 메일 — 관객 계정과 운영진 로그인이 같은 내용을 쓰고, 받는 쪽에 따라 제목과 링크가 다르다.
@@ -57,6 +57,6 @@ final class EmailVerificationMail {
 
                 링크는 %d시간 동안 열 수 있습니다.
                 가입한 적이 없다면 이 메일을 무시해 주세요.
-                """.formatted(link, ProposedPolicy.EMAIL_VERIFICATION_LINK_VALIDITY.toHours());
+                """.formatted(link, TimePolicy.EMAIL_VERIFICATION_LINK_VALIDITY.toHours());
     }
 }

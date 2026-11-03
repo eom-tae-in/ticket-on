@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 
 import com.ticketon.common.ImageFormat;
 import com.ticketon.common.TestImages;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import org.junit.jupiter.api.DisplayName;
@@ -35,9 +35,9 @@ class OrganizerLogoImageTest {
     }
 
     @Test
-    @DisplayName("용량 상한(제안 2MB)을 넘으면 받지 않는다 — 상한과 같은 크기는 받는다")
+    @DisplayName("용량 상한(2MB)을 넘으면 받지 않는다 — 상한과 같은 크기는 받는다")
     void rejectsOverSizeLimit() {
-        long limit = ProposedPolicy.ORGANIZER_LOGO_MAXIMUM_SIZE.bytes();
+        long limit = QuantityPolicy.ORGANIZER_LOGO_MAXIMUM_SIZE.bytes();
         byte[] square = TestImages.png(64, 64);
         byte[] atLimit = Arrays.copyOf(square, (int) limit);
         byte[] overLimit = Arrays.copyOf(square, (int) limit + 1);
