@@ -16,6 +16,9 @@ public final class QuantityPolicy {
     /** 1회 선택 매수 기본값 — 동시에 선점할 수 있는 좌석 수. 주최자가 조정한다. 묶음권은 티켓 장수로 센다. docs/06 "1회 선택 매수" */
     public static final int DEFAULT_MAX_SEATS_PER_SELECTION = 4;
 
+    /** 1인 총 매수 기본값 — 날짜별 4매(기준은 {@code domain.event.TicketsPerPersonLimit#defaultLimit}). 주최자가 조정한다. docs/06 "1인 총 매수" */
+    public static final int DEFAULT_MAX_TICKETS_PER_PERSON = 4;
+
     /** 1회 선택 매수 경고선 — 8석 초과 또는 전체의 10% 초과면 경고만 한다(막지 않음). docs/06 "1회 선택 매수" */
     public static final QuantityThreshold SEATS_PER_SELECTION_WARNING = new QuantityThreshold(8, Percent.of(10));
 

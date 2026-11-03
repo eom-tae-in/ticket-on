@@ -17,6 +17,12 @@ class QuantityPolicyTest {
     }
 
     @Test
+    @DisplayName("1인 총 매수 기본값은 4매다 (docs/06)")
+    void defaultMaxTicketsPerPerson() {
+        assertThat(QuantityPolicy.DEFAULT_MAX_TICKETS_PER_PERSON).isEqualTo(4);
+    }
+
+    @Test
     @DisplayName("1회 선택 매수 경고선은 8석 또는 전체의 10%다 (docs/06)")
     void seatsPerSelectionWarning() {
         assertThat(QuantityPolicy.SEATS_PER_SELECTION_WARNING).isEqualTo(new QuantityThreshold(8, Percent.of(10)));

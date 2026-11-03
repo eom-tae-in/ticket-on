@@ -32,7 +32,7 @@ class BookingSettingsTest {
             assertThat(defaults.bookingCloseLeadTime()).isEqualTo(LeadTime.of(Duration.ofHours(1)));
             assertThat(defaults.checkinOpenLeadTime()).isEqualTo(LeadTime.of(Duration.ofHours(1)));
             assertThat(defaults.seatsPerSelection()).isEqualTo(SeatsPerSelectionLimit.of(4));
-            assertThat(defaults.ticketsPerPerson()).isEqualTo(TicketsPerPersonLimit.unlimited());
+            assertThat(defaults.ticketsPerPerson()).isEqualTo(TicketsPerPersonLimit.of(4, TicketsPerPersonBasis.PER_DATE));
             assertThat(defaults.sessionChoice()).isEqualTo(SessionChoiceRestriction.NONE);
             assertThat(defaults.reentry()).isEqualTo(ReentrySetting.NOT_ALLOWED);
             assertThat(defaults.ageRestriction()).isEqualTo(AgeRestriction.none());
@@ -160,14 +160,29 @@ class BookingSettingsTest {
         }
 
         @Test
-        @DisplayName("비율은 올림한 정수 퍼센트 — 경고선을 넘은 비율이 10%로 보이지 않게")
-        void percentRoundedUp() {
+        @DisplayName("비율은 정수로 반올림한다 — 98석 중 4석은 4% (docs/06, Figma O9)")
+        void percentRounded() {
+            assertThat(SeatsPerSelectionLimit.of(4).feedbackFor(98).percentOfTotal()).hasValue(4);
             assertThat(SeatsPerSelectionLimit.of(3).feedbackFor(200).percentOfTotal()).hasValue(2);
-            assertThat(SeatsPerSelectionLimit.of(1).feedbackFor(1000).percentOfTotal()).hasValue(1);
+            assertThat(SeatsPerSelectionLimit.of(21).feedbackFor(200).percentOfTotal()).hasValue(11);
+        }
 
+        @Test
+        @DisplayName("경고는 반올림 전 비율로 판단한다 — 8석 / 79석은 10%로 보여도 10%를 넘어 경고한다")
+        void warningUsesUnroundedShare() {
             SeatsPerSelectionFeedback justOver = SeatsPerSelectionLimit.of(8).feedbackFor(79);
-            assertThat(justOver.percentOfTotal()).hasValue(11);
+
+            assertThat(justOver.percentOfTotal()).hasValue(10);
             assertThat(justOver.isWarning()).isTrue();
+        }
+
+        @Test
+        @DisplayName("1%가 안 되면 \"1% 미만\"이다 — 반올림하면 1%가 되는 0.6%도, 1%는 아니다")
+        void underOnePercent() {
+            assertThat(SeatsPerSelectionLimit.of(1).feedbackFor(1000).isUnderOnePercent()).isTrue();
+            assertThat(SeatsPerSelectionLimit.of(6).feedbackFor(1000).isUnderOnePercent()).isTrue();
+            assertThat(SeatsPerSelectionLimit.of(10).feedbackFor(1000).isUnderOnePercent()).isFalse();
+            assertThat(SeatsPerSelectionLimit.of(4).feedbackFor(0).isUnderOnePercent()).isFalse();
         }
 
         @Test
@@ -200,9 +215,18 @@ class BookingSettingsTest {
     class TicketsPerPerson {
 
         @Test
-        @DisplayName("처음 값은 제한 없음이다 (제안값 — 확인 필요 #35)")
-        void defaultUnlimited() {
+        @DisplayName("처음 값은 4매 · 날짜별이다 — 4일 공연이면 한 사람이 16매까지 (docs/06, Figma O9)")
+        void defaultFourPerDate() {
             TicketsPerPersonLimit limit = TicketsPerPersonLimit.defaultLimit();
+
+            assertThat(limit).isEqualTo(TicketsPerPersonLimit.of(4, TicketsPerPersonBasis.PER_DATE));
+            assertThat(limit.maximumTicketsInEvent(4)).hasValue(16);
+        }
+
+        @Test
+        @DisplayName("주최자는 제한 없음으로 바꿀 수 있다")
+        void unlimitedStaysAvailable() {
+            TicketsPerPersonLimit limit = TicketsPerPersonLimit.unlimited();
 
             assertThat(limit.isLimited()).isFalse();
             assertThat(limit.maximumTicketsInEvent(4)).isEmpty();

@@ -30,7 +30,7 @@ import java.util.List;
  * "행사 만들기 위저드"). 칸 이름은 위저드 값 응답의 bookingSettings와 같다 — 받은 값을 고쳐 그대로 보내면 된다. 5단계는 전부 처음 값이 있어 건너뛸
  * 수 있다 — 건너뛰면 이 요청을 보내지 않고, 행사를 만들 때의 처음 값 그대로다.
  * <p>
- * 비울 수 있는 칸은 비운 것이 곧 처음 값이다 — 오픈 시각(판매 시작 즉시), 1인 총 매수(제한 없음), 연령 제한(없음). 나머지 칸은 필수다.
+ * 비울 수 있는 칸은 비운 것이 곧 처음 값이다 — 오픈 시각(판매 시작 즉시), 연령 제한(없음). 1인 총 매수는 비우면 제한 없음이다(처음 값은 4매 · 날짜별). 나머지 칸은 필수다.
  * 예매 종료 · 검표 시작은 기준 시각(회차 시작 등)보다 앞서는 시간을 분으로 받는다 — 0이면 기준 시각 그대로다. 숫자의 범위와 취소 규정 구간의 모양은
  * 여기서 도메인 값 객체와 같은 규칙으로 본다(400). 기준보다 불리한 취소 규정, 걸린 적 없는 암호 보호는 409다.
  * <p>
@@ -81,7 +81,7 @@ public record EventBookingSettingsRequest(
         @Min(value = 1, message = "1석 이상으로 입력해 주세요.")
         Integer maxSeatsPerSelection,
 
-        @Schema(description = "1인 총 매수. 비우면 제한 없음(처음 값)", requiredMode = NOT_REQUIRED, nullable = true)
+        @Schema(description = "1인 총 매수. 처음 값은 4매 · 날짜별이다. 비우면 제한 없음", requiredMode = NOT_REQUIRED, nullable = true)
         @Valid
         TicketsPerPersonLimitRequest ticketsPerPersonLimit,
 
