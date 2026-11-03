@@ -41,6 +41,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -65,8 +66,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 배치 서버 전체를 진짜 PostgreSQL(마이그레이션 전체)과 로컬 파일 저장소(임시 디렉터리)로 띄우고 보관 기간이 지난 행사 변경 이력 삭제 작업을 직접
- * 돌린다(#46 완료 조건 — "행사 종료 6개월 후 삭제 배치"). 배치 서버는 마이그레이션을 돌리지 않으므로 이 테스트만 Flyway를 켜고, 실제 시각에 맞춰
- * 작업이 끼어들지 않게 스케줄러는 끈다. 시각은 시계를 옮겨 정한다. Docker가 없는 환경에서는 건너뛴다.
+ * 돌린다(#46 완료 조건 — "행사 종료 6개월 후 삭제 배치", #231 — 상세 안내 · 지도 링크 · 공개용 연락처 이력도 함께). 배치 서버는 마이그레이션을
+ * 돌리지 않으므로 이 테스트만 Flyway를 켜고, 실제 시각에 맞춰 작업이 끼어들지 않게 스케줄러는 끈다. 시각은 시계를 옮겨 정한다. Docker가 없는 환경에서는 건너뛴다.
  * <p>
  * 극단 열두달(docs/15)의 소유자 박정훈과 운영자 기획 단원이 10/15 10:00에 ○○밴드 단독공연(11/14 19:00~21:00)과 가을 낭독회(12/20 19:00~21:00)의
  * 판매를 시작했다. 판매 시작(#58)이 아직 없어 행사를 판매 대기로 바꾸는 일은 표에 바로 하고, 첫 버전은 판매 시작이 부를 유스케이스를 같은
@@ -82,6 +83,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 class EventChangeHistoryPurgeJobIntegrationTest {
 
     private static final Instant PUBLISHED_AT = korean(2026, 10, 15, 10, 0);
+    private static final Instant OPENED_AT = korean(2026, 10, 18, 14, 0);
     private static final Instant CHANGED_AT = korean(2026, 10, 20, 14, 0);
     private static final LocalDate NOVEMBER_14 = LocalDate.of(2026, 11, 14);
     private static final LocalDate DECEMBER_20 = LocalDate.of(2026, 12, 20);
@@ -187,6 +189,27 @@ class EventChangeHistoryPurgeJobIntegrationTest {
     }
 
     @Test
+    @DisplayName("판매 중에 상세 안내에 \"주차 불가\"를 넣은 ○○밴드도 5/14에는 상세 안내 이력까지 남기고, 5/15에 함께 지운다")
+    void purgesVenueGuideHistoryWithOthers() {
+        long band = publishedEvent("○○밴드 단독공연", NOVEMBER_14);
+        jdbcTemplate.update("UPDATE event SET status = 'ON_SALE', booking_opened_at = ? WHERE id = ?", Timestamp.from(OPENED_AT), band);
+        MUTABLE_CLOCK.moveTo(CHANGED_AT);
+        EventBasicInformationItems items = items("○○밴드 단독공연");
+        saveEventBasicInformationUseCase.save(new SaveEventBasicInformationCommand(acting(planner), band, new EventBasicInformationItems(
+                items.title(), items.type(), items.categoryName(), items.genreName(), items.introduction(), items.venue(),
+                "지하 1층, 주차 불가", null, null)));
+        assertThat(historyTargetsOf(band)).containsExactly("TITLE", "INTRODUCTION", "POSTER", "VENUE_DETAILS");
+
+        MUTABLE_CLOCK.moveTo(LAST_DAY_KEPT);
+        job.run();
+        assertThat(historyTargetsOf(band)).containsExactly("TITLE", "INTRODUCTION", "POSTER", "VENUE_DETAILS");
+
+        MUTABLE_CLOCK.moveTo(SIX_MONTHS_AND_A_DAY);
+        job.run();
+        assertThat(historyCountOf(band)).isZero();
+    }
+
+    @Test
     @DisplayName("이력을 지우면 판매를 시작한 뒤 바꾼 포스터의 이전 파일도 지우고, 지금 포스터 파일은 남긴다")
     void discardsReplacedPosterFileWithHistory() {
         long band = publishedEvent("○○밴드 단독공연", NOVEMBER_14);
@@ -285,6 +308,12 @@ class EventChangeHistoryPurgeJobIntegrationTest {
 
     private static Path posterFile(String fileKey) {
         return storageDirectory.resolve(POSTER_BUNDLE).resolve(fileKey);
+    }
+
+    /** 그 행사의 이력 대상 칸 — 쌓은 차례. */
+    private List<String> historyTargetsOf(long eventId) {
+        return jdbcTemplate.queryForList("SELECT target FROM event_change_history WHERE event_id = ? ORDER BY id", String.class,
+                eventId);
     }
 
     private int historyCountOf(long eventId) {

@@ -20,7 +20,8 @@ import org.jooq.impl.DSL;
 import org.springframework.stereotype.Component;
 
 /**
- * 행사 변경 이력 저장소 어댑터 — 변경 이력 표(event_change_history — V26)에 버전을 쌓고, 행사마다 지운다.
+ * 행사 변경 이력 저장소 어댑터 — 변경 이력 표(event_change_history — V26, 상세 안내 · 지도 링크 · 공개용 연락처는 V27)에 버전을 쌓고, 행사마다
+ * 지운다. 대상 칸은 도메인 enum 이름 그대로 넣고 읽는다.
  * <ul>
  *   <li>쌓기: 버전마다 그 칸(행사 · 대상 칸 · 회차)의 지금 버전(유효 끝이 없는 줄)의 유효 끝을 그 순간으로 고친 뒤, 그 순간부터 유효한 새 줄을
  *       넣는다. 지금 버전이 하나뿐인 것은 유일 색인 두 개가 막는다. 부르는 흐름이 행사 줄을 FOR UPDATE로 쥐고 있어 같은 행사의 쌓기는 차례로 돈다.</li>

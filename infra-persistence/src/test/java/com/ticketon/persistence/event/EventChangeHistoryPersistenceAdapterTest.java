@@ -44,14 +44,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 진짜 PostgreSQL에 마이그레이션(V26 변경 이력)을 올리고 변경 이력 저장소 · 조회를 본다 — 버전이 유효 기간과 함께 쌓이는지(제목을 두 번 바꾸면
- * 버전 셋), 칸마다 · 회차마다 따로 닫히는지, 행사마다 지워지는지, CHECK · 유일 색인 · 외래 키가 어긋난 줄을 거부하는지. Docker가 없는 환경에서는
- * 건너뛴다.
+ * 진짜 PostgreSQL에 마이그레이션(V26 변경 이력, V27 상세 안내 · 지도 링크 · 공개용 연락처)을 올리고 변경 이력 저장소 · 조회를 본다 — 버전이 유효
+ * 기간과 함께 쌓이는지(제목을 두 번 바꾸면 버전 셋), 칸마다 · 회차마다 따로 닫히는지, 행사마다 지워지는지, CHECK · 유일 색인 · 외래 키가 어긋난
+ * 줄을 거부하는지. Docker가 없는 환경에서는 건너뛴다.
  * <p>
  * 극단 열두달(docs/15 박정훈)의 ○○밴드 단독공연 — 3/1 10:00에 판매를 시작했고(첫 버전), 3/14 · 3/15 저녁 공연이다. docs/03의 예시("주연: 김배우"로
  * 등록 → 3/5 예매 → 3/10 "주연: 이배우"로 수정, "○○밴드 단독공연" → "○○밴드 앵콜공연")를 옮겼다.
@@ -72,6 +74,8 @@ class EventChangeHistoryPersistenceAdapterTest {
     private static final LocalDate MARCH_14 = LocalDate.of(2026, 3, 14);
     private static final LocalDate MARCH_15 = LocalDate.of(2026, 3, 15);
     private static final String POSTER_KEY = "Pq7rS2tU9vW4xY6zA1bC3dE5fG8hJ0kL.jpg";
+    private static final String MAP_LINK = "https://map.example/place/12";
+    private static final String PUBLIC_CONTACT = "twelve-months@example.com";
 
     private static CloseableDSLContext dsl;
 
@@ -216,6 +220,39 @@ class EventChangeHistoryPersistenceAdapterTest {
         }
 
         @Test
+        @DisplayName("상세 안내 · 지도 링크 · 공개용 연락처도 칸마다 쌓이고 닫힌다 — \"주차 불가\"를 넣고 지도 링크를 비우면 그 두 칸만 버전이 둘이다")
+        void venueGuideVersions() {
+            adapter.add(band, List.of(
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.TITLE, null, null, "○○밴드 단독공연"),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.VENUE_DETAILS, null, null, "지하 1층"),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.MAP_LINK, null, null, MAP_LINK),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.PUBLIC_CONTACT, null, null, PUBLIC_CONTACT)),
+                    junghoon, PUBLISHED_AT);
+
+            adapter.add(band, List.of(
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.VENUE_DETAILS, null, "지하 1층", "지하 1층, 주차 불가"),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.MAP_LINK, null, MAP_LINK, null)),
+                    planner, FIRST_CHANGE);
+
+            assertThat(entriesOf(band, EventChangeHistoryTarget.VENUE_DETAILS))
+                    .extracting(EventChangeHistoryEntry::previousContent, EventChangeHistoryEntry::newContent,
+                            EventChangeHistoryEntry::validFrom, EventChangeHistoryEntry::validUntil, EventChangeHistoryEntry::sessionId)
+                    .containsExactly(
+                            tuple(null, "지하 1층", PUBLISHED_AT, FIRST_CHANGE, null),
+                            tuple("지하 1층", "지하 1층, 주차 불가", FIRST_CHANGE, null, null));
+            assertThat(entriesOf(band, EventChangeHistoryTarget.MAP_LINK))
+                    .extracting(EventChangeHistoryEntry::previousContent, EventChangeHistoryEntry::newContent,
+                            EventChangeHistoryEntry::validUntil)
+                    .containsExactly(tuple(null, MAP_LINK, FIRST_CHANGE), tuple(MAP_LINK, null, null));
+            assertThat(entriesOf(band, EventChangeHistoryTarget.PUBLIC_CONTACT)).singleElement().satisfies(entry -> {
+                assertThat(entry.newContent()).isEqualTo(PUBLIC_CONTACT);
+                assertThat(entry.validUntil()).isNull();
+            });
+            assertThat(entriesOf(band, EventChangeHistoryTarget.TITLE)).singleElement()
+                    .satisfies(entry -> assertThat(entry.validUntil()).isNull());
+        }
+
+        @Test
         @DisplayName("한 번에 같은 칸을 두 번 쌓지 않는다 — 아무것도 넣지 않고 막는다")
         void rejectsSameItemTwice() {
             assertThatIllegalArgumentException().isThrownBy(() -> adapter.add(band,
@@ -268,6 +305,29 @@ class EventChangeHistoryPersistenceAdapterTest {
         }
 
         @Test
+        @DisplayName("상세 안내 · 지도 링크 · 공개용 연락처 버전도 함께 지우고 돌려준다 — 비운 버전도 그대로 읽힌다")
+        void deletesVenueGuideVersions() {
+            publishBand();
+            adapter.add(band, List.of(
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.VENUE_DETAILS, null, null, "지하 1층, 주차 불가"),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.MAP_LINK, null, null, MAP_LINK),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.PUBLIC_CONTACT, null, null, PUBLIC_CONTACT)),
+                    planner, FIRST_CHANGE);
+            adapter.add(band, List.of(new EventChangeHistoryVersion(EventChangeHistoryTarget.PUBLIC_CONTACT, null, PUBLIC_CONTACT, null)),
+                    junghoon, SECOND_CHANGE);
+
+            List<EventChangeHistoryVersion> deleted = adapter.deleteByEventId(band);
+
+            assertThat(deleted).hasSize(8);
+            assertThat(deleted.subList(4, 8)).containsExactly(
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.VENUE_DETAILS, null, null, "지하 1층, 주차 불가"),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.MAP_LINK, null, null, MAP_LINK),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.PUBLIC_CONTACT, null, null, PUBLIC_CONTACT),
+                    new EventChangeHistoryVersion(EventChangeHistoryTarget.PUBLIC_CONTACT, null, PUBLIC_CONTACT, null));
+            assertThat(query.findByEventId(band)).isEmpty();
+        }
+
+        @Test
         @DisplayName("지우기 전 잠금은 행사 줄이 있으면 잡는다 — 지운 행사도 잡고, 없는 행사는 false")
         void locksEventRowForPurge() {
             dsl.update(EVENT).set(EVENT.DELETED_AT, OffsetDateTime.of(2026, 9, 1, 0, 0, 0, 0, ZoneOffset.UTC))
@@ -304,6 +364,42 @@ class EventChangeHistoryPersistenceAdapterTest {
                     PUBLISHED_AT.minusSeconds(1).atOffset(ZoneOffset.UTC))));
             assertRejectedBy("event_change_history_changed_by_nickname_ck", () -> insert(Map.of(EVENT_CHANGE_HISTORY.CHANGED_BY_NICKNAME,
                     "")));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"VENUE_DETAILS", "MAP_LINK", "PUBLIC_CONTACT"})
+        @DisplayName("상세 안내 · 지도 링크 · 공개용 연락처 줄을 받고, 비운 버전(바꾼 뒤 내용 NULL)도 받는다 — 회차를 가리키면 거부한다 (V27)")
+        void acceptsVenueGuideTargets(String target) {
+            String content = switch (EventChangeHistoryTarget.valueOf(target)) {
+                case MAP_LINK -> MAP_LINK;
+                case PUBLIC_CONTACT -> PUBLIC_CONTACT;
+                default -> "지하 1층, 주차 불가";
+            };
+            insert(values(EVENT_CHANGE_HISTORY.TARGET, target, EVENT_CHANGE_HISTORY.NEW_CONTENT, content,
+                    EVENT_CHANGE_HISTORY.VALID_UNTIL, FIRST_CHANGE.atOffset(ZoneOffset.UTC)));
+            insert(values(EVENT_CHANGE_HISTORY.TARGET, target, EVENT_CHANGE_HISTORY.PREVIOUS_CONTENT, content,
+                    EVENT_CHANGE_HISTORY.NEW_CONTENT, null, EVENT_CHANGE_HISTORY.VALID_FROM, FIRST_CHANGE.atOffset(ZoneOffset.UTC)));
+
+            assertThat(entriesOf(band, EventChangeHistoryTarget.valueOf(target)))
+                    .extracting(EventChangeHistoryEntry::previousContent, EventChangeHistoryEntry::newContent)
+                    .containsExactly(tuple(null, content), tuple(content, null));
+            assertRejectedBy("event_change_history_session_ck", () -> insert(values(EVENT_CHANGE_HISTORY.TARGET, target,
+                    EVENT_CHANGE_HISTORY.SESSION_ID, marchFourteenth, EVENT_CHANGE_HISTORY.VALID_UNTIL,
+                    FIRST_CHANGE.atOffset(ZoneOffset.UTC))));
+            assertRejectedBy("event_change_history_changed_ck", () -> insert(values(EVENT_CHANGE_HISTORY.TARGET, target,
+                    EVENT_CHANGE_HISTORY.NEW_CONTENT, null, EVENT_CHANGE_HISTORY.VALID_UNTIL, FIRST_CHANGE.atOffset(ZoneOffset.UTC))));
+        }
+
+        @Test
+        @DisplayName("대상 칸 CHECK는 V27 뒤에도 모르는 칸을 거부하고, 제목 · 소개 · 포스터의 비운 버전은 바꾼 뒤 내용 CHECK가 여전히 거부한다")
+        void stillRejectsUnknownTargetAndEmptyRequiredContent() {
+            assertRejectedBy("event_change_history_target_ck", () -> insert(Map.of(EVENT_CHANGE_HISTORY.TARGET, "VENUE")));
+            assertRejectedBy("event_change_history_target_ck", () -> insert(Map.of(EVENT_CHANGE_HISTORY.TARGET, "venue_details")));
+            for (String required : List.of("TITLE", "INTRODUCTION", "POSTER")) {
+                assertRejectedBy("event_change_history_new_content_ck", () -> insert(values(EVENT_CHANGE_HISTORY.TARGET, required,
+                        EVENT_CHANGE_HISTORY.PREVIOUS_CONTENT, "○○밴드 단독공연", EVENT_CHANGE_HISTORY.NEW_CONTENT, null)));
+            }
+            assertThat(query.findByEventId(band)).isEmpty();
         }
 
         @Test

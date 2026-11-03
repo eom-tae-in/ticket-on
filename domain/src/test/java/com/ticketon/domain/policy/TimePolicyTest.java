@@ -156,6 +156,14 @@ class TimePolicyTest {
     }
 
     @Test
+    @DisplayName("조기예매 마감 임박(기간)은 끝 순간에서 72시간 전부터다 — 3/20 18:00에 끝나면 3/17 18:00 (docs/05, docs/99 C)")
+    void earlyBirdEndingSoon() {
+        assertThat(TimePolicy.EARLY_BIRD_ENDING_SOON).isEqualTo(Duration.ofHours(72));
+        assertThat(koreanInstant(2026, 3, 20, 18, 0).minus(TimePolicy.EARLY_BIRD_ENDING_SOON))
+                .isEqualTo(koreanInstant(2026, 3, 17, 18, 0));
+    }
+
+    @Test
     @DisplayName("작성 중 행사 알림은 오전 10시, 주최자 신청 강조는 남은 1영업일부터다 (docs/99 C)")
     void draftNoticeTimeAndReviewHighlight() {
         assertThat(TimePolicy.DRAFT_EVENT_IDLE_NOTICE_RUN_TIME).isEqualTo(LocalTime.of(10, 0));
