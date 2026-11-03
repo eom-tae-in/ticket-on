@@ -45,7 +45,7 @@ class BookingEligibilityStartTest {
         @Test
         @DisplayName("판매 중이어도 미리보기 링크로는 예매할 수 없다")
         void previewLinkIsNeverBookable() {
-            BookingEligibility eligibility = BookingEligibilityJudge.of(play(EventStatus.ON_SALE), eightPerformances(), seoyun(),
+            BookingEligibility eligibility = judge(play(EventStatus.ON_SALE), eightPerformances(), seoyun(),
                     BookingAccess.PREVIEW_LINK, BookingPurpose.NEW_BOOKING).atStart(DURING_SALES);
 
             assertRefused(eligibility, BookingErrorCode.PREVIEW_NOT_BOOKABLE, "미리보기에서는 예매할 수 없습니다.");
@@ -54,7 +54,7 @@ class BookingEligibilityStartTest {
         @Test
         @DisplayName("작성 중 행사의 미리보기는 '아직 열리지 않음'이 아니라 미리보기라서 막는다")
         void draftPreviewIsRefusedAsPreview() {
-            BookingEligibility eligibility = BookingEligibilityJudge.of(play(EventStatus.DRAFT), eightPerformances(), seoyun(),
+            BookingEligibility eligibility = judge(play(EventStatus.DRAFT), eightPerformances(), seoyun(),
                     BookingAccess.PREVIEW_LINK, BookingPurpose.NEW_BOOKING).atStart(BEFORE_OPEN);
 
             assertRefused(eligibility, BookingErrorCode.PREVIEW_NOT_BOOKABLE, "미리보기에서는 예매할 수 없습니다.");
@@ -98,7 +98,7 @@ class BookingEligibilityStartTest {
         @Test
         @DisplayName("판매 중단 중에는 변경도 할 수 없고, docs/04의 변경 문구로 알린다")
         void salesPausedRefusesChangeWithDocumentMessage() {
-            BookingEligibility eligibility = BookingEligibilityJudge.of(play(EventStatus.SALES_PAUSED), eightPerformances(), seoyun(),
+            BookingEligibility eligibility = judge(play(EventStatus.SALES_PAUSED), eightPerformances(), seoyun(),
                     BookingAccess.EVENT_PAGE, BookingPurpose.CHANGE).atStart(DURING_SALES);
 
             assertRefused(eligibility, BookingErrorCode.CHANGE_SALES_PAUSED, "현재 판매가 중단되어 변경할 수 없습니다. 취소는 가능합니다.");
@@ -148,7 +148,7 @@ class BookingEligibilityStartTest {
         @Test
         @DisplayName("이용 정지된 계정은 예매를 변경할 수도 없다")
         void suspendedAccountCannotChange() {
-            BookingEligibility eligibility = BookingEligibilityJudge.of(play(EventStatus.ON_SALE), eightPerformances(), suspendedAudience(),
+            BookingEligibility eligibility = judge(play(EventStatus.ON_SALE), eightPerformances(), suspendedAudience(),
                     BookingAccess.EVENT_PAGE, BookingPurpose.CHANGE).atStart(DURING_SALES);
 
             assertRefused(eligibility, AccountErrorCode.AUDIENCE_SUSPENDED, "이용 정지 중에는 이용할 수 없는 기능입니다.");

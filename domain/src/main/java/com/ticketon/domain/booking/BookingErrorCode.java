@@ -5,10 +5,12 @@ import com.ticketon.domain.error.ErrorCode;
 /**
  * 예매 도메인의 오류 코드. 문구는 화면에 그대로 나간다.
  * <p>
- * 예매 자격 판정({@link BookingEligibilityJudge})이 막은 까닭은 {@link BookingRefusal}로 나간다 — 코드는 여기 상수 이름 그대로다.
+ * 예매 자격 판정({@link BookingEligibilityJudge})이 막은 까닭은 {@link BookingRefusal}로 나간다 — 코드는 여기 상수 이름 그대로다. 그 행사의
+ * 값이 들어가는 까닭(연령 제한 · 회차 선택 제약)은 판정이 관객 화면의 행사 이름("이 공연은")과 기준 나이를 채운 문구로 내보내고, 여기 문구는 그
+ * 값이 빠진 꼴이다.
  * <p>
- * 확인 필요 (#223) — 문서에 문구가 있는 것({@link #CHANGE_SALES_PAUSED}, docs/04 "판매 중단")밖은 모두 지었다. 경우는 docs/06 "전체 흐름" ·
- * docs/03 "행사 만들기 위저드"(미리보기)가 정했다.
+ * 확인 필요 (#223) — 문서에 문구가 있는 것({@link #CHANGE_SALES_PAUSED} docs/04 "판매 중단", 판정이 채우는 연령 제한 문구 docs/03 "연령
+ * 제한")밖은 모두 지었다. 경우는 docs/06 "전체 흐름" · "매수 제한", docs/03 "행사 만들기 위저드"(미리보기)가 정했다.
  */
 public enum BookingErrorCode implements ErrorCode {
 
@@ -28,7 +30,28 @@ public enum BookingErrorCode implements ErrorCode {
     BOOKING_CLOSED("예매가 마감되었습니다."),
 
     /** 취소된 행사다 — 공연한 회차 없이 전부 취소했다(docs/04 "행사 취소"). */
-    EVENT_CANCELLED("취소되어 예매할 수 없습니다.");
+    EVENT_CANCELLED("취소되어 예매할 수 없습니다."),
+
+    /** 고른 회차가 취소됐다 — 취소된 회차는 시간이 남아 있어도 팔지 않는다(docs/04 "회차 취소"). 묶음권이면 날짜 하나라도 취소됐으면 막는다. */
+    SESSION_CANCELLED("취소된 회차라 예매할 수 없습니다."),
+
+    /** 고른 회차의 예매 종료 시각이 지났다 — 회차형은 시작, 종일형은 마지막 입장 1시간 전이 처음 값이다(docs/06 "예매 종료"). 행사의 다른 회차는 팔 수 있다. */
+    SESSION_BOOKING_CLOSED("이 회차는 예매가 마감되었습니다."),
+
+    /**
+     * 그 회차 날짜의 만 나이가 기준 나이에 모자란다 — 묶음권은 첫 날로 본다(docs/03 "연령 제한"). 회차를 고르는 순간 막는다(docs/06 "전체 흐름").
+     * 판정은 docs/03의 문구 "이 공연은 만 19세 이상만 예매할 수 있습니다."에 관객 화면의 행사 이름과 기준 나이를 채워 내보낸다.
+     */
+    AGE_RESTRICTED("연령 제한으로 예매할 수 없습니다."),
+
+    /**
+     * '하루에 한 회차만'인데 그 날짜의 다른 회차 티켓을 이미 가졌다(docs/06 "회차 선택 제약 — 관객이 어기면 그 자리에서 알려줍니다"). 판정은 "이
+     * 공연은 "을 앞에 붙이고 이미 예매했다는 까닭을 뒤에 붙인다.
+     */
+    ONE_SESSION_PER_DATE("하루에 한 회차만 예매할 수 있습니다."),
+
+    /** '행사 전체에서 한 회차만'인데 다른 회차 티켓을 이미 가졌거나, 여러 회차를 한 번에 고르려 했다(묶음권). 판정은 "이 공연은 "을 앞에 붙인다. */
+    ONE_SESSION_PER_EVENT("한 회차만 예매할 수 있습니다.");
 
     private final String message;
 

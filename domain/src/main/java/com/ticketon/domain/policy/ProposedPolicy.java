@@ -59,8 +59,14 @@ import java.time.LocalTime;
  *       {@code domain.payment.PaymentHistoryDescriptionSource#appliedDiscountSummaryOf}.</li>
  *   <li>확인 필요 (#223) — 묶음권에서 그 회차의 지연 환급을 이미 받은 티켓에 나중에 그날 몫을 돌려줄 때 그날 몫에서 지연 환급을 빼지 않고 그날 몫
  *       전액을 돌려준다(반대 순서 — 그날 몫 뒤 그 회차 지연 환급 — 는 막는다): {@code domain.payment.PaymentHistory#recordBundleDayRefund}.</li>
- *   <li>확인 필요 (#223) — 예매 자격 판정의 오류 문구(미리보기 · 오픈 전 · 판매 중단 · 마감 · 취소된 행사). 경우는 docs/06 · docs/03 · docs/04가
- *       정했고, 변경 중 판매 중단(docs/04 원문) 밖은 문구만 지었다. 이용 정지는 계정의 문구를 그대로 쓴다: {@code domain.booking.BookingErrorCode}.</li>
+ *   <li>확인 필요 (#223) — 예매 자격 판정의 오류 문구(미리보기 · 오픈 전 · 판매 중단 · 마감 · 취소된 행사 · 취소된 회차 · 회차 마감 · 회차 선택
+ *       제약). 경우는 docs/06 · docs/03 · docs/04가 정했고, 변경 중 판매 중단(docs/04 원문)과 연령 제한(docs/03 원문에 행사 이름 · 기준 나이를
+ *       채움) 밖은 문구만 지었다. 회차 선택 제약도 연령 제한처럼 "이 공연은 "을 앞에 붙인다. 이용 정지는 계정의 문구를 그대로 쓴다:
+ *       {@code domain.booking.BookingErrorCode}.</li>
+ *   <li>확인 필요 (#223) — 회차 선택 제약 · 1인 총 매수는 이미 가진 티켓 가운데 취소된 회차(묶음권의 하루 취소)는 세지 않고, 출연자가 바뀌어
+ *       포기한 날은 센다(티켓이 계속 가리키고 자리가 풀리는지 문서에 없음): {@code domain.booking.HeldBookingTickets}.</li>
+ *   <li>확인 필요 (#223) — '행사 전체에서 한 회차만'인 행사에서는 회차 여럿을 가리키는 묶음권을 살 수 없다(문서가 둘이 함께 걸린 경우를 말하지
+ *       않아 글자 그대로): {@code domain.booking.BookingEligibilityJudge#atSessionChoice}.</li>
  *   <li>확인 필요 (#223) — 예매 변경도 새로 잡는 쪽은 새 예매와 같은 판정을 받고, 바꿀 티켓은 곧 취소되므로 이미 가진 티켓에서 빼고 넘긴다고
  *       보았다(docs/08 "변경 = 취소 + 재예매"): {@code domain.booking.BookingPurpose#CHANGE}.</li>
  * </ul>

@@ -33,11 +33,26 @@ import com.ticketon.domain.event.SessionPriceAdjustment;
 import com.ticketon.domain.event.TicketsPerPersonLimit;
 import com.ticketon.domain.event.TimedSessionTime;
 import com.ticketon.domain.event.Venue;
+import com.ticketon.domain.policy.Percent;
+import com.ticketon.domain.pricing.BundleProduct;
+import com.ticketon.domain.pricing.BundleProductName;
+import com.ticketon.domain.pricing.BundleProductTerms;
+import com.ticketon.domain.pricing.DiscountKind;
+import com.ticketon.domain.pricing.Money;
+import com.ticketon.domain.pricing.SessionPrice;
+import com.ticketon.domain.pricing.TicketPrice;
+import com.ticketon.domain.ticket.QrKey;
+import com.ticketon.domain.ticket.Ticket;
+import com.ticketon.domain.ticket.TicketCancellationReason;
+import com.ticketon.domain.ticket.TicketParentNumber;
+import com.ticketon.domain.ticket.TicketSession;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.Set;
 
 /**
@@ -93,6 +108,22 @@ final class BookingFixtures {
     /** 관객 계정 id. */
     static final long AUDIENCE_ID = 21L;
 
+    /** 공연의 R석 · 페스티벌의 스탠딩A(수량형). */
+    static final long PLAY_ZONE_R = 3L;
+    static final long STANDING_A = 4L;
+
+    /** 페스티벌의 묶음권 상품 id. */
+    static final long THREE_DAY_PASS_ID = 77L;
+    static final long WEEKEND_PASS_ID = 78L;
+
+    /** 관객의 예매 건 ...0091. */
+    static final long BOOKING_ID = 91L;
+    static final TicketParentNumber BOOKING_NUMBER = TicketParentNumber.of("0091");
+
+    /** 주최자가 발권한 초대권. */
+    static final long INVITATION_ID = 55L;
+    static final TicketParentNumber INVITATION_NUMBER = TicketParentNumber.of("5521");
+
     /** 한서윤의 생년월일 — 1998-04-02. */
     static final LocalDate SEOYUN_BIRTH_DATE = LocalDate.of(1998, 4, 2);
 
@@ -134,6 +165,20 @@ final class BookingFixtures {
                 "극단 열두달이 해마다 올리는 봄 정기공연입니다.",
                 new Venue("○○아트홀", "서울특별시 종로구 대학로 12"),
                 null, null, null), status, bookingSettings);
+    }
+
+    /**
+     * 그 예매 설정으로 판매 중인 사진전 — 시간대를 나눈 전시는 회차형이라(docs/05 "묶음권") 봄 정기공연의 8회차 일정을 그대로 쓴다(같은 행사 id).
+     * 관객 화면에서 "전시"로 부르는 행사다.
+     */
+    static Event photoExhibition(BookingSettings bookingSettings) {
+        return event(PLAY_EVENT_ID, new EventBasicInformation(
+                EventTitle.of("빛의 기록 사진전"),
+                EventType.EXHIBITION,
+                EventCategoryCatalog.initial().select(EventType.EXHIBITION, "사진", null),
+                "시간대마다 입장 인원을 나눠 받는 사진전입니다.",
+                new Venue("○○갤러리", "서울특별시 종로구 삼청로 7"),
+                null, null, null), EventStatus.ON_SALE, bookingSettings);
     }
 
     /** 그 예매 설정으로 판매 중인 늦여름 페스티벌. */
@@ -239,9 +284,89 @@ final class BookingFixtures {
         return AudiencePersonalInformation.of("한서윤", birthDate, "seoyun@example.com", "010-1234-5678");
     }
 
-    /** 행사 페이지에서 새로 예매하려는 판정. */
+    /** 이 행사의 티켓이 없는 관객이 행사 페이지에서 새로 예매하려는 판정. */
     static BookingEligibilityJudge judge(Event event, EventSchedule schedule, AudienceAccount audience) {
-        return BookingEligibilityJudge.of(event, schedule, audience, BookingAccess.EVENT_PAGE, BookingPurpose.NEW_BOOKING);
+        return judge(event, schedule, audience, List.of());
+    }
+
+    /** 그 티켓을 가진 관객이 행사 페이지에서 새로 예매하려는 판정. */
+    static BookingEligibilityJudge judge(Event event, EventSchedule schedule, AudienceAccount audience, List<Ticket> heldTickets) {
+        return BookingEligibilityJudge.of(event, schedule, audience, heldTickets, BookingAccess.EVENT_PAGE, BookingPurpose.NEW_BOOKING);
+    }
+
+    /** 이 행사의 티켓이 없는 관객의 그 화면 · 그 목적의 판정. */
+    static BookingEligibilityJudge judge(Event event, EventSchedule schedule, AudienceAccount audience, BookingAccess access,
+            BookingPurpose purpose) {
+        return BookingEligibilityJudge.of(event, schedule, audience, List.of(), access, purpose);
+    }
+
+    /** 봄 정기공연 그 회차의 예매 티켓 count장 — 예매 건 하나, 장당 50,000원. */
+    static List<Ticket> bookedTickets(long sessionId, int count) {
+        List<Ticket> tickets = new ArrayList<>();
+        for (int sequence = 1; sequence <= count; sequence++) {
+            tickets.add(Ticket.issueForBooking(BOOKING_ID, BOOKING_NUMBER, sequence, PLAY_ZONE_R, OptionalLong.empty(),
+                    List.of(TicketSession.purchased(sessionId, new SessionPrice(Money.of(50_000)))), undiscounted(50_000),
+                    qrKey(sequence)));
+        }
+        return List.copyOf(tickets);
+    }
+
+    /** 봄 정기공연 그 회차의 예매 티켓 한 장. */
+    static Ticket bookedTicket(long sessionId) {
+        return bookedTickets(sessionId, 1).getFirst();
+    }
+
+    /** 늦여름 페스티벌 3일 통권 티켓 한 장 — 5/3 · 5/4 · 5/5, 40,000 + 50,000 + 50,000원 → 7% → 130,200원(docs/05). */
+    static Ticket festivalPassTicket() {
+        return Ticket.issueForBooking(BOOKING_ID, BOOKING_NUMBER, 1, STANDING_A, OptionalLong.empty(),
+                List.of(TicketSession.purchased(SESSION_MAY_3, new SessionPrice(Money.of(40_000))),
+                        TicketSession.purchased(SESSION_MAY_4, new SessionPrice(Money.of(50_000))),
+                        TicketSession.purchased(SESSION_MAY_5, new SessionPrice(Money.of(50_000)))),
+                undiscounted(130_200), qrKey(1));
+    }
+
+    /** 그 회차의 초대권 티켓 한 장 — 결제 없음. */
+    static Ticket invitationTicket(long sessionId) {
+        return Ticket.issueForInvitation(INVITATION_ID, INVITATION_NUMBER, 1, PLAY_ZONE_R, OptionalLong.empty(), List.of(sessionId),
+                qrKey(9));
+    }
+
+    /** 늦여름 페스티벌 3일 통권 초대권 티켓 한 장 — 단체 초대(docs/09 "묶음권 초대"). */
+    static Ticket festivalPassInvitation() {
+        return Ticket.issueForInvitation(INVITATION_ID, INVITATION_NUMBER, 1, STANDING_A, OptionalLong.empty(),
+                List.of(SESSION_MAY_3, SESSION_MAY_4, SESSION_MAY_5), qrKey(9));
+    }
+
+    /** 관객이 직접 취소한 그 회차의 예매 티켓 한 장. */
+    static Ticket cancelledBookedTicket(long sessionId) {
+        Ticket ticket = bookedTicket(sessionId);
+        ticket.cancel(TicketCancellationReason.AUDIENCE_CANCELLATION, korean(2026, 3, 8, 10, 0));
+        return ticket;
+    }
+
+    /** 늦여름 페스티벌 3일 통권 — 5/3 · 5/4 · 5/5, 스탠딩A, 7%(docs/05 "묶음권 만들기"). */
+    static BundleProduct threeDayPass() {
+        return BundleProduct.restore(THREE_DAY_PASS_ID, FESTIVAL_EVENT_ID, new BundleProductTerms(BundleProductName.of("3일 통권"),
+                Set.of(MAY_3, MAY_4, MAY_5), Set.of(STANDING_A), Percent.of(7)));
+    }
+
+    /** 늦여름 페스티벌 주말 2일권 — 5/4 · 5/5, 스탠딩A, 3%. */
+    static BundleProduct weekendPass() {
+        return BundleProduct.restore(WEEKEND_PASS_ID, FESTIVAL_EVENT_ID, new BundleProductTerms(BundleProductName.of("주말 2일권"),
+                Set.of(MAY_4, MAY_5), Set.of(STANDING_A), Percent.of(3)));
+    }
+
+    /** 3일 통권과 날짜마다의 회차(페스티벌은 날짜당 회차 하나). */
+    static BookingSelection threeDayPassSelection() {
+        return BookingSelection.bundle(threeDayPass(), List.of(SESSION_MAY_3, SESSION_MAY_4, SESSION_MAY_5));
+    }
+
+    private static TicketPrice undiscounted(long won) {
+        return new TicketPrice(Money.of(won), DiscountKind.NONE, Money.ZERO);
+    }
+
+    private static QrKey qrKey(int seed) {
+        return QrKey.issue(String.valueOf((char) ('A' + seed)).repeat(QrKey.LENGTH));
     }
 
     /** 막혔고, 그 까닭의 코드 · 문구가 기대한 것인지 본다. */
