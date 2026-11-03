@@ -69,7 +69,10 @@ import java.time.LocalTime;
  *   <li>확인 필요 (#223) — '행사 전체에서 한 회차만'인 행사에서는 회차 여럿을 가리키는 묶음권을 살 수 없다(문서가 둘이 함께 걸린 경우를 말하지
  *       않아 글자 그대로): {@code domain.booking.BookingEligibilityJudge#atSessionChoice}.</li>
  *   <li>확인 필요 (#223) — 예매 변경도 새로 잡는 쪽은 새 예매와 같은 판정을 받고, 바꿀 티켓은 곧 취소되므로 이미 가진 티켓에서 빼고 넘긴다고
- *       보았다(docs/08 "변경 = 취소 + 재예매"): {@code domain.booking.BookingPurpose#CHANGE}.</li>
+ *       보았다(docs/08 "변경 = 취소 + 재예매"). 그래서 판매 중에 매수 제한을 낮추거나 회차 선택 제약을 건 뒤에는 이미 산 관객의 좌석 변경도 막힐 수
+ *       있다(docs/04 "신규 예매부터 적용"과 갈림): {@code domain.booking.BookingPurpose#CHANGE}.</li>
+ *   <li>확인 필요 (#223) — 예매 자격의 거부 까닭이 겹치면 미리보기 → 판매 상태 → 계정 → 회차 → 연령 → 회차 선택 제약 → 1인 총 매수 순서로 하나만
+ *       알린다: {@code domain.booking.BookingEligibilityJudge}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
