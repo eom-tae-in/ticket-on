@@ -63,7 +63,8 @@ public record EventBasicInformation(EventTitle title, EventType type, EventCateg
      * 이 기본 정보를 그 기본 정보로 바꾸면 바뀌는 수정 항목 — 상태별 수정 범위 표({@link EventEditScope})가 판정하는 단위로 나눈다.
      * <ul>
      *   <li>제목 · 소개 → {@link EventEditTarget#TITLE_POSTER_DESCRIPTION}</li>
-     *   <li>유형 · 카테고리 → {@link EventEditTarget#TYPE_AND_CATEGORY}</li>
+     *   <li>유형 → {@link EventEditTarget#TYPE}</li>
+     *   <li>카테고리 → {@link EventEditTarget#CATEGORY} — 카테고리는 유형의 목록에서 고르므로 유형이 바뀌면 카테고리도 바뀐다</li>
      *   <li>장소(공연장 이름 · 주소) → {@link EventEditTarget#VENUE}</li>
      *   <li>상세 안내 · 지도 링크 · 공개용 연락처 → {@link EventEditTarget#VENUE_GUIDE_AND_CONTACT}</li>
      * </ul>
@@ -76,8 +77,11 @@ public record EventBasicInformation(EventTitle title, EventType type, EventCateg
         if (!title.equals(changed.title) || !introduction.equals(changed.introduction)) {
             targets.add(EventEditTarget.TITLE_POSTER_DESCRIPTION);
         }
-        if (type != changed.type || !category.equals(changed.category)) {
-            targets.add(EventEditTarget.TYPE_AND_CATEGORY);
+        if (type != changed.type) {
+            targets.add(EventEditTarget.TYPE);
+        }
+        if (!category.equals(changed.category)) {
+            targets.add(EventEditTarget.CATEGORY);
         }
         if (!venue.equals(changed.venue)) {
             targets.add(EventEditTarget.VENUE);

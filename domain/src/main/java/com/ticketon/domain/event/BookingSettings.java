@@ -30,9 +30,9 @@ import java.util.Set;
  * 예매 종료 · 검표 시작은 기준 시각에서 앞서는 시간만 갖는다({@link LeadTime}). 기준 시각(회차형은 회차 시작, 종일형은 마지막 입장 · 운영 시작)은
  * 회차의 시각이 고른다({@link SessionTimes}). 회차를 나중에 추가해도 이 설정이 그대로 적용된다(docs/04 "회차 추가는 허용").
  * <p>
- * 언제 무엇을 바꿀 수 있는지(판매 중에도 예매 종료 시각은 변경 가능 등)는 상태별 수정 범위가 정한다(docs/04 "예매가 열린 뒤 수정 범위",
- * {@link EventEditTarget#BOOKING_CLOSE_TIME}, {@link EventEditTarget#OTHER_BOOKING_SETTINGS}). 바꿀 때 어느 항목이 바뀌는지는
- * {@link #changedEditTargets}가 나눈다.
+ * 언제 무엇을 바꿀 수 있는지는 상태별 수정 범위가 정한다(docs/04 "예매가 열린 뒤(판매 중) 수정 범위") — 예매가 열린 뒤에도 예매 종료 · 검표
+ * 시작 · 매수 제한 · 회차 선택 제약은 바꾸고(매수 제한은 신규 예매부터), 재입장은 켜기만, 연령 제한은 낮추거나 없애기만 하며
+ * ({@link Event#saveBookingStep}), 오픈 시각은 이미 지나 바꾸지 않는다. 바꿀 때 어느 항목이 바뀌는지는 {@link #changedEditTargets}가 나눈다.
  *
  * @param bookingOpensAt       예매 오픈 시각. 비워 두면 null — 판매를 시작하는 순간 연다
  * @param bookingCloseLeadTime 예매 종료 — 회차 시작(종일형은 마지막 입장)보다 이만큼 앞에서 닫는다
@@ -73,26 +73,41 @@ public record BookingSettings(Instant bookingOpensAt, LeadTime bookingCloseLeadT
     }
 
     /**
-     * 이 설정을 그 설정으로 바꾸면 바뀌는 수정 항목 — 상태별 수정 범위 표({@link EventEditScope})가 판정하는 단위로 나눈다. 예매 종료가 바뀌면
-     * {@link EventEditTarget#BOOKING_CLOSE_TIME}, 그 밖의 칸(오픈 시각 · 검표 시작 · 1회 선택 매수 · 1인 총 매수 · 회차 선택 제약 · 재입장 ·
-     * 연령 제한) 가운데 하나라도 바뀌면 {@link EventEditTarget#OTHER_BOOKING_SETTINGS}. 위저드는 단계의 칸을 모두 다시 보내므로 바뀌지 않은
-     * 항목은 담지 않는다 — 같으면 빈 집합이다.
+     * 이 설정을 그 설정으로 바꾸면 바뀌는 수정 항목 — 상태별 수정 범위 표({@link EventEditScope})가 판정하는 단위로 나눈다.
+     * <ul>
+     *   <li>오픈 시각 → {@link EventEditTarget#BOOKING_OPEN_TIME}</li>
+     *   <li>예매 종료 → {@link EventEditTarget#BOOKING_CLOSE_TIME}</li>
+     *   <li>검표 시작 → {@link EventEditTarget#CHECKIN_OPEN_TIME}</li>
+     *   <li>1회 선택 매수 · 1인 총 매수(기준 포함) · 회차 선택 제약 → {@link EventEditTarget#PURCHASE_LIMITS_AND_SESSION_CHOICE}</li>
+     *   <li>재입장 → {@link EventEditTarget#REENTRY}</li>
+     *   <li>연령 제한 → {@link EventEditTarget#AGE_RESTRICTION}</li>
+     * </ul>
+     * 위저드는 단계의 칸을 모두 다시 보내므로 바뀌지 않은 항목은 담지 않는다 — 같으면 빈 집합이다. 재입장 · 연령 제한이 어느 쪽으로 바뀌는지는
+     * 여기서 보지 않는다({@link Event#saveBookingStep}).
      */
     public Set<EventEditTarget> changedEditTargets(BookingSettings changed) {
         Objects.requireNonNull(changed, "changed");
         Set<EventEditTarget> targets = EnumSet.noneOf(EventEditTarget.class);
+        if (!Objects.equals(bookingOpensAt, changed.bookingOpensAt)) {
+            targets.add(EventEditTarget.BOOKING_OPEN_TIME);
+        }
         if (!bookingCloseLeadTime.equals(changed.bookingCloseLeadTime)) {
             targets.add(EventEditTarget.BOOKING_CLOSE_TIME);
         }
-        boolean othersChanged = !Objects.equals(bookingOpensAt, changed.bookingOpensAt)
-                || !checkinOpenLeadTime.equals(changed.checkinOpenLeadTime)
-                || !seatsPerSelection.equals(changed.seatsPerSelection)
+        if (!checkinOpenLeadTime.equals(changed.checkinOpenLeadTime)) {
+            targets.add(EventEditTarget.CHECKIN_OPEN_TIME);
+        }
+        boolean purchaseLimitsChanged = !seatsPerSelection.equals(changed.seatsPerSelection)
                 || !ticketsPerPerson.equals(changed.ticketsPerPerson)
-                || sessionChoice != changed.sessionChoice
-                || reentry != changed.reentry
-                || !ageRestriction.equals(changed.ageRestriction);
-        if (othersChanged) {
-            targets.add(EventEditTarget.OTHER_BOOKING_SETTINGS);
+                || sessionChoice != changed.sessionChoice;
+        if (purchaseLimitsChanged) {
+            targets.add(EventEditTarget.PURCHASE_LIMITS_AND_SESSION_CHOICE);
+        }
+        if (reentry != changed.reentry) {
+            targets.add(EventEditTarget.REENTRY);
+        }
+        if (!ageRestriction.equals(changed.ageRestriction)) {
+            targets.add(EventEditTarget.AGE_RESTRICTION);
         }
         return targets;
     }

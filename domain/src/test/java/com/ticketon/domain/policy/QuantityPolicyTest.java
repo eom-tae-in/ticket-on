@@ -36,9 +36,10 @@ class QuantityPolicyTest {
     }
 
     @Test
-    @DisplayName("잔여 배지는 10% 또는 10석이다 (docs/13)")
+    @DisplayName("잔여 배지는 10% 또는 10석이고, 10석 쪽은 절반 이상 팔려야 한다 (docs/13)")
     void remainingSeatsBadge() {
         assertThat(QuantityPolicy.REMAINING_SEATS_BADGE).isEqualTo(new QuantityThreshold(10, Percent.of(10)));
+        assertThat(QuantityPolicy.REMAINING_SEATS_BADGE_SOLD_SHARE).isEqualTo(Percent.of(50));
     }
 
     @Test

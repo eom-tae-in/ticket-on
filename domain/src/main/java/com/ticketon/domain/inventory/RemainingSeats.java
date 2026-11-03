@@ -1,5 +1,6 @@
 package com.ticketon.domain.inventory;
 
+import com.ticketon.domain.policy.Percent;
 import com.ticketon.domain.policy.QuantityPolicy;
 import com.ticketon.domain.policy.QuantityThreshold;
 import java.util.Collection;
@@ -9,16 +10,19 @@ import java.util.Objects;
  * 잔여 — 남은 자리와 전체 자리(docs/13 "잔여 좌석 표시"). 매진 · 매진 임박을 여기서 판정한다({@link #badge}).
  * <ul>
  *   <li><b>매진</b> — 잔여 0. 상태가 아니라 잔여가 0인 순간의 표시다(docs/04 "'매진'은 상태가 아닙니다").</li>
- *   <li><b>매진 임박</b> — 잔여 10% 이하 또는 10석 이하({@link QuantityPolicy#REMAINING_SEATS_BADGE}). 둘 중 하나만 맞아도 임박이다.
- *       확인 필요 (#53) — 10%는 반올림하기 전 비율로 본다: 200석에 20석 남으면(10%) 임박, 21석 남으면(10.5%) 아니다(1회 선택 매수
- *       경고선과 같은 방식, {@code domain.event.SeatsPerSelectionFeedback}).</li>
+ *   <li><b>매진 임박</b> — 잔여 10% 이하, 또는 잔여 10석 이하이면서 절반 이상 팔림({@link QuantityPolicy#REMAINING_SEATS_BADGE},
+ *       {@link QuantityPolicy#REMAINING_SEATS_BADGE_SOLD_SHARE}). 둘 중 하나만 맞아도 임박이다. 비율은 반올림하기 전으로 본다: 200석에
+ *       20석 남으면(10%) 임박, 21석 남으면(10.5%) 아니다.</li>
  * </ul>
- * 확인 필요 (#53) — 10%의 분모(전체)는 그 구역의 자리 전부다: 수량형은 정원, 지정형은 그 구역에 배정된 활성 좌석 수. 판매 제외 좌석 · 관계자
- * 확보분도 분모에 든다 — 문서는 "잔여 10% 이하"만 적었고, 관객이 보는 객석 크기는 정원이다. 그래서 정원이 10석 이하인 구역은 하나도 팔리지 않아도
- * '10석 이하'라 매진 임박이다(문서 그대로).
+ * 분모(전체)는 그 단위의 자리 전부다 — 수량형은 정원, 지정형은 그 구역에 배정된 활성 좌석 수이고, 판매 제외 좌석 · 관계자 확보분도 든다(docs/13
+ * "잔여 좌석 표시", docs/99 C "잔여 배지").
  * <p>
- * 여러 구역 · 회차의 잔여는 더해 본다({@link #plus}, {@link #sum}). 행사 카드에 어느 회차 · 구역을 더할지(끝난 회차 · 취소된 회차를 빼는지)는
- * 보여 주는 쪽이 정한다.
+ * "절반 이상 팔림"은 정원이 작은 구역이 처음부터 임박이 되지 않게 하는 조건이다 — 정원 8석 VIP 구역은 한 장도 안 팔려도 10석 이하다. 남지 않은
+ * 자리(판매 · 선점 · 판매 제외 · 관계자 확보)를 팔린 쪽으로 세어 <b>잔여 × 2 ≤ 전체</b>로 본다. 문서가 "정원이 20석 이상이면 10석 이하가 남았을
+ * 때 이미 절반 넘게 팔렸다"고 이렇게 센다. 판매 제외 · 관계자 확보분을 팔린 쪽으로 세는 것은 확인 필요 (#223).
+ * <p>
+ * 회차의 잔여는 그 회차 모든 구역을 더해 본다({@link #plus}, {@link #sum}). 목록 카드는 회차마다의 표시로 정한다
+ * ({@link RemainingSeatsBadge#forEventCard}).
  *
  * @param remaining 남은 자리 (0 이상, 전체 이하)
  * @param total     전체 자리 (0 이상)
@@ -60,13 +64,20 @@ public record RemainingSeats(int remaining, int total) {
         return remaining == 0;
     }
 
-    /** 매진 임박인지 — 매진이 아니고, 잔여 10석 이하 또는 전체의 10% 이하. */
+    /** 매진 임박인지 — 매진이 아니고, 전체의 10% 이하이거나 10석 이하이면서 절반 이상 팔림. */
     public boolean isAlmostSoldOut() {
         if (isSoldOut()) {
             return false;
         }
         QuantityThreshold line = QuantityPolicy.REMAINING_SEATS_BADGE;
-        return remaining <= line.count() || remaining * PERCENT <= (long) total * line.percentOfTotal().value();
+        boolean withinPercent = remaining * PERCENT <= (long) total * line.percentOfTotal().value();
+        boolean fewAndMostlySold = remaining <= line.count() && isSoldAtLeast(QuantityPolicy.REMAINING_SEATS_BADGE_SOLD_SHARE);
+        return withinPercent || fewAndMostlySold;
+    }
+
+    private boolean isSoldAtLeast(Percent share) {
+        long notRemaining = (long) total - remaining;
+        return notRemaining * PERCENT >= (long) total * share.value();
     }
 
     /** 잔여 표시 — 매진 · 매진 임박 · 표시 없음. */

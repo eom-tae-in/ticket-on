@@ -90,7 +90,8 @@ public class OrganizerEventController {
     @Operation(summary = "1단계 저장 (기본 정보)", description = "단계를 넘길 때마다 부르는 자동 임시저장. 보낸 칸으로 기본 정보를 바꾸고 위저드 값을 "
             + "돌려준다. 지금과 같은 값이면 아무것도 바뀌지 않는다(조작 기록 · 마지막 수정 시각도 그대로). 두 사람이 거의 동시에 저장하면 차례로 "
             + "처리된다. 운영진 누구나 저장한다. 입력 오류(400)와 카테고리 오류(409)는 행사 만들기와 같다. 바뀐 항목을 지금 상태에서 고칠 수 없으면 "
-            + "409(예매가 열린 뒤 장소 VENUE_CHANGE_NEEDS_ADMIN_APPROVAL 등). " + REJECTIONS + " " + EVENT_NOT_FOUND
+            + "409(예매가 열린 뒤 장소 VENUE_CHANGE_NEEDS_ADMIN_APPROVAL, 유형 EDIT_LOCKED_AFTER_BOOKING_OPENED 등 — 카테고리 · 상세 안내 · "
+            + "지도 링크 · 공개용 연락처는 예매가 열린 뒤에도 바꾼다). 막히면 아무것도 바뀌지 않는다. " + REJECTIONS + " " + EVENT_NOT_FOUND
             + " 바뀌었으면 운영진 조작 기록에 남는다.")
     @PutMapping("/{eventId}/basic-information")
     public EventWizardResponse saveBasicInformation(@CurrentStaff ActingStaff actingStaff,
@@ -121,8 +122,10 @@ public class OrganizerEventController {
             + "같은 값이면 아무것도 바뀌지 않는다 — 걸려 있던 암호를 다시 적어도 같다. 운영진 누구나 저장한다. 빠졌거나 범위를 벗어난 칸, 관람일 "
             + "당일 구간이 없거나 같은 날 구간이 둘인 취소 규정, 암호 보호가 아닌데 적은 암호는 400. 기준보다 관객에게 불리한 취소 규정은 409 "
             + "CANCELLATION_POLICY_STRICTER_THAN_STANDARD, 암호가 걸린 적 없이 암호 보호로 두면서 암호를 비우면 409 EVENT_PASSWORD_REQUIRED, "
-            + "바뀐 항목을 지금 상태에서 고칠 수 없으면 409(예매가 열린 뒤 취소 규정 EDIT_LOCKED_AFTER_BOOKING_OPENED 등). " + REJECTIONS + " "
-            + EVENT_NOT_FOUND + " 바뀌었으면 운영진 조작 기록에 남는다.")
+            + "바뀐 항목을 지금 상태에서 고칠 수 없으면 409(예매가 열린 뒤 취소 규정 · 예매 오픈 시각 EDIT_LOCKED_AFTER_BOOKING_OPENED 등). "
+            + "예매가 열린 뒤 재입장을 끄면 409 REENTRY_TURN_OFF_LOCKED_AFTER_BOOKING_OPENED, 연령 제한을 새로 걸거나 올리면 409 "
+            + "AGE_RESTRICTION_RAISE_LOCKED_AFTER_BOOKING_OPENED. 막히면 아무것도 바뀌지 않는다. " + REJECTIONS + " " + EVENT_NOT_FOUND
+            + " 바뀌었으면 운영진 조작 기록에 남는다.")
     @PutMapping("/{eventId}/booking-settings")
     public EventWizardResponse saveBookingSettings(@CurrentStaff ActingStaff actingStaff,
             @PathVariable @Positive(message = INVALID_ID_MESSAGE) long eventId,
