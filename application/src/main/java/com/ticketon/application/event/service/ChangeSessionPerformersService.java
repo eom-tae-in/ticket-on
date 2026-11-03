@@ -8,8 +8,8 @@ import com.ticketon.domain.event.Event;
 import com.ticketon.domain.event.EventChangeHistory;
 import com.ticketon.domain.event.EventSchedule;
 import com.ticketon.domain.event.SessionPerformers;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,13 +43,13 @@ public class ChangeSessionPerformersService implements ChangeSessionPerformersUs
         LockedSchedule locked = editing.lock(command.actingStaff(), command.eventId());
         Event event = locked.event();
         EventSchedule schedule = locked.requireSchedule();
-        Set<Long> sessionIdsBefore = ScheduleResults.sessionIdsOf(schedule);
+        Map<Long, EventScheduleEditing.SessionPlacement> placementsBefore = EventScheduleEditing.placementsOf(schedule);
         Optional<SessionPerformers> before = schedule.session(command.sessionId()).performers();
 
         if (!event.changeSessionPerformers(schedule, command.sessionId(), command.performers(), locked.now())) {
             return ScheduleResults.of(schedule);
         }
-        EventScheduleResult saved = editing.saveChanged(locked, schedule, sessionIdsBefore,
+        EventScheduleResult saved = editing.saveChanged(locked, schedule, placementsBefore,
                 operationSummary(ScheduleResults.sessionLabel(schedule, command.sessionId())));
         historyRecorder.record(locked.permission(), command.eventId(),
                 EventChangeHistory.performersVersion(event, schedule, command.sessionId(), before).stream().toList(), locked.now());

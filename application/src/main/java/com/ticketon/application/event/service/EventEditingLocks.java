@@ -12,8 +12,10 @@ import com.ticketon.domain.event.Event;
 import com.ticketon.domain.event.EventErrorCode;
 
 /**
- * 행사를 만들거나 고치는 흐름(행사 만들기 · 복제, 위저드 단계 저장, 포스터 올리기, 일정 편집, 구역 · 입구 추가 · 수정 · 삭제, 배치도 편집)의 시작 — 이
- * 흐름들이 같은 잠금 순서와 같은 재확인을 쓰게 한곳에 둔다. 잠금 순서는 운영진 계정 줄 → 주최자 줄 → 행사 줄 → 일정 · 도면 · 입구 줄이다
+ * 행사를 만들거나 고치는 흐름(행사 만들기 · 복제, 위저드 단계 저장, 포스터 올리기, 일정 편집, 구역 · 입구 추가 · 수정 · 삭제, 배치도 편집,
+ * 위저드 4단계의 조기예매 · 쿠폰 · 묶음권 저장)의 시작 — 이 흐름들이 같은 잠금 순서와 같은 재확인을 쓰게 한곳에 둔다. 4단계 저장은 가격(pricing
+ * ②)의 서비스라 이 클래스를 공개해 함께 쓴다(위 층이 아래 층을 부른다). 잠금 순서는 운영진 계정 줄 → 주최자 줄 → 행사 줄 → 일정 · 도면 · 입구 ·
+ * 가격 줄이다
  * (organizer 서비스의 {@link StaffAccountLocks} 표).
  * <ol>
  *   <li>권한을 확인한다 — 권한이 없는 요청은 아무 줄도 잠그지 않고 막는다.</li>
@@ -30,7 +32,7 @@ import com.ticketon.domain.event.EventErrorCode;
  *       입구 목록을 읽는다. 다른 주최자의 행사는 없는 것으로 다룬다.</li>
  * </ol>
  */
-final class EventEditingLocks {
+public final class EventEditingLocks {
 
     private EventEditingLocks() {
     }
@@ -41,7 +43,7 @@ final class EventEditingLocks {
      * @return 잠근 뒤 다시 확인한 권한 — 조작 기록에 이 권한(그때의 역할)을 남긴다
      * @throws com.ticketon.domain.error.PermissionDeniedException 처음 확인이나 잠근 뒤의 다시 확인에서 막히면
      */
-    static StaffPermissionResult lockOrganizer(CheckStaffPermissionUseCase checkStaffPermissionUseCase,
+    public static StaffPermissionResult lockOrganizer(CheckStaffPermissionUseCase checkStaffPermissionUseCase,
             StaffAccountRepository staffAccountRepository, OrganizerRepository organizerRepository,
             CheckStaffPermissionQuery query) {
         StaffPermissionResult checked = checkStaffPermissionUseCase.check(query);
@@ -60,7 +62,7 @@ final class EventEditingLocks {
      *
      * @throws NotFoundException 없거나 지운 행사, 다른 주최자의 행사면({@link EventErrorCode#EVENT_NOT_FOUND})
      */
-    static Event lockEvent(EventRepository eventRepository, StaffPermissionResult permission, long eventId) {
+    public static Event lockEvent(EventRepository eventRepository, StaffPermissionResult permission, long eventId) {
         return eventRepository.findByIdForUpdate(eventId)
                 .filter(event -> permission.covers(event.organizerId()))
                 .orElseThrow(() -> eventNotFound(permission, eventId));

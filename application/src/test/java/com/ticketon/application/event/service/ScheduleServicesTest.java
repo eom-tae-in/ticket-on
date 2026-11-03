@@ -30,6 +30,7 @@ import com.ticketon.domain.error.NotFoundException;
 import com.ticketon.domain.error.PermissionDeniedException;
 import com.ticketon.domain.error.RuleViolationException;
 import com.ticketon.domain.event.Event;
+import com.ticketon.domain.event.EventDateMoved;
 import com.ticketon.domain.event.EventErrorCode;
 import com.ticketon.domain.event.EventStatus;
 import com.ticketon.domain.event.EventWizardStep;
@@ -252,10 +253,11 @@ class ScheduleServicesTest {
     }
 
     @Test
-    @DisplayName("회차를 다른 날짜로 옮기면 같은 회차라 재고에 알리지 않고, 일시 변경 기록이 남는다 — 같은 일시를 다시 보내면 기록이 없다")
+    @DisplayName("회차를 다른 날짜로 옮기면 같은 회차라 재고에 알리지 않고, 빠진 날짜와 옮겨 간 날짜를 알리고(묶음권이 따라감), 일시 변경 기록이 남는다 — 같은 일시를 다시 보내면 기록이 없다")
     void changesSessionDateTime() {
         chooseTimed();
         long evening = sessionIdAt(addSession(NOVEMBER_14, 19, 21), NOVEMBER_14, 19);
+        long november14 = scene.scheduleRepository.findByEventId(springPlay).orElseThrow().requireDate(NOVEMBER_14).id().getAsLong();
         int publishedBefore = scene.eventPublisher.published().size();
         ChangeSessionDateTimeCommand moveToNovember15 = new ChangeSessionDateTimeCommand(acting(PLANNER, scene.twelveMonths),
                 springPlay, evening, NOVEMBER_15, LocalTime.of(20, 0), LocalTime.of(22, 0));
@@ -268,7 +270,9 @@ class ScheduleServicesTest {
         });
         assertThat(scene.scheduleRepository.removedSessions()).isEmpty();
         assertThat(scene.scheduleRepository.removedDates()).hasSize(1);
-        assertThat(scene.eventPublisher.published()).hasSize(publishedBefore);
+        long november15 = scene.scheduleRepository.findByEventId(springPlay).orElseThrow().requireDate(NOVEMBER_15).id().getAsLong();
+        assertThat(scene.eventPublisher.published()).hasSize(publishedBefore + 1).last()
+                .isEqualTo(new EventDateMoved(springPlay, november14, november15));
         assertThat(summaries()).last().isEqualTo("회차 일시 변경 · 2026-11-14 19:00 → 2026-11-15 20:00 (2단계)");
         int recordsBefore = scene.recordRepository.records().size();
 

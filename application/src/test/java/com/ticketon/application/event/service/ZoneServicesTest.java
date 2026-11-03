@@ -26,6 +26,7 @@ import com.ticketon.domain.event.BlockSize;
 import com.ticketon.domain.event.CanvasPoint;
 import com.ticketon.domain.event.Event;
 import com.ticketon.domain.event.EventErrorCode;
+import com.ticketon.domain.event.EventPricesChanged;
 import com.ticketon.domain.event.EventStatus;
 import com.ticketon.domain.event.EventWizardStep;
 import com.ticketon.domain.event.Seat;
@@ -185,7 +186,7 @@ class ZoneServicesTest {
     }
 
     @Test
-    @DisplayName("수량형 스탠딩A의 기본가 · 이름만 고치고 정원은 300 그대로 보내면 저장하고 기록하되, 정원이 그대로라 재고에 알리지 않는다")
+    @DisplayName("수량형 스탠딩A의 기본가 · 이름만 고치고 정원은 300 그대로 보내면 저장하고 기록하되, 정원이 그대로라 재고에 알리지 않고 바뀐 기본가를 가격에 알린다")
     void changesQuantityZonePriceWithoutCapacityNotice() {
         long standingA = add(JUNGHOON, ZoneKind.QUANTITY, STANDING_A_300).zoneId();
 
@@ -198,13 +199,13 @@ class ZoneServicesTest {
         assertThat(scene.floorPlanRepository.findByEventId(springPlay).zone(standingA).basePrice())
                 .isEqualTo(ZoneBasePrice.of(35_000));
         assertThat(scene.eventPublisher.published())
-                .containsExactly(new ZoneAdded(springPlay, standingA, ZoneKind.QUANTITY, ZoneCapacity.of(300)));
+                .containsExactly(new ZoneAdded(springPlay, standingA, ZoneKind.QUANTITY, ZoneCapacity.of(300)), new EventPricesChanged(springPlay));
         assertThat(scene.recordRepository.records()).last()
                 .satisfies(record -> assertThat(record.summary()).isEqualTo("구역 수정 · 스탠딩 1구역 (3단계)"));
     }
 
     @Test
-    @DisplayName("지정형 R석의 기본가 · 이름을 고쳐도 정원이 없어 재고에 알리지 않는다")
+    @DisplayName("지정형 R석의 기본가 · 이름을 고쳐도 정원이 없어 재고에 알리지 않고, 바뀐 기본가를 가격에 알린다")
     void changesDesignatedZoneWithoutCapacityNotice() {
         long rSeat = add(JUNGHOON, ZoneKind.DESIGNATED, R_SEAT).zoneId();
 
@@ -213,7 +214,7 @@ class ZoneServicesTest {
         assertThat(changed.name()).isEqualTo("VIP석");
         assertThat(changed.basePrice()).isEqualTo(70_000);
         assertThat(scene.eventPublisher.published())
-                .containsExactly(new ZoneAdded(springPlay, rSeat, ZoneKind.DESIGNATED, null));
+                .containsExactly(new ZoneAdded(springPlay, rSeat, ZoneKind.DESIGNATED, null), new EventPricesChanged(springPlay));
         assertThat(scene.recordRepository.records()).last()
                 .satisfies(record -> assertThat(record.summary()).isEqualTo("구역 수정 · VIP석 (3단계)"));
     }

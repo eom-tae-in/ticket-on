@@ -16,8 +16,6 @@ import com.ticketon.domain.event.TimedSessionTime;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.util.Locale;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /** 일정을 일정 값(Result)으로 옮기고, 조작 기록 요약에 쓸 회차 · 운영 시간 · 가격 조정 표기를 만든다 — 도메인 객체를 포트 밖으로 그대로 내보내지 않는다. */
 final class ScheduleResults {
@@ -29,14 +27,6 @@ final class ScheduleResults {
         return new EventScheduleResult(schedule.eventId(), schedule.mode(),
                 OperatingHoursResult.of(schedule.defaultOperatingHours().orElse(null)),
                 schedule.dates().stream().map(date -> of(schedule, date)).toList());
-    }
-
-    /** 일정의 회차 id — 저장 전 회차(id 없음)는 빠진다. */
-    static Set<Long> sessionIdsOf(EventSchedule schedule) {
-        return schedule.sessions().stream()
-                .filter(session -> session.id().isPresent())
-                .map(session -> session.id().getAsLong())
-                .collect(Collectors.toSet());
     }
 
     /** 회차 표기 — 회차형은 "2026-03-14 19:00", 종일형은 "2026-05-03". */

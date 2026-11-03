@@ -1,0 +1,65 @@
+package com.ticketon.application.pricing.service;
+
+import com.ticketon.application.pricing.port.out.BundleProductRepository;
+import com.ticketon.application.pricing.port.out.EarlyBirdRepository;
+import com.ticketon.domain.event.EventDateMoved;
+import com.ticketon.domain.event.ZoneRemoved;
+import com.ticketon.domain.pricing.BundleProduct;
+import com.ticketon.domain.pricing.EarlyBird;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 행사(①)의 일정 · 도면이 바뀌었다는 알림을 듣고 묶음권 상품 · 조기예매가 따라간다 — 행사는 가격(②)을 부를 수 없어 알리기만 하고, 가격이 듣고
+ * 처리한다(.claude/rules/architecture.md "도메인 패키지와 층").
+ * <ul>
+ *   <li><b>날짜를 옮기면</b>({@link EventDateMoved}) 그 날짜를 묶은 묶음권이 옮겨 간 날짜를 묶는다({@link BundleProduct#followMovedDate}) —
+ *       빠지면 연기한 날짜를 묶은 묶음권이 지워진 날짜를 가리켜 말없이 팔리지 않는다(docs/04 "연기된 회차도 계속 팝니다").</li>
+ *   <li><b>구역을 지우면</b>({@link ZoneRemoved}) 묶음권의 대상 구역에서 빼고({@link BundleProduct#dropRemovedZone} — 하나뿐인 구역이면 막아 구역
+ *       삭제도 되돌려진다, 확인 필요 #223), 조기예매가 그 구역을 꺼 둔 기록을 지운다({@link EarlyBird#dropRemovedZone}).</li>
+ * </ul>
+ * <b>발행한 유스케이스의 트랜잭션 안에서 동기로 돈다</b>(도메인 이벤트 규약, #42) — 함께 커밋되거나 함께 되돌려진다. 발행한 흐름이 이미 행사 줄을
+ * FOR UPDATE로 쥐고 있어 가격 줄을 따로 잠그지 않는다. 바뀐 것이 없으면 쓰지 않는다.
+ */
+@Component
+class PricingFollowsEventEdits {
+
+    private final BundleProductRepository bundleProductRepository;
+    private final EarlyBirdRepository earlyBirdRepository;
+
+    PricingFollowsEventEdits(BundleProductRepository bundleProductRepository, EarlyBirdRepository earlyBirdRepository) {
+        this.bundleProductRepository = bundleProductRepository;
+        this.earlyBirdRepository = earlyBirdRepository;
+    }
+
+    @EventListener
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void dateMoved(EventDateMoved notice) {
+        for (BundleProduct bundleProduct : bundleProductRepository.findByEventId(notice.eventId())) {
+            if (bundleProduct.followMovedDate(notice.retiredDateId(), notice.movedToDateId())) {
+                bundleProductRepository.update(bundleProduct);
+            }
+        }
+    }
+
+    /**
+     * @throws com.ticketon.domain.error.RuleViolationException 지운 구역이 어느 묶음권의 하나뿐인 대상 구역이면
+     *                                                          ({@link com.ticketon.domain.pricing.PricingErrorCode#BUNDLE_ONLY_ZONE})
+     */
+    @EventListener
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void zoneRemoved(ZoneRemoved notice) {
+        for (BundleProduct bundleProduct : bundleProductRepository.findByEventId(notice.eventId())) {
+            if (bundleProduct.dropRemovedZone(notice.zoneId())) {
+                bundleProductRepository.update(bundleProduct);
+            }
+        }
+        for (EarlyBird earlyBird : earlyBirdRepository.findByEventId(notice.eventId()).all()) {
+            if (earlyBird.dropRemovedZone(notice.zoneId())) {
+                earlyBirdRepository.update(earlyBird);
+            }
+        }
+    }
+}

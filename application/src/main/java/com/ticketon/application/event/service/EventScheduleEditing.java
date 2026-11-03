@@ -14,16 +14,26 @@ import com.ticketon.application.organizer.port.out.OrganizerRepository;
 import com.ticketon.domain.error.RuleViolationException;
 import com.ticketon.domain.event.Event;
 import com.ticketon.domain.event.EventErrorCode;
+import com.ticketon.domain.event.EventDate;
+import com.ticketon.domain.event.EventDateMoved;
+import com.ticketon.domain.event.EventPricesChanged;
 import com.ticketon.domain.event.EventSchedule;
+import com.ticketon.domain.event.EventSession;
 import com.ticketon.domain.event.SessionAdded;
+import com.ticketon.domain.event.SessionPriceAdjustment;
 import com.ticketon.domain.event.SessionRemoved;
 import com.ticketon.domain.organizer.StaffAction;
 import com.ticketon.domain.organizer.StaffOperationTargetKind;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
@@ -39,8 +49,14 @@ import org.springframework.stereotype.Component;
  * <p>
  * <b>바뀐 것이 없으면</b>(자동 임시저장을 여러 번 해도) 저장도 알림도 기록도 하지 않는다.
  * <p>
- * <b>재고에 알린다</b> — 저장 전후의 회차 id를 견줘 생긴 회차마다 {@link SessionAdded}, 지운 회차마다 {@link SessionRemoved}를 같은 트랜잭션 안에서
- * 발행한다. 듣는 쪽(재고, #54)이 같은 트랜잭션에서 처리하면 함께 커밋되거나 함께 되돌려진다. 회차를 다른 날짜로 옮기는 것은 같은 회차라 알리지 않는다.
+ * <b>재고 · 가격에 알린다</b> — 저장 전후의 회차({@link SessionPlacement})를 견줘 같은 트랜잭션 안에서 발행한다. 듣는 쪽(재고 #54, 가격 #51)이
+ * 같은 트랜잭션에서 처리하면 함께 커밋되거나 함께 되돌려진다 — 듣는 쪽이 막으면(가격을 적용해 0원이 되는 등) 그 저장도 되돌려진다.
+ * <ul>
+ *   <li>생긴 회차마다 {@link SessionAdded}, 지운 회차마다 {@link SessionRemoved}. 회차를 다른 날짜로 옮기는 것은 같은 회차라 이 둘을 보내지
+ *       않는다.</li>
+ *   <li>회차가 다른 날짜로 옮겨 가 원래 날짜가 일정에서 빠졌으면 {@link EventDateMoved} — 그 날짜를 묶은 묶음권 상품이 옮겨 간 날짜를 따라간다.</li>
+ *   <li>남아 있는 회차의 가격 조정이 바뀌었으면 {@link EventPricesChanged} 한 번 — 가격이 바뀐 가격으로 0원이 되는 가격이 없는지 본다.</li>
+ * </ul>
  * <p>
  * 수정 범위는 저장된 상태로 판정한다. 시간이 움직이는 상태의 행사에 지금 시각을 반영하는 일은 상태별 설정 잠금(#65)이 더한다.
  */
@@ -92,33 +108,88 @@ class EventScheduleEditing {
     EventScheduleResult edit(ActingStaff actingStaff, long eventId, ScheduleEdit edit) {
         LockedSchedule locked = lock(actingStaff, eventId);
         EventSchedule schedule = locked.requireSchedule();
-        Set<Long> sessionIdsBefore = ScheduleResults.sessionIdsOf(schedule);
+        Map<Long, SessionPlacement> placementsBefore = placementsOf(schedule);
         Optional<String> summary = edit.apply(locked.event(), schedule, locked.now());
         if (summary.isEmpty()) {
             return ScheduleResults.of(schedule);
         }
-        return saveChanged(locked, schedule, sessionIdsBefore, summary.get());
+        return saveChanged(locked, schedule, placementsBefore, summary.get());
     }
 
     /**
-     * 바뀐 일정 · 행사를 저장하고, 생기거나 지워진 회차를 재고에 알리고, 조작 기록을 남긴다.
+     * 일정의 회차마다 가리키는 날짜와 가격 조정 — 고치기 전에 떠 두었다가 저장한 뒤와 견준다({@link #saveChanged}). 저장 전 회차(id 없음)는 빠진다.
+     */
+    static Map<Long, SessionPlacement> placementsOf(EventSchedule schedule) {
+        Map<Long, SessionPlacement> placements = new HashMap<>();
+        for (EventDate eventDate : schedule.dates()) {
+            if (eventDate.id().isEmpty()) {
+                continue;
+            }
+            for (EventSession session : eventDate.sessions()) {
+                session.id().ifPresent(sessionId -> placements.put(sessionId,
+                        new SessionPlacement(eventDate.id().getAsLong(), session.priceAdjustment())));
+            }
+        }
+        return Map.copyOf(placements);
+    }
+
+    /**
+     * 바뀐 일정 · 행사를 저장하고, 재고 · 가격에 알리고(생기거나 지워진 회차, 옮겨 가 빠진 날짜, 바뀐 가격 조정), 조작 기록을 남긴다.
      *
-     * @param sessionIdsBefore 고치기 전 일정의 회차 id
+     * @param placementsBefore 고치기 전 일정의 회차마다 가리키던 날짜와 가격 조정({@link #placementsOf})
      * @param summary          조작 기록 요약
      * @return 저장한 일정
      */
-    EventScheduleResult saveChanged(LockedSchedule locked, EventSchedule edited, Set<Long> sessionIdsBefore, String summary) {
+    EventScheduleResult saveChanged(LockedSchedule locked, EventSchedule edited, Map<Long, SessionPlacement> placementsBefore,
+            String summary) {
         long eventId = locked.event().id().orElseThrow();
         EventSchedule saved = scheduleRepository.save(edited, locked.now());
         eventRepository.save(locked.event());
-        Set<Long> sessionIdsAfter = ScheduleResults.sessionIdsOf(saved);
-        sessionIdsBefore.stream().filter(sessionId -> !sessionIdsAfter.contains(sessionId)).sorted()
+        Map<Long, SessionPlacement> placementsAfter = placementsOf(saved);
+        placementsBefore.keySet().stream().filter(sessionId -> !placementsAfter.containsKey(sessionId)).sorted()
                 .forEach(sessionId -> eventPublisher.publishEvent(new SessionRemoved(eventId, sessionId)));
-        sessionIdsAfter.stream().filter(sessionId -> !sessionIdsBefore.contains(sessionId)).sorted()
+        placementsAfter.keySet().stream().filter(sessionId -> !placementsBefore.containsKey(sessionId)).sorted()
                 .forEach(sessionId -> eventPublisher.publishEvent(new SessionAdded(eventId, sessionId)));
+        movedDates(eventId, placementsBefore, placementsAfter).forEach(eventPublisher::publishEvent);
+        if (priceAdjustmentChanged(placementsBefore, placementsAfter)) {
+            eventPublisher.publishEvent(new EventPricesChanged(eventId));
+        }
         recordStaffOperationUseCase.record(new RecordStaffOperationCommand(locked.permission(), StaffOperationTargetKind.EVENT, eventId,
                 summary, locked.now()));
         return ScheduleResults.of(saved);
+    }
+
+    /** 회차가 다른 날짜로 옮겨 가 원래 날짜가 일정에서 빠진 것 — 빠진 날짜 순. 회차가 남은 날짜에서 옮긴 것은 빠진 날짜가 없어 알리지 않는다. */
+    private static List<EventDateMoved> movedDates(long eventId, Map<Long, SessionPlacement> before, Map<Long, SessionPlacement> after) {
+        Set<Long> dateIdsAfter = after.values().stream().map(SessionPlacement::dateId).collect(Collectors.toSet());
+        return before.entrySet().stream()
+                .filter(entry -> after.containsKey(entry.getKey()))
+                .filter(entry -> after.get(entry.getKey()).dateId() != entry.getValue().dateId())
+                .filter(entry -> !dateIdsAfter.contains(entry.getValue().dateId()))
+                .map(entry -> new EventDateMoved(eventId, entry.getValue().dateId(), after.get(entry.getKey()).dateId()))
+                .distinct()
+                .sorted(Comparator.comparingLong(EventDateMoved::retiredDateId))
+                .toList();
+    }
+
+    /** 저장 전후에 함께 있는 회차의 가격 조정이 바뀌었는지. */
+    private static boolean priceAdjustmentChanged(Map<Long, SessionPlacement> before, Map<Long, SessionPlacement> after) {
+        return before.entrySet().stream()
+                .filter(entry -> after.containsKey(entry.getKey()))
+                .anyMatch(entry -> !after.get(entry.getKey()).priceAdjustment().equals(entry.getValue().priceAdjustment()));
+    }
+
+    /**
+     * 회차 하나가 가리키는 날짜와 가격 조정.
+     *
+     * @param dateId          회차가 속한 날짜의 id
+     * @param priceAdjustment 회차의 가격 조정
+     */
+    record SessionPlacement(long dateId, SessionPriceAdjustment priceAdjustment) {
+
+        SessionPlacement {
+            Objects.requireNonNull(priceAdjustment, "priceAdjustment");
+        }
     }
 
     /**
