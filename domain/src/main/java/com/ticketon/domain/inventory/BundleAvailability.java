@@ -11,7 +11,8 @@ import java.util.Objects;
  * 멈춤도 매진처럼 상태가 아니라 계산이다 — 취소표가 나와 그 날짜에 자리가 생기면 다시 판다(docs/04 "'매진'은 상태가 아닙니다").
  * <p>
  * 묶음권 한 장은 날짜마다 관객이 고른 회차 하나씩을 가리키고, 그 회차마다 1씩 잡는다({@link QuantityZoneStock#hold}). 묶음권은 수량형 구역에서만
- * 판다(docs/05 "왜 수량형 전용인가") — 묶음권 상품(#50)이 그 규칙과 날짜 · 구역을 갖고, 여기서는 날짜별 회차 재고만 받아 판정한다.
+ * 판다(docs/05 "왜 수량형 전용인가") — 묶음권 상품({@code domain.pricing.BundleProduct})이 그 규칙과 날짜 · 구역을 갖고, 여기서는 날짜별 회차
+ * 재고만 받아 판정한다. 상품의 날짜가 지워져 고를 회차가 없으면 그 날짜는 빈 재고로 넣는다({@link BundleDateStock}) — 그 묶음권은 팔리지 않는다.
  */
 public final class BundleAvailability {
 

@@ -15,8 +15,25 @@ public enum PricingErrorCode implements ErrorCode {
 
     /**
      * 묶음권 할인율을 적용하면 0원 이하가 된다(100원 단위로 내린 뒤 — 할인율 100% 등). 회차 가격과 같은 까닭으로 막는다({@link BundleDayPrices#bundlePrice}).
+     * 묶음권 상품을 정할 때도 할인율 100%는 받지 않는다({@link BundleProductTerms}).
      */
     BUNDLE_PRICE_NOT_POSITIVE("묶음권 할인율을 적용하면 0원 이하가 됩니다. 할인율을 낮춰 주세요."),
+
+    /**
+     * 묶음권 상품의 포함 날짜가 2개보다 적다({@link BundleProductTerms}). 묶음권은 날짜 N개를 묶은 상품이다 — 날짜 하나짜리는 1일권이다(docs/05 "묶음권
+     * (수량형 전용)", docs/14 "묶음권 상품은 날짜를, 티켓은 회차를 가리킵니다"). 문구는 문서에 없다 — 확인 필요 (#223).
+     */
+    BUNDLE_DATES_TOO_FEW("묶음권에는 날짜를 2개 이상 골라 주세요."),
+
+    /** 묶음권 상품의 대상 구역이 없다({@link BundleProductTerms}). 문구는 문서에 없다 — 확인 필요 (#223). */
+    BUNDLE_ZONES_EMPTY("묶음권을 팔 구역을 하나 이상 골라 주세요."),
+
+    /**
+     * 묶음권 상품의 대상 구역에 지정형 구역이 있다({@link BundleProduct#create}). 지정석 묶음권은 날짜 수만큼 좌석을 동시에 선점해야 하고, 마지막 날
+     * 자리가 없으면 앞의 둘도 무의미해진다 — 묶음권은 수량형 전용이다(docs/05 "왜 수량형 전용인가", docs/99 B "지정석 묶음권 / 다회차 할인").
+     * 문구는 문서에 없다 — 확인 필요 (#223).
+     */
+    BUNDLE_ZONE_NOT_QUANTITY("지정형 구역에서는 묶음권을 팔 수 없습니다. 수량형 구역만 골라 주세요."),
 
     /**
      * 조기예매 · 쿠폰의 할인 값이 범위 밖이다 — 정액 0원, 정률 0% 또는 100%({@link Discount#requireOfferable}). 0원 · 0%는 할인이 아니고 100%는

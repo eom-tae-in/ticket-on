@@ -39,6 +39,14 @@ import java.time.LocalTime;
  *   <li>확인 필요 (#223) — 조기예매 · 쿠폰을 만들고 고칠 때의 오류 문구(할인 값 범위, 0원이 되는 할인, 마감된 조기예매, 쓴 수 아래로 줄이기).
  *       경우는 docs/99 C · E가 정했고 문구만 지었다: {@code domain.pricing.PricingErrorCode}.</li>
  *   <li>확인 필요 (#223) — 이미 취소된 티켓 · 이미 포기한 날짜의 오류 문구(문서에 없어 지었다): {@code domain.ticket.TicketErrorCode}.</li>
+ *   <li>확인 필요 (#52) — 5일 이상 묶음권의 기본 할인율은 채우지 않고(주최자가 직접 적음), 할인율 상한(20%)도 두지 않는다:
+ *       {@code domain.pricing.BundleProduct#defaultDiscountRate}.</li>
+ *   <li>확인 필요 (#223) — 묶음권 상품이 팔 구역(수량형, 하나 이상)을 고른다. 문서의 "묶음권 만들기"에는 이름 · 포함 날짜 · 할인율만 있다:
+ *       {@code domain.pricing.BundleProductTerms#zoneIds}.</li>
+ *   <li>확인 필요 (#223) — 묶음권 상품은 날짜를 id로 가리키고, 묶은 날짜가 지워지며 회차가 다른 날짜로 옮겨 가면 따라간다. 옮겨 간 날짜를 이미
+ *       묶고 있으면(묶은 날짜끼리 합쳐지면) 따라가지 않는다: {@code domain.pricing.BundleProduct#followMovedDate}.</li>
+ *   <li>확인 필요 (#223) — 묶음권 상품을 만들고 고칠 때의 오류 문구(날짜 2개 미만, 구역 없음, 지정형 구역). 경우는 docs/05가 정했고 문구만 지었다:
+ *       {@code domain.pricing.PricingErrorCode}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
@@ -53,6 +61,13 @@ public final class ProposedPolicy {
      * 잡고 대상도 겹치지 않아(작성 중 행사에는 이력이 없다) 맞물리지 않는다. 문서에는 "6개월 — 변경 이력 삭제"만 있고 언제 지우는지가 없다(docs/04 "행사가 끝난 뒤 일어나는 일").
      */
     public static final LocalTime EVENT_CHANGE_HISTORY_PURGE_RUN_TIME = LocalTime.of(4, 0);
+
+    /**
+     * 확인 필요 (#223, 문서에 없음) — 묶음권 상품 이름("3일 통권")의 최대 길이(글자 수). 20자를 제안한다: 티켓("3일권 · 스탠딩A") · 검표 결과
+     * ("3일권 (5/3~5/5) · 2일차")에 구역 이름과 나란히 보이는 짧은 이름표라 구역 · 블록 · 입구 이름({@link QuantityPolicy#ZONE_NAME_MAXIMUM_LENGTH})과
+     * 같은 상한을 썼다. docs/99 C "입력·파일 상한"에 묶음권 이름이 없다(docs/05 "조합은 자동 생성하지 않습니다 — 묶음권 만들기").
+     */
+    public static final int BUNDLE_PRODUCT_NAME_MAXIMUM_LENGTH = 20;
 
     private ProposedPolicy() {
     }
