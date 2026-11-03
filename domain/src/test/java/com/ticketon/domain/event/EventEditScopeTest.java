@@ -36,7 +36,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 @DisplayName("상태별 수정 범위 (docs/04 \"상태별로 할 수 있는 것\", \"예매가 열린 뒤(판매 중) 수정 범위\", \"판매 종료는 공연이 끝난 때가 아닙니다\")")
 class EventEditScopeTest {
 
-    /** docs/04 "예매가 열린 뒤(판매 중) 수정 범위" 표 그대로 — 표 밖 항목은 그 근거 또는 확인 필요. */
+    /** docs/04 "예매가 열린 뒤(판매 중) 수정 범위" 표 그대로 — 표 밖 항목(회차 출연 · 비어 있던 종료 시각 · 예매 오픈 시각)은 그 근거대로. */
     private static final Map<EventEditTarget, EventEditAvailability> AFTER_BOOKING_OPENED = afterBookingOpenedTable();
 
     private static Map<EventEditTarget, EventEditAvailability> afterBookingOpenedTable() {
@@ -73,7 +73,7 @@ class EventEditScopeTest {
     private static final Set<EventEditTarget> LOCKED_BY_INVITATIONS = Set.of(EventEditTarget.VENUE, EventEditTarget.SESSION_DATE_TIME,
             EventEditTarget.FLOOR_PLAN, EventEditTarget.EXCLUDED_SEATS, EventEditTarget.SESSION_OR_ZONE_DELETION);
 
-    /** 판매가 끝난 뒤에도 고치는 항목 — 입구 목록 · 검표 계정(+ 확인 필요: 비어 있던 회차 종료 시각). */
+    /** 판매가 끝난 뒤에도 고치는 항목 — 입구 목록 · 검표 계정(+ 비어 있던 회차 종료 시각 입력, docs/04 "상태별로 할 수 있는 것"). */
     private static final Set<EventEditTarget> ON_SITE = Set.of(EventEditTarget.ENTRANCES, EventEditTarget.CHECKIN_ACCOUNTS,
             EventEditTarget.MISSING_SESSION_END_TIME);
 
@@ -374,7 +374,7 @@ class EventEditScopeTest {
         }
 
         @Test
-        @DisplayName("판매가 끝난 뒤에는 회차 시간을 바꿀 수 없고, 비어 있던 종료 시각 입력은 받는다 (확인 필요)")
+        @DisplayName("판매가 끝난 뒤에는 회차 시간을 바꿀 수 없고, 비어 있던 종료 시각 입력은 받는다 (docs/04 \"판매 종료는 공연이 끝난 때가 아닙니다\")")
         void salesClosedLocksSessionTime() {
             Event event = springPlayIn(EventStatus.SALES_CLOSED);
 
