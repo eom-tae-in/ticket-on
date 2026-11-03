@@ -51,6 +51,14 @@ import java.time.LocalTime;
  *       적용해도 1원 이상"을 묶음권에도 썼다, docs/99 C "할인 값"): {@code domain.pricing.BundleProduct#create}.</li>
  *   <li>확인 필요 (#223) — 묶음권 목록의 시작 가격은 매진 여부를 보지 않는다(한 구역만 매진된 회차도 조합에 들어감):
  *       {@code domain.pricing.BundleProduct#startingPrice}.</li>
+ *   <li>확인 필요 (#223) — 결제·환불 내역 설명 중 문서 예시에 없는 모양: 여러 장은 쉼표로 이음("12열 9번, 12열 10번 변경"), 관객 취소가 아닌
+ *       취소는 사유를 괄호로 붙임("2매 취소 (회차 취소)"), 배상 줄은 함께 나간 환불 줄과 같은 설명: {@code domain.payment.PaymentHistoryCause#describe}.</li>
+ *   <li>확인 필요 (#223) — 적용 할인 표시는 결제 줄(예매 결제 · 변경 결제)의 설명에 할인 종류별 장수로 붙인다("조기예매 2매 · 쿠폰 1매"). 할인
+ *       없는 예매 결제는 설명이 없다. 문서 예시 "3/1 결제 165,000원"에 설명이 없는 것은 할인이 없었다는 뜻일 수도, 할인은 [상세](결제 상세)에서
+ *       보인다는 뜻일 수도 있다 — 뒤의 뜻이면 이 요약을 목록 줄에서 빼고 결제 상세(#76)에서 장마다 보인다:
+ *       {@code domain.payment.PaymentHistoryDescriptionSource#appliedDiscountSummaryOf}.</li>
+ *   <li>확인 필요 (#223) — 묶음권에서 그 회차의 지연 환급을 이미 받은 티켓에 나중에 그날 몫을 돌려줄 때 그날 몫에서 지연 환급을 빼지 않고 그날 몫
+ *       전액을 돌려준다(반대 순서 — 그날 몫 뒤 그 회차 지연 환급 — 는 막는다): {@code domain.payment.PaymentHistory#recordBundleDayRefund}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
