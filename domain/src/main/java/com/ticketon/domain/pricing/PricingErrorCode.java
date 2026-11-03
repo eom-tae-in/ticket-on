@@ -121,7 +121,8 @@ public enum PricingErrorCode implements ErrorCode {
      * 구역 기본가 · 회차 가격 조정을 바꾸거나 구역 · 회차를 더한 뒤, 묶음권 할인율이나 조기예매 · 쿠폰의 할인을 적용하면 0원이 되는 가격이 생긴다
      * ({@link EventPriceTable#requirePricesStayPositive}). 할인을 정할 때 막는 것({@link #DISCOUNT_MAKES_PRICE_ZERO},
      * {@link #BUNDLE_PRICE_NOT_POSITIVE})과 같은 까닭이다 — 막지 않으면 관객이 예매하는 순간 주최자용 문구로 막힌다. 바꾸는 쪽은 가격이라 할인을
-     * 정할 때의 문구("할인 값을 낮춰 주세요")와 나눴다. 확인 필요 (#223) — 문구는 문서에 없다.
+     * 정할 때의 문구("할인 값을 낮춰 주세요")와 나눴다. 확인 필요 (#223) — 문구는 문서에 없다. 묶음권을 더하거나 할인율을 바꿔 그 가격에
+     * 조기예매 · 쿠폰을 적용하면 0원이 될 때도 이 오류라, 그때도 "가격을 높이거나"로 나간다.
      */
     PRICE_CHANGE_MAKES_DISCOUNTED_PRICE_ZERO("이 가격이면 묶음권 · 조기예매 · 쿠폰을 적용해 0원이 되는 가격이 생깁니다. 가격을 높이거나 할인을 먼저 "
             + "낮춰 주세요.");
