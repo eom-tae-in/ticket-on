@@ -17,7 +17,6 @@ import com.ticketon.domain.organizer.OrganizerErrorCode;
 import com.ticketon.domain.organizer.OrganizerReviewChecklistItem;
 import com.ticketon.domain.organizer.RejectionReason;
 import com.ticketon.domain.organizer.RejectionReasonTemplate;
-import com.ticketon.domain.organizer.SettlementAccount;
 import java.util.Arrays;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -85,7 +84,7 @@ public class GetOrganizerApplicationReviewService implements GetOrganizerApplica
                 form.eventHistoryOrPlan(),
                 form.businessStatus(),
                 businessInformationOf(form.businessDeclaration().businessInformation()),
-                settlementAccountOf(form.settlementAccount()));
+                OrganizerApplicationReviewResult.MaskedSettlementAccount.from(form.settlementAccount()));
     }
 
     private static OrganizerApplicationReviewResult.BusinessInformation businessInformationOf(
@@ -96,10 +95,5 @@ public class GetOrganizerApplicationReviewService implements GetOrganizerApplica
         return new OrganizerApplicationReviewResult.BusinessInformation(information.tradeName(),
                 information.representativeName(), information.businessAddress(),
                 information.businessPhoneNumber().value(), information.registrationNumber().digits());
-    }
-
-    private static OrganizerApplicationReviewResult.SettlementAccount settlementAccountOf(SettlementAccount account) {
-        return new OrganizerApplicationReviewResult.SettlementAccount(account.bankName(), account.accountNumber(),
-                account.accountHolder());
     }
 }
