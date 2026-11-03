@@ -106,6 +106,12 @@ public final class TimePolicy {
     /** 관리자 처리 목록의 주최자 신청 강조 — 심사 목표일까지 남은 영업일이 이 수 이하면 강조한다(지난 신청 포함). docs/99 C "주최자 신청 강조" */
     public static final BusinessDays ORGANIZER_REVIEW_DEADLINE_APPROACHING_WITHIN = BusinessDays.of(1);
 
+    /**
+     * 조기예매 "마감 임박"(기간) — 끝 순간에서 72시간 전부터. 날짜로 세지 않는다(3/20 18:00에 끝나면 3/17 18:00부터). 수량과 기간 중 더 급한 쪽을
+     * 따른다. docs/05 "임박 표시", docs/99 C "조기예매 '끝나기 3일 전'"
+     */
+    public static final Duration EARLY_BIRD_ENDING_SOON = Duration.ofHours(72);
+
     private TimePolicy() {
     }
 }

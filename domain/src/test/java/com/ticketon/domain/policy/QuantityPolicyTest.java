@@ -3,7 +3,6 @@ package com.ticketon.domain.policy;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ticketon.common.ImageFormat;
-import java.time.Period;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -29,11 +28,11 @@ class QuantityPolicyTest {
     }
 
     @Test
-    @DisplayName("조기예매 임박은 30% / 10% 또는 10장 / 종료 3일이다 (docs/05)")
+    @DisplayName("조기예매 임박은 30% / 10% 또는 10장이면서 절반 이상 나감이다 (docs/05)")
     void earlyBirdIndicators() {
         assertThat(QuantityPolicy.EARLY_BIRD_RUNNING_LOW).isEqualTo(Percent.of(30));
         assertThat(QuantityPolicy.EARLY_BIRD_ALMOST_GONE).isEqualTo(new QuantityThreshold(10, Percent.of(10)));
-        assertThat(QuantityPolicy.EARLY_BIRD_ENDING_SOON).isEqualTo(Period.ofDays(3));
+        assertThat(QuantityPolicy.EARLY_BIRD_ALMOST_GONE_CLAIMED_SHARE).isEqualTo(Percent.of(50));
     }
 
     @Test

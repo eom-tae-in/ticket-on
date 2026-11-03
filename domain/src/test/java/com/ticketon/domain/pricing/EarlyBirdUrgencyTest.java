@@ -5,15 +5,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.ticketon.common.KoreanTime;
 import com.ticketon.domain.policy.Percent;
 import com.ticketon.domain.policy.QuantityPolicy;
+import com.ticketon.domain.policy.TimePolicy;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.Period;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("조기예매 임박 단계 — 30% 이하 / 10% 이하 또는 10장 이하 / 종료 3일 이내, 내려가지 않음 (docs/05 \"임박 표시\", docs/99 C)")
+@DisplayName("조기예매 임박 단계 — 30% 이하 / 10% 이하, 또는 10장 이하이면서 절반 이상 나감 / 끝나기 72시간 전, 내려가지 않음 (docs/05 \"임박 표시\", docs/99 C)")
 class EarlyBirdUrgencyTest {
 
     private static final long EVENT_ID = 1L;
@@ -23,7 +24,7 @@ class EarlyBirdUrgencyTest {
     private static final Instant MARCH_10 = korean(2026, 3, 10, 0, 0);
     private static final Instant MARCH_20 = korean(2026, 3, 20, 0, 0);
     private static final DiscountPeriod MARCH_1_TO_20 = DiscountPeriod.of(MARCH_1, MARCH_20);
-    /** 종료 3일 전보다 이른 때 — 기간으로는 표시 없음 */
+    /** 끝나기 72시간 전보다 이른 때 — 기간으로는 표시 없음 */
     private static final Instant MARCH_10_NOON = korean(2026, 3, 10, 12, 0);
 
     private static Instant korean(int year, int month, int day, int hour, int minute) {
@@ -40,17 +41,24 @@ class EarlyBirdUrgencyTest {
         return withQuantity(limit, limit - remaining).urgency(MARCH_10_NOON);
     }
 
+    private static EarlyBird endingAt(Instant endsAt) {
+        return EarlyBird.restore(10L, EVENT_ID,
+                EarlyBirdTerms.limited(THIRTY_PERCENT, DiscountPeriod.of(MARCH_1, endsAt), EarlyBirdQuantity.of(100), EarlyBirdScope.everything()),
+                0, EarlyBirdUrgency.NONE);
+    }
+
     @Test
-    @DisplayName("숫자는 확정 숫자에서 온다 — 30%, 10% 또는 10장, 3일 (docs/99 C)")
+    @DisplayName("숫자는 확정 숫자에서 온다 — 30%, 10% 또는 10장이면서 절반, 72시간 (docs/99 C)")
     void policyValues() {
         assertThat(QuantityPolicy.EARLY_BIRD_RUNNING_LOW).isEqualTo(Percent.of(30));
         assertThat(QuantityPolicy.EARLY_BIRD_ALMOST_GONE.count()).isEqualTo(10);
         assertThat(QuantityPolicy.EARLY_BIRD_ALMOST_GONE.percentOfTotal()).isEqualTo(Percent.of(10));
-        assertThat(QuantityPolicy.EARLY_BIRD_ENDING_SOON).isEqualTo(Period.ofDays(3));
+        assertThat(QuantityPolicy.EARLY_BIRD_ALMOST_GONE_CLAIMED_SHARE).isEqualTo(Percent.of(50));
+        assertThat(TimePolicy.EARLY_BIRD_ENDING_SOON).isEqualTo(Duration.ofHours(72));
     }
 
     @Nested
-    @DisplayName("수량 — 경계는 모두 이하")
+    @DisplayName("수량 — 경계는 모두 이하, 비율은 반올림하지 않음")
     class ByQuantity {
 
         @Test
@@ -72,7 +80,21 @@ class EarlyBirdUrgencyTest {
         }
 
         @Test
-        @DisplayName("10장 경계 — 50장: 16장 표시 없음 · 15장(30%) 얼마 남지 않음 · 11장 얼마 남지 않음 · 10장(20%) 마감 임박")
+        @DisplayName("10% 경계는 반올림하지 않는다 — 205장: 20장(9.8%) 마감 임박 · 21장(10.2%) 얼마 남지 않음")
+        void tenPercentNotRounded() {
+            assertThat(remaining(20, 205)).isEqualTo(EarlyBirdUrgency.ALMOST_GONE);
+            assertThat(remaining(21, 205)).isEqualTo(EarlyBirdUrgency.RUNNING_LOW);
+        }
+
+        @Test
+        @DisplayName("30% 경계는 반올림하지 않는다 — 103장: 31장(30.1%) 표시 없음 · 30장(29.1%) 얼마 남지 않음")
+        void thirtyPercentNotRounded() {
+            assertThat(remaining(31, 103)).isEqualTo(EarlyBirdUrgency.NONE);
+            assertThat(remaining(30, 103)).isEqualTo(EarlyBirdUrgency.RUNNING_LOW);
+        }
+
+        @Test
+        @DisplayName("10장 경계 — 50장: 16장 표시 없음 · 15장(30%) 얼마 남지 않음 · 11장 얼마 남지 않음 · 10장(이미 40장 나감) 마감 임박")
         void tenTickets() {
             assertThat(remaining(16, 50)).isEqualTo(EarlyBirdUrgency.NONE);
             assertThat(remaining(15, 50)).isEqualTo(EarlyBirdUrgency.RUNNING_LOW);
@@ -88,10 +110,34 @@ class EarlyBirdUrgencyTest {
         }
 
         @Test
-        @DisplayName("10장 이하인 조기예매는 처음부터 마감 임박")
-        void smallQuantityIsAlmostGoneFromStart() {
-            assertThat(remaining(10, 10)).isEqualTo(EarlyBirdUrgency.ALMOST_GONE);
-            assertThat(remaining(5, 5)).isEqualTo(EarlyBirdUrgency.ALMOST_GONE);
+        @DisplayName("10장짜리 조기예매는 처음부터 임박이 아니다 — 10장 · 6장 남음 표시 없음, 절반 나간 5장 남음부터 마감 임박 (docs/05, docs/99 D)")
+        void tenTicketsNeedHalfClaimed() {
+            assertThat(remaining(10, 10)).isEqualTo(EarlyBirdUrgency.NONE);
+            assertThat(remaining(6, 10)).isEqualTo(EarlyBirdUrgency.NONE);
+            assertThat(remaining(5, 10)).isEqualTo(EarlyBirdUrgency.ALMOST_GONE);
+            assertThat(remaining(1, 10)).isEqualTo(EarlyBirdUrgency.ALMOST_GONE);
+        }
+
+        @Test
+        @DisplayName("절반은 반올림하지 않는다 — 7장: 4장 남음(3/7 = 42.9% 나감) 표시 없음 · 3장 남음(57.1% 나감) 마감 임박")
+        void halfNotRounded() {
+            assertThat(remaining(4, 7)).isEqualTo(EarlyBirdUrgency.NONE);
+            assertThat(remaining(3, 7)).isEqualTo(EarlyBirdUrgency.ALMOST_GONE);
+        }
+
+        @Test
+        @DisplayName("10장 이하로 남아도 절반이 안 나갔으면 아니다 — 19장: 10장 남음(47.4% 나감) 표시 없음 · 9장 남음 마감 임박, 11장: 10장 남음 표시 없음")
+        void tenOrFewerButLessThanHalfClaimed() {
+            assertThat(remaining(10, 19)).isEqualTo(EarlyBirdUrgency.NONE);
+            assertThat(remaining(9, 19)).isEqualTo(EarlyBirdUrgency.ALMOST_GONE);
+            assertThat(remaining(10, 11)).isEqualTo(EarlyBirdUrgency.NONE);
+        }
+
+        @Test
+        @DisplayName("딱 절반이면 나간 것으로 본다 — 20장: 11장 남음 표시 없음 · 10장 남음 마감 임박")
+        void exactlyHalfClaimed() {
+            assertThat(remaining(11, 20)).isEqualTo(EarlyBirdUrgency.NONE);
+            assertThat(remaining(10, 20)).isEqualTo(EarlyBirdUrgency.ALMOST_GONE);
         }
 
         @Test
@@ -106,17 +152,27 @@ class EarlyBirdUrgencyTest {
     }
 
     @Nested
-    @DisplayName("기간 — 종료 3일 이내면 마감 임박")
+    @DisplayName("기간 — 끝나기 72시간 전부터 마감 임박")
     class ByPeriod {
 
         @Test
         @DisplayName("3/20 0시에 끝나면 3/17 0시부터 마감 임박 — 3/16 23:59:59는 아직 표시 없음")
-        void threeDaysBeforeEnd() {
+        void seventyTwoHoursBeforeEnd() {
             EarlyBird earlyBird = withQuantity(100, 0);
 
             assertThat(earlyBird.urgency(korean(2026, 3, 17, 0, 0).minusSeconds(1))).isEqualTo(EarlyBirdUrgency.NONE);
             assertThat(earlyBird.urgency(korean(2026, 3, 17, 0, 0))).isEqualTo(EarlyBirdUrgency.ALMOST_GONE);
             assertThat(earlyBird.urgency(MARCH_20.minusSeconds(1))).isEqualTo(EarlyBirdUrgency.ALMOST_GONE);
+        }
+
+        @Test
+        @DisplayName("날짜가 아니라 끝 순간에서 센다 — 3/20 18:00에 끝나면 3/17 18:00부터, 3/17 09:00 · 17:59:59는 아직 표시 없음")
+        void countsFromEndMomentNotDate() {
+            EarlyBird earlyBird = endingAt(korean(2026, 3, 20, 18, 0));
+
+            assertThat(earlyBird.urgency(korean(2026, 3, 17, 9, 0))).isEqualTo(EarlyBirdUrgency.NONE);
+            assertThat(earlyBird.urgency(korean(2026, 3, 17, 18, 0).minusSeconds(1))).isEqualTo(EarlyBirdUrgency.NONE);
+            assertThat(earlyBird.urgency(korean(2026, 3, 17, 18, 0))).isEqualTo(EarlyBirdUrgency.ALMOST_GONE);
         }
     }
 
@@ -125,7 +181,7 @@ class EarlyBirdUrgencyTest {
     class MoreUrgent {
 
         @Test
-        @DisplayName("절반 남아도 종료 3일 이내면 마감 임박")
+        @DisplayName("절반 남아도 끝나기 72시간 안이면 마감 임박")
         void periodWins() {
             assertThat(withQuantity(100, 50).urgency(korean(2026, 3, 18, 0, 0))).isEqualTo(EarlyBirdUrgency.ALMOST_GONE);
         }
@@ -166,7 +222,7 @@ class EarlyBirdUrgencyTest {
         }
 
         @Test
-        @DisplayName("종료 3일 이내라 마감 임박인데 기간을 열흘 늘려도 마감 임박 그대로")
+        @DisplayName("끝나기 72시간 안이라 마감 임박인데 기간을 열흘 늘려도 마감 임박 그대로")
         void extendingPeriodKeepsStage() {
             EarlyBird earlyBird = withQuantity(100, 0);
             Instant march18 = korean(2026, 3, 18, 0, 0);

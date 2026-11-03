@@ -24,8 +24,6 @@ import java.time.LocalTime;
  *       메일이 가지 않게): {@code domain.event.EventChangeHistory#notifiesOwner}.</li>
  *   <li>확인 필요 (#46) — 변경 이력은 행사가 끝난 날(한국 날짜) + 6개월까지 보관하고 그다음 날부터 지운다. 회차가 모두 취소돼 끝난 날을 알 수 없는
  *       행사의 이력은 지우지 않는다: {@code domain.event.EventChangeHistory#isPurgeDue}.</li>
- *   <li>확인 필요 (#49) — 조기예매 임박의 "종료일 3일 이내"는 끝 순간에서 한국 달력 3일(72시간)을 거슬러 올라간 순간부터다:
- *       {@code domain.pricing.EarlyBirdUrgency#byPeriod}.</li>
  *   <li>확인 필요 (#53) — 매진 임박 "10% 이하"의 분모는 그 구역의 자리 전부다(수량형은 정원, 지정형은 배정된 활성 좌석 수 — 판매 제외 · 관계자
  *       확보분 포함): {@code domain.inventory.RemainingSeats}.</li>
  *   <li>확인 필요 (#53) — 매진 임박 10%는 반올림하기 전 비율로 본다(205석의 20석은 임박, 21석은 아님):
