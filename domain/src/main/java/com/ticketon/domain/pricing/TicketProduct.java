@@ -5,7 +5,7 @@ package com.ticketon.domain.pricing;
  * 묶음권").
  * <p>
  * 조기예매의 상품별 켜고 끔({@link EarlyBirdScope})이 이 값으로 상품을 가리킨다. 묶음권은 상품의 id만 갖는다 — 묶음권 상품의 규칙(포함 날짜 ·
- * 대상 구역 · 할인율)은 묶음권 상품(#50)이 갖고, 여기서는 "어느 상품인가"만 가린다.
+ * 대상 구역 · 할인율)은 묶음권 상품({@link BundleProduct}, {@link BundleProduct#product})이 갖고, 여기서는 "어느 상품인가"만 가린다.
  */
 public sealed interface TicketProduct {
 

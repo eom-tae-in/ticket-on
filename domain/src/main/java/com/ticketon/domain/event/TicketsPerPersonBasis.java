@@ -16,7 +16,7 @@ public enum TicketsPerPersonBasis {
     /** 날짜별 — 날짜마다 한도만큼. 묶음권 1장은 포함한 날짜마다 1매로 센다(docs/05 "매수 제한 계산"). */
     PER_DATE,
 
-    /** 행사 전체 — 행사 전체에서 한도만큼. */
+    /** 행사 전체 — 행사 전체에서 한도만큼. 묶음권 1장은 날짜마다 1매를 더해 센다 — 3일권 1장은 3매({@code domain.pricing.BundleProduct}). */
     EVENT_TOTAL;
 
     /**

@@ -18,6 +18,8 @@
  * </ol>
  * 조기예매와 쿠폰은 쓸 수 있는지를 판정해 그 할인({@link com.ticketon.domain.pricing.Discount})을 위 3단계에 넘긴다.
  * <ul>
+ *   <li>묶음권 상품({@link com.ticketon.domain.pricing.BundleProduct}) — 주최자가 정한 날짜 N개(2개 이상) · 대상 구역(수량형만) · 할인율(기본값을
+ *       채워 두고 바꿈). 상품은 날짜를, 티켓은 관객이 고른 회차를 가리킨다.</li>
  *   <li>조기예매({@link com.ticketon.domain.pricing.EarlyBird}, 행사마다 {@link com.ticketon.domain.pricing.EarlyBirds}) — 선점하는 순간 몫을
  *       잡고 사용 수는 줄지 않는다. 몫을 잡은 결과({@link com.ticketon.domain.pricing.EarlyBirdAllocation})가 할인 전 티켓을 만든다. 관객에게는
  *       남은 수량 대신 임박 단계({@link com.ticketon.domain.pricing.EarlyBirdUrgency})를 보인다.</li>
