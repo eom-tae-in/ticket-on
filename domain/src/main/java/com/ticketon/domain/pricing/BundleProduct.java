@@ -5,16 +5,24 @@ import com.ticketon.domain.error.RuleViolationException;
 import com.ticketon.domain.event.EventDate;
 import com.ticketon.domain.event.EventErrorCode;
 import com.ticketon.domain.event.EventSchedule;
+import com.ticketon.domain.event.EventSession;
 import com.ticketon.domain.event.FloorPlan;
 import com.ticketon.domain.event.Zone;
 import com.ticketon.domain.event.ZoneKind;
 import com.ticketon.domain.policy.Percent;
 import com.ticketon.domain.policy.QuantityPolicy;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.function.Predicate;
 
 /**
  * 묶음권 상품 — 날짜 N개를 묶은 상품(docs/05 "묶음권 (수량형 전용)", docs/14 "묶음권 상품은 날짜를, 티켓은 회차를 가리킵니다"). 3일 행사에서
@@ -26,7 +34,9 @@ import java.util.Set;
  *   <li><b>수량형 전용</b> — 지정석 묶음권은 날짜 수만큼 좌석을 동시에 선점해야 하고, 마지막 날 자리가 없으면 앞의 둘도 무의미해진다. 지정석은 회차별
  *       개별 예매만 한다(docs/05 "왜 수량형 전용인가", docs/99 B "지정석 묶음권 / 다회차 할인"). 대상 구역은 수량형만 받는다.</li>
  *   <li><b>가격은 할인율로 계산한다</b> — 가격을 직접 받지 않는다. 날짜별 가격 합계 × (1 − 할인율), 100원 내림({@link BundleDayPrices#bundlePrice}).
- *       회차별 가격 조정이 저절로 반영된다(docs/99 D "묶음권 가격"). 할인율은 기본값({@link #defaultDiscountRate})을 채워 두고 주최자가 바꾼다.</li>
+ *       회차별 가격 조정이 저절로 반영된다(docs/99 D "묶음권 가격"). 할인율은 기본값({@link #defaultDiscountRate})을 채워 두고 주최자가 바꾼다.
+ *       상품 목록에는 가장 싼 회차 조합의 가격("3일권 40,000원~", {@link #startingPrice})이 보이고, 관객이 회차를 다 고르면 확정된다
+ *       ({@link #priceFor}).</li>
  * </ul>
  * 조기예매의 상품별 켜고 끔은 이 상품을 {@link TicketProduct#bundle}로 가리킨다({@link #product}). 날짜마다 들어갈 회차가 남았는지(판매 멈춤)는
  * 재고가 본다({@code domain.inventory.BundleAvailability}).
@@ -49,13 +59,15 @@ public final class BundleProduct {
     }
 
     /**
-     * 주최자가 묶음권 상품을 만든다. 날짜와 구역이 그 행사의 것이어야 하고, 구역은 수량형이어야 한다.
+     * 주최자가 묶음권 상품을 만든다. 날짜와 구역이 그 행사의 것이어야 하고, 구역은 수량형이어야 한다. 할인율은 구역마다 가장 싼 회차 조합에 적용해도
+     * 1원 이상 남겨야 한다.
      *
      * @param schedule  그 행사의 일정 — 포함 날짜를 찾는다
      * @param floorPlan 그 행사의 도면 — 대상 구역을 찾는다
      * @throws NotFoundException        일정에 없는 날짜면({@link EventErrorCode#SCHEDULE_DATE_NOT_FOUND}), 도면에 없는 구역이면
      *                                  ({@link EventErrorCode#ZONE_NOT_FOUND})
-     * @throws RuleViolationException   지정형 구역이 있으면({@link PricingErrorCode#BUNDLE_ZONE_NOT_QUANTITY})
+     * @throws RuleViolationException   지정형 구역이 있으면({@link PricingErrorCode#BUNDLE_ZONE_NOT_QUANTITY}), 가장 싼 회차 조합이 0원이 되면
+     *                                  ({@link PricingErrorCode#BUNDLE_PRICE_NOT_POSITIVE})
      * @throws IllegalArgumentException 일정 · 도면이 다른 행사의 것이면
      */
     public static BundleProduct create(long eventId, BundleProductTerms terms, EventSchedule schedule, FloorPlan floorPlan) {
@@ -135,7 +147,8 @@ public final class BundleProduct {
      *
      * @return 바뀌었는지. 같은 설정이면 false
      * @throws NotFoundException      일정에 없는 날짜, 도면에 없는 구역이면
-     * @throws RuleViolationException 지정형 구역이 있으면({@link PricingErrorCode#BUNDLE_ZONE_NOT_QUANTITY})
+     * @throws RuleViolationException 지정형 구역이 있으면({@link PricingErrorCode#BUNDLE_ZONE_NOT_QUANTITY}), 가장 싼 회차 조합이 0원이 되면
+     *                                ({@link PricingErrorCode#BUNDLE_PRICE_NOT_POSITIVE})
      */
     public boolean reconfigure(BundleProductTerms newTerms, EventSchedule schedule, FloorPlan floorPlan) {
         Objects.requireNonNull(newTerms, "newTerms");
@@ -173,6 +186,82 @@ public final class BundleProduct {
         return true;
     }
 
+    /**
+     * 상품 목록에 보일 시작 가격 — <b>가장 싼 회차 조합</b>의 묶음권 가격("3일권 40,000원~", docs/05 "조합은 자동 생성하지 않습니다"). 회차를 다
+     * 고르면 금액이 확정된다({@link #priceFor}).
+     * <p>
+     * 같은 날짜의 회차끼리 가격이 다르면 관객이 고른 회차의 가격으로 계산하므로, 날짜마다 가장 싼 회차를 고른 조합이 가장 싸다. 묶음권 가격은 날짜별
+     * 가격 합계가 작을수록 작으므로({@link BundleDayPrices#bundlePrice} — 100원 내림) 구역마다 그 조합의 가격을 내고 가장 싼 구역의 것을 보인다.
+     * <blockquote>
+     * 전시 3일권 7%. 5/3 15,000원 · 5/4 낮 15,000원 / 야간 20,000원 · 5/5 15,000원<br>
+     * 가장 싼 조합 15,000 + 15,000 + 15,000 = 45,000원 → 41,800원~
+     * </blockquote>
+     * 관객이 고를 수 있는 회차만 본다 — 취소되지 않았고, 부르는 쪽이 넘긴 예매할 수 있는 회차. 한 날짜라도 고를 회차가 없는 구역은 빼고, 어느 구역도
+     * 조합이 없으면 비어 있다(그 묶음권은 지금 살 수 없다).
+     *
+     * @param bookableSessionIds 지금 예매할 수 있는 회차 — 그 회차의 예매가 마감되지 않은 회차. 부르는 쪽이 고른다
+     * @return 시작 가격. 살 수 있는 조합이 없으면 비어 있다
+     */
+    public Optional<Money> startingPrice(EventSchedule schedule, FloorPlan floorPlan, Set<Long> bookableSessionIds) {
+        requireSameEvent(schedule, floorPlan);
+        Set<Long> bookable = Set.copyOf(Objects.requireNonNull(bookableSessionIds, "bookableSessionIds"));
+        Predicate<EventSession> selectable = session -> !session.isCancelled()
+                && session.id().isPresent() && bookable.contains(session.id().getAsLong());
+        return terms.zoneIds().stream()
+                .map(floorPlan::zone)
+                .map(zone -> cheapestDayPrices(terms, zone, schedule, selectable))
+                .flatMap(Optional::stream)
+                .map(dayPrices -> dayPrices.bundlePrice(terms.discountRate()))
+                .min(Comparator.naturalOrder());
+    }
+
+    /**
+     * 관객이 고른 회차의 날짜별 가격 — 날짜마다 고른 회차의 가격을 날짜 순서대로 담는다(docs/05 "같은 날짜의 회차끼리 가격이 다르면, 관객이 고른
+     * 회차의 가격으로 계산합니다"). 티켓이 고른 회차를 가리키므로 할인 전 합계 · 환불(그날 몫) 계산이 모두 이 가격으로 맞아떨어진다.
+     * <blockquote>
+     * 전시 3일권. 5/4 낮 회차 15,000원, 야간 회차 20,000원(회차별 조정 +5,000원).<br>
+     * 낮을 고르면 5/4 몫은 15,000원, 야간을 고르면 20,000원으로 합계를 냅니다.
+     * </blockquote>
+     * 회차가 취소됐는지, 그 회차의 예매가 마감됐는지는 예매 자격 판정이 본다. 여기서는 가격만 낸다.
+     *
+     * @param zoneId           관객이 고른 구역 — 이 묶음권을 파는 구역
+     * @param chosenSessionIds 관객이 고른 회차 — 묶은 날짜마다 하나씩
+     * @throws RuleViolationException 이 묶음권을 팔지 않는 구역이면({@link PricingErrorCode#BUNDLE_ZONE_NOT_INCLUDED}), 회차가 날짜마다 하나씩이
+     *                                아니면({@link PricingErrorCode#BUNDLE_SESSIONS_MISMATCH})
+     * @throws NotFoundException      일정에 없는 회차면({@link EventErrorCode#SESSION_NOT_FOUND})
+     */
+    public BundleDayPrices dayPricesFor(long zoneId, List<Long> chosenSessionIds, EventSchedule schedule, FloorPlan floorPlan) {
+        requireSameEvent(schedule, floorPlan);
+        Objects.requireNonNull(chosenSessionIds, "chosenSessionIds");
+        if (!terms.zoneIds().contains(zoneId)) {
+            throw new RuleViolationException(PricingErrorCode.BUNDLE_ZONE_NOT_INCLUDED, "묶음권 " + id + ", 구역 " + zoneId);
+        }
+        Zone zone = floorPlan.zone(zoneId);
+        Map<LocalDate, SessionPrice> pricesByDate = new TreeMap<>();
+        for (long sessionId : chosenSessionIds) {
+            EventDate eventDate = schedule.dateOf(sessionId);
+            if (!includes(terms, eventDate) || pricesByDate.containsKey(eventDate.date())) {
+                throw sessionsMismatch(chosenSessionIds);
+            }
+            pricesByDate.put(eventDate.date(), SessionPrice.of(zone.basePrice(), schedule.session(sessionId).priceAdjustment()));
+        }
+        if (pricesByDate.size() != terms.dateCount()) {
+            throw sessionsMismatch(chosenSessionIds);
+        }
+        return BundleDayPrices.of(List.copyOf(pricesByDate.values()));
+    }
+
+    /**
+     * 관객이 회차를 다 골라 확정된 묶음권 가격 = 날짜별 가격 합계 × (1 − 할인율), 100원 내림(docs/05 "가격은 할인율로 계산합니다").
+     * <blockquote>5/3 (금) 40,000원 · 5/4 (토) 50,000원 · 5/5 (일) 50,000원 → 합계 140,000원 → 3일권 7% 할인 → 130,200원</blockquote>
+     * 이 가격 위에 조기예매 또는 쿠폰 중 유리한 하나가 붙는다({@link BookingPrice}).
+     *
+     * @see #dayPricesFor
+     */
+    public Money priceFor(long zoneId, List<Long> chosenSessionIds, EventSchedule schedule, FloorPlan floorPlan) {
+        return dayPricesFor(zoneId, chosenSessionIds, schedule, floorPlan).bundlePrice(terms.discountRate());
+    }
+
     private void requireApplicable(BundleProductTerms candidate, EventSchedule schedule, FloorPlan floorPlan) {
         requireSameEvent(schedule, floorPlan);
         for (long dateId : candidate.dateIds()) {
@@ -184,7 +273,50 @@ public final class BundleProduct {
                 throw new RuleViolationException(PricingErrorCode.BUNDLE_ZONE_NOT_QUANTITY,
                         "행사 " + eventId + ", 구역 " + zoneId + " — " + zone.kind());
             }
+            requirePositivePrice(candidate, zone, schedule);
         }
+    }
+
+    /**
+     * 할인율이 가장 싼 회차 조합에 적용해도 1원 이상 남기는지 — 할인한 가격은 날짜별 가격 합계가 작을수록 작으므로 가장 싼 조합 하나만 보면 된다.
+     * 조기예매 · 쿠폰의 할인 값을 가장 낮은 가격에 견주는 것과 같다({@link Discount#requireLeavesPositivePrice}, docs/99 C "할인 값"). 정할 때 막지
+     * 않으면 관객이 예매하는 순간 주최자용 문구로 막힌다. 취소되지 않은 회차를 모두 본다.
+     */
+    private static void requirePositivePrice(BundleProductTerms candidate, Zone zone, EventSchedule schedule) {
+        cheapestDayPrices(candidate, zone, schedule, session -> !session.isCancelled())
+                .ifPresent(dayPrices -> dayPrices.bundlePrice(candidate.discountRate()));
+    }
+
+    /**
+     * 그 구역에서 날짜마다 가장 싼 고를 수 있는 회차의 가격 — 날짜 순서대로. 한 날짜라도 고를 회차가 없거나(지워진 날짜 포함) 비어 있다.
+     */
+    private static Optional<BundleDayPrices> cheapestDayPrices(BundleProductTerms candidate, Zone zone, EventSchedule schedule,
+            Predicate<EventSession> selectable) {
+        List<EventDate> includedDates = schedule.dates().stream().filter(eventDate -> includes(candidate, eventDate)).toList();
+        if (includedDates.size() != candidate.dateCount()) {
+            return Optional.empty();
+        }
+        List<SessionPrice> cheapestPrices = new ArrayList<>();
+        for (EventDate eventDate : includedDates) {
+            Optional<SessionPrice> cheapest = eventDate.sessions().stream()
+                    .filter(selectable)
+                    .map(session -> SessionPrice.of(zone.basePrice(), session.priceAdjustment()))
+                    .min(Comparator.comparing(SessionPrice::amount));
+            if (cheapest.isEmpty()) {
+                return Optional.empty();
+            }
+            cheapestPrices.add(cheapest.get());
+        }
+        return Optional.of(BundleDayPrices.of(cheapestPrices));
+    }
+
+    private static boolean includes(BundleProductTerms candidate, EventDate eventDate) {
+        return eventDate.id().isPresent() && candidate.dateIds().contains(eventDate.id().getAsLong());
+    }
+
+    private RuleViolationException sessionsMismatch(List<Long> chosenSessionIds) {
+        return new RuleViolationException(PricingErrorCode.BUNDLE_SESSIONS_MISMATCH,
+                "묶음권 " + id + ", 날짜 " + terms.dateIds() + ", 고른 회차 " + chosenSessionIds);
     }
 
     private void requireSameEvent(EventSchedule schedule, FloorPlan floorPlan) {

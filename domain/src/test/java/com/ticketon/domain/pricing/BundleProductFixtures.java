@@ -15,6 +15,7 @@ import com.ticketon.domain.event.ZoneColor;
 import com.ticketon.domain.event.ZoneKind;
 import com.ticketon.domain.event.ZoneName;
 import com.ticketon.domain.policy.Percent;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -46,6 +47,9 @@ final class BundleProductFixtures {
 
     /** 테이블석 — 지정형 (docs/02 "페스티벌에 테이블석만 지정형으로 둘 수도 있습니다"). */
     static final long TABLE_SEATS = 6L;
+
+    /** 어린이 — 수량형, 기본가 3,000원. 할인율을 높이면 묶음권 가격이 0원이 되는 싼 구역. */
+    static final long CHILDREN = 10L;
 
     /** 시간대를 나눈 전시(회차형) — 5/3 낮 · 5/4 낮 · 야간 · 5/5 낮 (docs/05 "조합은 자동 생성하지 않습니다"). */
     static final long EXHIBITION_EVENT_ID = 8L;
@@ -80,16 +84,27 @@ final class BundleProductFixtures {
         return FloorPlan.restore(FESTIVAL_EVENT_ID, List.of(
                 quantityZone(STANDING_A, "스탠딩A", 40_000),
                 quantityZone(STANDING_B, "스탠딩B", 30_000),
+                quantityZone(CHILDREN, "어린이", 3_000),
                 Zone.restore(TABLE_SEATS, ZoneKind.DESIGNATED, ZoneName.of("테이블석"), ZoneColor.of("#FFAA00"), ZoneBasePrice.of(60_000), null)),
                 List.of(), null);
     }
 
     static EventSchedule exhibitionSchedule() {
+        return exhibitionSchedule(timedSession(DAY_MAY_4, 10, SessionPriceAdjustment.none()));
+    }
+
+    /** 5/4 낮 회차가 취소된 전시. */
+    static EventSchedule exhibitionScheduleWithDayMay4Cancelled() {
+        return exhibitionSchedule(EventSession.restore(DAY_MAY_4, TimedSessionTime.startingAt(LocalTime.of(10, 0)), null,
+                SessionPriceAdjustment.none(), Instant.parse("2026-04-20T00:00:00Z")));
+    }
+
+    private static EventSchedule exhibitionSchedule(EventSession dayMay4) {
         return EventSchedule.restore(EXHIBITION_EVENT_ID, SessionMode.TIMED, null, List.of(
                 EventDate.restore(EXHIBITION_MAY_3, LocalDate.of(2026, 5, 3), null, List.of(
                         timedSession(DAY_MAY_3, 10, SessionPriceAdjustment.none()))),
                 EventDate.restore(EXHIBITION_MAY_4, LocalDate.of(2026, 5, 4), null, List.of(
-                        timedSession(DAY_MAY_4, 10, SessionPriceAdjustment.none()),
+                        dayMay4,
                         timedSession(NIGHT_MAY_4, 18, SessionPriceAdjustment.amount(5_000)))),
                 EventDate.restore(EXHIBITION_MAY_5, LocalDate.of(2026, 5, 5), null, List.of(
                         timedSession(DAY_MAY_5, 10, SessionPriceAdjustment.none())))));

@@ -45,8 +45,10 @@ import java.time.LocalTime;
  *       {@code domain.pricing.BundleProductTerms#zoneIds}.</li>
  *   <li>확인 필요 (#223) — 묶음권 상품은 날짜를 id로 가리키고, 묶은 날짜가 지워지며 회차가 다른 날짜로 옮겨 가면 따라간다. 옮겨 간 날짜를 이미
  *       묶고 있으면(묶은 날짜끼리 합쳐지면) 따라가지 않는다: {@code domain.pricing.BundleProduct#followMovedDate}.</li>
- *   <li>확인 필요 (#223) — 묶음권 상품을 만들고 고칠 때의 오류 문구(날짜 2개 미만, 구역 없음, 지정형 구역). 경우는 docs/05가 정했고 문구만 지었다:
- *       {@code domain.pricing.PricingErrorCode}.</li>
+ *   <li>확인 필요 (#223) — 묶음권 상품을 만들고 고칠 때(날짜 2개 미만, 구역 없음, 지정형 구역)와 관객이 고른 구역 · 회차가 묶음권에 맞지 않을 때의
+ *       오류 문구. 경우는 docs/05가 정했고 문구만 지었다: {@code domain.pricing.PricingErrorCode}.</li>
+ *   <li>확인 필요 (#223) — 묶음권 할인율을 정할 때 구역마다 가장 싼 회차 조합에 적용해 0원이 되면 받지 않는다(조기예매 · 쿠폰의 "가장 낮은 가격에
+ *       적용해도 1원 이상"을 묶음권에도 썼다, docs/99 C "할인 값"): {@code domain.pricing.BundleProduct#create}.</li>
  * </ul>
  */
 public final class ProposedPolicy {

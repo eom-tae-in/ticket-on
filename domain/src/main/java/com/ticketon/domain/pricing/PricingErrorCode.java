@@ -15,7 +15,8 @@ public enum PricingErrorCode implements ErrorCode {
 
     /**
      * 묶음권 할인율을 적용하면 0원 이하가 된다(100원 단위로 내린 뒤 — 할인율 100% 등). 회차 가격과 같은 까닭으로 막는다({@link BundleDayPrices#bundlePrice}).
-     * 묶음권 상품을 정할 때도 할인율 100%는 받지 않는다({@link BundleProductTerms}).
+     * 묶음권 상품을 정할 때도 할인율 100%와, 가장 싼 회차 조합에 적용해 0원이 되는 할인율은 받지 않는다({@link BundleProductTerms},
+     * {@link BundleProduct#create}).
      */
     BUNDLE_PRICE_NOT_POSITIVE("묶음권 할인율을 적용하면 0원 이하가 됩니다. 할인율을 낮춰 주세요."),
 
@@ -34,6 +35,15 @@ public enum PricingErrorCode implements ErrorCode {
      * 문구는 문서에 없다 — 확인 필요 (#223).
      */
     BUNDLE_ZONE_NOT_QUANTITY("지정형 구역에서는 묶음권을 팔 수 없습니다. 수량형 구역만 골라 주세요."),
+
+    /** 관객이 고른 구역이 그 묶음권을 파는 구역이 아니다({@link BundleProduct#dayPricesFor}). 문구는 문서에 없다 — 확인 필요 (#223). */
+    BUNDLE_ZONE_NOT_INCLUDED("이 묶음권으로 살 수 없는 구역입니다."),
+
+    /**
+     * 관객이 고른 회차가 묶음권의 날짜마다 하나씩이 아니다 — 빠진 날짜, 한 날짜에 둘, 묶지 않은 날짜의 회차({@link BundleProduct#dayPricesFor}). 묶음권
+     * 티켓은 날짜마다 회차 하나씩을 가리킨다(docs/05 "묶음권 = 날짜 N개를 묶은 상품"). 문구는 문서에 없다 — 확인 필요 (#223).
+     */
+    BUNDLE_SESSIONS_MISMATCH("묶음권의 날짜마다 회차를 하나씩 골라 주세요."),
 
     /**
      * 조기예매 · 쿠폰의 할인 값이 범위 밖이다 — 정액 0원, 정률 0% 또는 100%({@link Discount#requireOfferable}). 0원 · 0%는 할인이 아니고 100%는
