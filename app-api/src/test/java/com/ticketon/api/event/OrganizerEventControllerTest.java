@@ -105,7 +105,8 @@ class OrganizerEventControllerTest {
 
     private static final String DEFAULT_BOOKING_BODY = """
             {"visibility": "PUBLIC", "newPassword": null, "bookingOpensAt": null, "bookingCloseLeadMinutes": 60,
-             "checkinOpenLeadMinutes": 60, "maxSeatsPerSelection": 4, "ticketsPerPersonLimit": null, "sessionChoice": "NONE",
+             "checkinOpenLeadMinutes": 60, "maxSeatsPerSelection": 4,
+             "ticketsPerPersonLimit": {"maxTickets": 4, "basis": "PER_DATE"}, "sessionChoice": "NONE",
              "reentryAllowed": false, "minimumAge": null,
              "cancellationFeeTiers": [{"fromDaysBefore": 10, "deductionRatePercent": 0}, {"fromDaysBefore": 7, "deductionRatePercent": 10},
                                       {"fromDaysBefore": 3, "deductionRatePercent": 20}, {"fromDaysBefore": 1, "deductionRatePercent": 30},

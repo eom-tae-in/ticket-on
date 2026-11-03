@@ -10,9 +10,9 @@ import java.util.OptionalInt;
  * <b>위험선(8석 초과 또는 전체의 10% 초과)을 넘으면 경고만 한다</b>({@link QuantityPolicy#SEATS_PER_SELECTION_WARNING}). 막지 않는다.
  * <blockquote>8석은 전체 50석의 16%입니다. 한 사람이 객석의 상당 부분을 가져갈 수 있습니다.</blockquote>
  * <p>
- * 경고는 비율을 반올림하기 전 값으로 본다 — 8석 / 80석(10%)은 "10% 초과"가 아니고, 9석 / 80석(11.25%)은 넘는다.
- * 보여 줄 비율은 올림한 정수 퍼센트다({@link #percentOfTotal}): 경고선을 넘은 비율이 "10%"로 보이면 경고와 숫자가 어긋나기 때문이다
- * (반올림 방식은 문서에 없어 정한 것 — 확인 필요 #35).
+ * 경고는 비율을 반올림하기 전 값으로 본다 — 8석 / 80석(10%)은 "10% 초과"가 아니고, 9석 / 80석(11.25%)은 넘는다. 8석 / 79석(10.13%)은 10%로
+ * 보여도 경고한다.
+ * 보여 줄 비율은 정수로 반올림한다({@link #percentOfTotal}) — 98석 중 4석은 4%다(docs/06, Figma O9). 1%가 안 되면 "1% 미만"이다({@link #isUnderOnePercent}).
  *
  * @param maxSeats   1회 선택 매수 (1 이상)
  * @param totalSeats 전체 좌석 수 (0 이상). 아직 구역을 만들지 않았으면 0이고, 그때는 비율 없이 좌석 수 경고만 본다
@@ -31,15 +31,20 @@ public record SeatsPerSelectionFeedback(int maxSeats, int totalSeats) {
     }
 
     /**
-     * 전체 좌석에서 차지하는 비율 — 올림한 정수 퍼센트. 4석 / 200석 → 2, 3석 / 200석(1.5%) → 2, 8석 / 50석 → 16.
-     * 1회 선택 매수가 전체보다 많으면 100을 넘는다(막지 않으므로). 전체 좌석 수가 0이면 비어 있다.
+     * 전체 좌석에서 차지하는 비율 — 반올림한 정수 퍼센트. 4석 / 200석 → 2, 4석 / 98석 → 4, 3석 / 200석(1.5%) → 2, 8석 / 50석 → 16.
+     * 1회 선택 매수가 전체보다 많으면 100을 넘는다(막지 않으므로). 전체 좌석 수가 0이면 비어 있다. 1% 미만이면 숫자 대신 "1% 미만"을 보인다.
      */
     public OptionalInt percentOfTotal() {
         if (totalSeats == 0) {
             return OptionalInt.empty();
         }
         long numerator = maxSeats * PERCENT;
-        return OptionalInt.of((int) ((numerator + totalSeats - 1) / totalSeats));
+        return OptionalInt.of((int) ((numerator * 2 + totalSeats) / (totalSeats * 2L)));
+    }
+
+    /** 비율을 "1% 미만"으로 보이는지 — 반올림하기 전 비율이 1%보다 작다. 전체 좌석 수가 0이면 비율이 없어 아니다. */
+    public boolean isUnderOnePercent() {
+        return totalSeats > 0 && maxSeats * PERCENT < totalSeats;
     }
 
     /** 좌석 수 위험선(8석)을 넘는지 — 9석부터. */

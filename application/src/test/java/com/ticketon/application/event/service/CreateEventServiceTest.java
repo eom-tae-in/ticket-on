@@ -24,6 +24,7 @@ import com.ticketon.domain.event.EventType;
 import com.ticketon.domain.event.EventVisibility;
 import com.ticketon.domain.event.EventWizardStep;
 import com.ticketon.domain.event.SessionChoiceRestriction;
+import com.ticketon.domain.event.TicketsPerPersonBasis;
 import com.ticketon.domain.organizer.OrganizerErrorCode;
 import com.ticketon.domain.organizer.StaffAction;
 import com.ticketon.domain.organizer.StaffOperationTargetKind;
@@ -78,8 +79,8 @@ class CreateEventServiceTest {
         assertThat(bookingStep.bookingCloseLeadTime()).isEqualTo(Duration.ofHours(1));
         assertThat(bookingStep.checkinOpenLeadTime()).isEqualTo(Duration.ofHours(1));
         assertThat(bookingStep.maxSeatsPerSelection()).isEqualTo(4);
-        assertThat(bookingStep.maxTicketsPerPerson()).isNull();
-        assertThat(bookingStep.ticketsPerPersonBasis()).isNull();
+        assertThat(bookingStep.maxTicketsPerPerson()).isEqualTo(4);
+        assertThat(bookingStep.ticketsPerPersonBasis()).isEqualTo(TicketsPerPersonBasis.PER_DATE);
         assertThat(bookingStep.sessionChoice()).isEqualTo(SessionChoiceRestriction.NONE);
         assertThat(bookingStep.reentryAllowed()).isFalse();
         assertThat(bookingStep.minimumAge()).isNull();
