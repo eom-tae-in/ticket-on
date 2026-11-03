@@ -59,6 +59,10 @@ import java.time.LocalTime;
  *       {@code domain.payment.PaymentHistoryDescriptionSource#appliedDiscountSummaryOf}.</li>
  *   <li>확인 필요 (#223) — 묶음권에서 그 회차의 지연 환급을 이미 받은 티켓에 나중에 그날 몫을 돌려줄 때 그날 몫에서 지연 환급을 빼지 않고 그날 몫
  *       전액을 돌려준다(반대 순서 — 그날 몫 뒤 그 회차 지연 환급 — 는 막는다): {@code domain.payment.PaymentHistory#recordBundleDayRefund}.</li>
+ *   <li>확인 필요 (#223) — 예매 자격 판정의 오류 문구(미리보기 · 오픈 전 · 판매 중단 · 마감 · 취소된 행사). 경우는 docs/06 · docs/03 · docs/04가
+ *       정했고, 변경 중 판매 중단(docs/04 원문) 밖은 문구만 지었다. 이용 정지는 계정의 문구를 그대로 쓴다: {@code domain.booking.BookingErrorCode}.</li>
+ *   <li>확인 필요 (#223) — 예매 변경도 새로 잡는 쪽은 새 예매와 같은 판정을 받고, 바꿀 티켓은 곧 취소되므로 이미 가진 티켓에서 빼고 넘긴다고
+ *       보았다(docs/08 "변경 = 취소 + 재예매"): {@code domain.booking.BookingPurpose#CHANGE}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
