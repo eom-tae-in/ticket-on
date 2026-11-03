@@ -299,6 +299,15 @@ class BookingSettingsTest {
                     "켜면 같은 QR로 여러 번 입장할 수 있습니다. 티켓 이미지를 공유해 여러 명이 들어오는 것을 막을 수 없으니, "
                             + "팔찌나 도장 같은 현장 수단을 함께 쓰시는 걸 권합니다.");
         }
+
+        @Test
+        @DisplayName("이미 산 관객에게 불리한 것은 켬에서 끔으로 끌 때뿐이다 — 켜기와 그대로는 불리하지 않다 (docs/04 \"켜기만\")")
+        void turningOffIsStricter() {
+            assertThat(ReentrySetting.NOT_ALLOWED.isStricterThan(ReentrySetting.ALLOWED)).isTrue();
+            assertThat(ReentrySetting.ALLOWED.isStricterThan(ReentrySetting.NOT_ALLOWED)).isFalse();
+            assertThat(ReentrySetting.ALLOWED.isStricterThan(ReentrySetting.ALLOWED)).isFalse();
+            assertThat(ReentrySetting.NOT_ALLOWED.isStricterThan(ReentrySetting.NOT_ALLOWED)).isFalse();
+        }
     }
 
     @Nested
@@ -332,6 +341,22 @@ class BookingSettingsTest {
             assertThatIllegalArgumentException().isThrownBy(() -> AgeRestriction.atLeast(0));
             assertThatIllegalArgumentException().isThrownBy(() -> new AgeRestriction(-1));
             assertThat(new AgeRestriction(0)).isEqualTo(AgeRestriction.none());
+        }
+
+        @Test
+        @DisplayName("이미 산 관객에게 불리한 것은 기준 나이가 오를 때다 — 없음에서 만 19세로 새로 거는 것도, 만 15세를 만 19세로 올리는 것도 (docs/04 \"낮추거나 없애기만\")")
+        void raisingIsStricter() {
+            assertThat(AgeRestriction.atLeast(19).isStricterThan(AgeRestriction.none())).isTrue();
+            assertThat(AgeRestriction.atLeast(19).isStricterThan(AgeRestriction.atLeast(15))).isTrue();
+        }
+
+        @Test
+        @DisplayName("낮추기 · 없애기 · 그대로는 불리하지 않다 — 만 19세를 만 15세로, 만 19세를 없음으로")
+        void loweringOrRemovingIsNotStricter() {
+            assertThat(AgeRestriction.atLeast(15).isStricterThan(AgeRestriction.atLeast(19))).isFalse();
+            assertThat(AgeRestriction.none().isStricterThan(AgeRestriction.atLeast(19))).isFalse();
+            assertThat(AgeRestriction.atLeast(19).isStricterThan(AgeRestriction.atLeast(19))).isFalse();
+            assertThat(AgeRestriction.none().isStricterThan(AgeRestriction.none())).isFalse();
         }
     }
 }

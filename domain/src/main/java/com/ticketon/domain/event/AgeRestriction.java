@@ -50,6 +50,14 @@ public record AgeRestriction(int minimumAge) {
         return minimumAge > 0;
     }
 
+    /**
+     * 그 제한에서 이 제한으로 바꾸면 이미 산 관객에게 불리한지 — 기준 나이가 오를 때다. 없음은 기준 나이 0이라 없음에서 새로 거는 것도 오르는
+     * 것이다. 예매가 열린 뒤에는 낮추거나 없애기만 한다(docs/04 "연령 제한 — 낮추거나 없애기만. 올리지 않음").
+     */
+    public boolean isStricterThan(AgeRestriction previous) {
+        return minimumAge > previous.minimumAge;
+    }
+
     /** 기준 나이 — 제한이 없으면 비어 있다. */
     public OptionalInt requiredAge() {
         return isRestricted() ? OptionalInt.of(minimumAge) : OptionalInt.empty();

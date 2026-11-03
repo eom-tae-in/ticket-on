@@ -37,4 +37,12 @@ public enum ReentrySetting {
     public boolean isAllowed() {
         return this == ALLOWED;
     }
+
+    /**
+     * 그 설정에서 이 설정으로 바꾸면 이미 산 관객에게 불리한지 — 켬에서 끔으로 끌 때뿐이다. 예매가 열린 뒤에는 켜기만 한다(docs/04 "재입장 —
+     * 켜기만. 끄지 않음").
+     */
+    public boolean isStricterThan(ReentrySetting previous) {
+        return previous == ALLOWED && this == NOT_ALLOWED;
+    }
 }
