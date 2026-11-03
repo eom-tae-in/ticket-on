@@ -112,6 +112,26 @@ class TicketQrKeyTest {
         }
 
         @Test
+        @DisplayName("초대권 회수 → '회수된 초대권입니다' · 초대해 주신 분께 확인해 주세요. (docs/09 \"발권 후\")")
+        void recalledInvitation() {
+            Ticket ticket = TicketFixtures.invitationTicket();
+            ticket.cancel(TicketCancellationReason.INVITATION_RECALLED, NOW);
+
+            assertThat(ticket.shareLinkInvalidReason(KEY, EventStatus.ON_SALE)).contains(ShareLinkInvalidReason.RECALLED);
+            assertThat(ShareLinkInvalidReason.RECALLED.title()).isEqualTo("회수된 초대권입니다");
+            assertThat(ShareLinkInvalidReason.RECALLED.guidance()).contains("초대해 주신 분께 확인해 주세요.");
+        }
+
+        @Test
+        @DisplayName("회차 취소 · 행사 취소 · 공연 중단으로 취소된 초대권은 예매 티켓과 같이 '취소된 티켓입니다'다 — 회수만 따로 알린다")
+        void invitationCancelledWithSession() {
+            Ticket ticket = TicketFixtures.invitationTicket();
+            ticket.cancel(TicketCancellationReason.SESSION_CANCELLED, NOW);
+
+            assertThat(ticket.shareLinkInvalidReason(KEY, EventStatus.ON_SALE)).contains(ShareLinkInvalidReason.CANCELLED);
+        }
+
+        @Test
         @DisplayName("QR 재발행 → 옛 열쇠로 만든 링크는 '재발행으로 바뀐 티켓입니다' · 예매하신 분께 새 링크를 받아 주세요.")
         void reissued() {
             Ticket ticket = TicketFixtures.designatedTicket();
@@ -145,6 +165,17 @@ class TicketQrKeyTest {
             assertThat(reissuedThenCancelled.shareLinkInvalidReason(KEY, EventStatus.ENDED))
                     .contains(ShareLinkInvalidReason.CANCELLED);
             assertThat(reissued.shareLinkInvalidReason(KEY, EventStatus.ENDED)).contains(ShareLinkInvalidReason.EVENT_ENDED);
+        }
+
+        @Test
+        @DisplayName("회수는 취소 자리에 선다 — 재발행한 뒤 회수했고 행사가 끝났어도 옛 링크는 '회수된 초대권입니다'다")
+        void recalledWinsLikeCancelled() {
+            Ticket ticket = TicketFixtures.invitationTicket();
+            ticket.reissueKey(NEW_KEY, NOW);
+            ticket.cancel(TicketCancellationReason.INVITATION_RECALLED, NOW.plusSeconds(60));
+
+            assertThat(ticket.shareLinkInvalidReason(KEY, EventStatus.ENDED)).contains(ShareLinkInvalidReason.RECALLED);
+            assertThat(ticket.shareLinkInvalidReason(NEW_KEY, EventStatus.ON_SALE)).contains(ShareLinkInvalidReason.RECALLED);
         }
     }
 }

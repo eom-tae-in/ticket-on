@@ -231,7 +231,8 @@ public final class Ticket {
      * 그 열쇠로 만든 공유 링크가 무효인 이유 — 유효하면 비어 있다(docs/07 "공유 링크의 수명"). 링크는 로그인 없이 열리고 그 티켓의 QR만 보여 준다.
      * <p>
      * 이유가 겹치면 <b>취소 → 행사 종료 → 재발행</b> 순으로 하나를 고른다(docs/99 E "티켓"). 취소된 티켓은 새 링크를 받아도 들어갈 수 없으므로
-     * "취소된 티켓입니다"가, 끝난 행사는 새 링크가 소용없으므로 "종료된 행사입니다"가 재발행 안내보다 앞선다.
+     * "취소된 티켓입니다"가, 끝난 행사는 새 링크가 소용없으므로 "종료된 행사입니다"가 재발행 안내보다 앞선다. 회수된 초대권은 취소 자리에서 "회수된
+     * 초대권입니다"를 보인다(docs/09 "발권 후", {@link ShareLinkInvalidReason#RECALLED}).
      *
      * @param linkKey     링크에 담긴 열쇠 — 지금 열쇠이거나, 옛 열쇠 이력으로 이 티켓을 찾은 재발행 전 열쇠
      * @param eventStatus 그 행사의 지금 상태. 행사 종료 · 정산 완료 · 취소됨이면 행사가 끝난 것이다({@link EventStatus#isFinished})
@@ -240,7 +241,7 @@ public final class Ticket {
         Objects.requireNonNull(linkKey, "linkKey");
         Objects.requireNonNull(eventStatus, "eventStatus");
         if (isCancelled()) {
-            return Optional.of(ShareLinkInvalidReason.CANCELLED);
+            return Optional.of(ShareLinkInvalidReason.ofCancellation(cancellation.reason()));
         }
         if (eventStatus.isFinished()) {
             return Optional.of(ShareLinkInvalidReason.EVENT_ENDED);
