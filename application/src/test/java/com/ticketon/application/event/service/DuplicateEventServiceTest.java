@@ -12,11 +12,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.tuple;
 
+import com.ticketon.application.event.port.in.AddAllDayDateCommand;
 import com.ticketon.application.event.port.in.AddEntranceCommand;
 import com.ticketon.application.event.port.in.AddSeatBlockCommand;
 import com.ticketon.application.event.port.in.AddTimedSessionCommand;
 import com.ticketon.application.event.port.in.AddZoneCommand;
 import com.ticketon.application.event.port.in.AssignSeatsToZoneCommand;
+import com.ticketon.application.event.port.in.ChangeDateOperatingHoursCommand;
 import com.ticketon.application.event.port.in.ChangeSeatActivationCommand;
 import com.ticketon.application.event.port.in.ChangeSeatAttributeCommand;
 import com.ticketon.application.event.port.in.ChooseSessionModeCommand;
@@ -50,11 +52,13 @@ import com.ticketon.domain.event.Event;
 import com.ticketon.domain.event.EventErrorCode;
 import com.ticketon.domain.event.EventPoster;
 import com.ticketon.domain.event.EventPosterImage;
+import com.ticketon.domain.event.EventSchedule;
 import com.ticketon.domain.event.EventStatus;
 import com.ticketon.domain.event.EventVisibility;
 import com.ticketon.domain.event.EventVisibilitySetting;
 import com.ticketon.domain.event.EventWizardStep;
 import com.ticketon.domain.event.LeadTime;
+import com.ticketon.domain.event.OperatingHours;
 import com.ticketon.domain.event.ReentrySetting;
 import com.ticketon.domain.event.SeatAttribute;
 import com.ticketon.domain.event.SeatsPerSelectionLimit;
@@ -325,12 +329,59 @@ class DuplicateEventServiceTest {
     }
 
     @Test
-    @DisplayName("날짜 · 회차는 가져오지 않는다 — 복제본에는 일정이 없고 원본의 회차는 그대로다")
-    void doesNotCopySchedule() {
+    @DisplayName("회차 방식(회차형)은 가져오고 날짜 · 회차는 가져오지 않는다 — 원본의 회차는 그대로다")
+    void copiesTimedModeWithoutSessions() {
         long copyId = duplicate(PLANNER, scene.twelveMonths, lastSpring).eventId();
 
-        assertThat(scene.scheduleRepository.findByEventId(copyId)).isEmpty();
+        EventSchedule copied = scene.scheduleRepository.findByEventId(copyId).orElseThrow();
+        assertThat(copied.mode()).isEqualTo(SessionMode.TIMED);
+        assertThat(copied.defaultOperatingHours()).isEmpty();
+        assertThat(copied.dates()).isEmpty();
         assertThat(scene.scheduleRepository.findByEventId(lastSpring).orElseThrow().sessions()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("복제본은 가져온 회차 방식으로 날짜만 넣으면 된다 — 회차를 더하면 진행 단계가 2단계로 오른다")
+    void copyTakesNewSessionsInCopiedMode() {
+        long copyId = duplicate(PLANNER, scene.twelveMonths, lastSpring).eventId();
+
+        scene.addTimedSessionService().add(new AddTimedSessionCommand(acting(PLANNER, scene.twelveMonths), copyId,
+                LocalDate.of(2027, 3, 13), TimedSessionTime.of(LocalTime.of(19, 0), LocalTime.of(21, 0))));
+
+        assertThat(scene.scheduleRepository.findByEventId(copyId).orElseThrow().sessions()).hasSize(1);
+        assertThat(scene.eventRepository.findById(copyId).orElseThrow().wizardProgress()).isEqualTo(EventWizardStep.SCHEDULE);
+    }
+
+    @Test
+    @DisplayName("종일형은 기본 운영 시간(10:00~18:00)까지 가져오고, 주말만 늦게까지 덮어쓴 날짜별 운영 시간은 날짜와 함께 빠진다")
+    void copiesAllDayModeAndDefaultOperatingHours() {
+        ActingStaff owner = acting(JUNGHOON, scene.twelveMonths);
+        long allDayEvent = scene.createEventService().create(new CreateEventCommand(owner, springPlayItems())).eventId();
+        OperatingHours weekdays = OperatingHours.of(LocalTime.of(10, 0), LocalTime.of(18, 0));
+        scene.chooseSessionModeService().choose(new ChooseSessionModeCommand(owner, allDayEvent, SessionMode.ALL_DAY, weekdays));
+        scene.addAllDayDateService().add(new AddAllDayDateCommand(owner, allDayEvent, LocalDate.of(2026, 3, 13)));
+        scene.addAllDayDateService().add(new AddAllDayDateCommand(owner, allDayEvent, LocalDate.of(2026, 3, 14)));
+        scene.changeDateOperatingHoursService().change(new ChangeDateOperatingHoursCommand(owner, allDayEvent,
+                LocalDate.of(2026, 3, 14), OperatingHours.of(LocalTime.of(10, 0), LocalTime.of(21, 0))));
+
+        long copyId = duplicate(PLANNER, scene.twelveMonths, allDayEvent).eventId();
+
+        EventSchedule copied = scene.scheduleRepository.findByEventId(copyId).orElseThrow();
+        assertThat(copied.mode()).isEqualTo(SessionMode.ALL_DAY);
+        assertThat(copied.defaultOperatingHours()).contains(weekdays);
+        assertThat(copied.dates()).isEmpty();
+        assertThat(scene.scheduleRepository.findByEventId(allDayEvent).orElseThrow().dates()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("회차 방식을 고르기 전인 원본을 복제하면 복제본에도 일정이 없다")
+    void noScheduleWithoutOriginalSchedule() {
+        long withoutSchedule = scene.createEventService()
+                .create(new CreateEventCommand(acting(JUNGHOON, scene.twelveMonths), springPlayItems())).eventId();
+
+        long copyId = duplicate(PLANNER, scene.twelveMonths, withoutSchedule).eventId();
+
+        assertThat(scene.scheduleRepository.findByEventId(copyId)).isEmpty();
     }
 
     @Test

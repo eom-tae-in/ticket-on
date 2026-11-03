@@ -98,7 +98,7 @@ class EventDuplicationIntegrationTest {
     }
 
     @Test
-    @DisplayName("운영자가 끝난 봄 정기공연을 복제하면 작성 중인 '(복사본)'이 공개로 생기고, 예매 설정은 가져오되 오픈 시각 · 회차는 없다")
+    @DisplayName("운영자가 끝난 봄 정기공연을 복제하면 작성 중인 '(복사본)'이 공개로 생기고, 예매 설정 · 회차 방식은 가져오되 오픈 시각 · 회차는 없다")
     void duplicatesEndedEventAsPublicDraftWithoutSessions() throws Exception {
         try (Browser operator = new Browser()) {
             operator.logInStaff(plannerEmail);
@@ -134,7 +134,7 @@ class EventDuplicationIntegrationTest {
                      {"fromDaysBefore": 0, "deductionRatePercent": 90}]"""));
 
             JsonNode schedule = operator.getJson(eventPath(twelveMonths, copyId) + "/schedule");
-            assertThat(schedule.get("sessionMode").isNull()).isTrue();
+            assertThat(schedule.get("sessionMode").asString()).isEqualTo("TIMED");
             assertThat(schedule.get("dates")).isEmpty();
             assertThat(operator.getJson(eventPath(twelveMonths, original) + "/schedule").get("dates")).hasSize(1);
             assertThat(jdbcTemplate.queryForObject("SELECT visibility FROM event WHERE id = ?", String.class, original))

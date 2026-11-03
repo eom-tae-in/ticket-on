@@ -9,6 +9,8 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import com.ticketon.domain.policy.CancellationFeeTier;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -427,6 +429,68 @@ class EventDuplicationTest {
             assertThatIllegalArgumentException().isThrownBy(() -> original.copyZonesFor(ORIGINAL_EVENT));
             assertThatIllegalStateException().isThrownBy(() -> original.copyZonesFor(COPY_EVENT).copyBlocksFrom(original));
             assertThatIllegalStateException().isThrownBy(() -> copiedAndSaved(original).copyBlocksFrom(original));
+        }
+    }
+
+    @Nested
+    @DisplayName("일정 — 회차 방식 · 기본 운영 시간만, 날짜 · 회차는 빼고")
+    class ScheduleCopy {
+
+        /** 작년 봄 정기공연의 회차형 일정 — 3/14 15:00 · 19:00, 3/15 19:00. */
+        private static EventSchedule timedSchedule() {
+            EventSchedule schedule = EventSchedule.timed(ORIGINAL_EVENT);
+            schedule.addSession(LocalDate.of(2025, 3, 14), TimedSessionTime.of(LocalTime.of(15, 0), LocalTime.of(17, 0)));
+            schedule.addSession(LocalDate.of(2025, 3, 14), TimedSessionTime.of(LocalTime.of(19, 0), LocalTime.of(21, 0)));
+            schedule.addSession(LocalDate.of(2025, 3, 15), TimedSessionTime.startingAt(LocalTime.of(19, 0)));
+            return schedule;
+        }
+
+        @Test
+        @DisplayName("회차형은 회차 방식만 가져오고 날짜 · 회차는 가져오지 않는다 — 원본의 회차는 그대로다")
+        void copiesTimedModeWithoutDates() {
+            EventSchedule original = timedSchedule();
+
+            EventSchedule copy = original.copyModeFor(COPY_EVENT);
+
+            assertThat(copy.eventId()).isEqualTo(COPY_EVENT);
+            assertThat(copy.mode()).isEqualTo(SessionMode.TIMED);
+            assertThat(copy.defaultOperatingHours()).isEmpty();
+            assertThat(copy.dates()).isEmpty();
+            assertThat(original.sessions()).hasSize(3);
+        }
+
+        @Test
+        @DisplayName("종일형은 기본 운영 시간(10:00~18:00, 마지막 입장 17:00)까지 가져오고, 주말만 늦게까지 덮어쓴 날짜별 운영 시간은 날짜와 함께 빠진다")
+        void copiesAllDayModeAndDefaultOperatingHours() {
+            OperatingHours weekdays = OperatingHours.of(LocalTime.of(10, 0), LocalTime.of(18, 0), LocalTime.of(17, 0));
+            EventSchedule original = EventSchedule.allDay(ORIGINAL_EVENT, weekdays);
+            original.addDate(LocalDate.of(2025, 3, 14));
+            original.addDate(LocalDate.of(2025, 3, 15));
+            original.overrideOperatingHours(LocalDate.of(2025, 3, 15), OperatingHours.of(LocalTime.of(10, 0), LocalTime.of(21, 0)));
+
+            EventSchedule copy = original.copyModeFor(COPY_EVENT);
+
+            assertThat(copy.mode()).isEqualTo(SessionMode.ALL_DAY);
+            assertThat(copy.defaultOperatingHours()).contains(weekdays);
+            assertThat(copy.dates()).isEmpty();
+            assertThat(original.dates()).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("복사한 일정은 회차 방식을 처음 고른 직후와 같다 — 새 날짜 · 회차를 더할 수 있다")
+        void copiedScheduleTakesNewSessions() {
+            EventSchedule copy = timedSchedule().copyModeFor(COPY_EVENT);
+
+            copy.addSession(LocalDate.of(2026, 3, 13), TimedSessionTime.of(LocalTime.of(19, 0), LocalTime.of(21, 0)));
+
+            assertThat(copy.sessions()).hasSize(1);
+            assertThat(copy.sessions()).extracting(session -> session.id().isPresent()).containsOnly(false);
+        }
+
+        @Test
+        @DisplayName("원본 행사의 id로는 복사하지 않는다")
+        void rejectsSameEvent() {
+            assertThatIllegalArgumentException().isThrownBy(() -> timedSchedule().copyModeFor(ORIGINAL_EVENT));
         }
     }
 

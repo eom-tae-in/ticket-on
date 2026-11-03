@@ -86,6 +86,23 @@ public final class EventSchedule {
     }
 
     /**
+     * 행사 복제 — 이 일정의 회차 방식과 (종일형이면) 기본 운영 시간만 복제본 행사의 새 일정으로 복사한다. 날짜가 아직 없는 일정이다 — 위저드
+     * 2단계에서 회차 방식을 처음 고른 직후와 같다. docs/04 "행사 복제"가 가져오지 않는 것은 날짜 · 회차이고, 회차 방식과 기본 운영 시간은 날짜에
+     * 묶이지 않은 행사 단위 값이다(docs/02 "회차형과 종일형", "날짜마다 운영 시간이 다를 수 있습니다 — 행사 단위로 기본 운영 시간을 한 번
+     * 넣고"). 날짜에 붙은 것 — 날짜 · 회차, 날짜별로 덮어쓴 운영 시간, 회차 가격 조정 · 출연 — 은 가져오지 않는다.
+     *
+     * @param newEventId 복제본 행사의 id
+     * @return 날짜가 없는 복제본의 일정
+     * @throws IllegalArgumentException 이 일정의 행사 id를 넘기면
+     */
+    public EventSchedule copyModeFor(long newEventId) {
+        if (newEventId == eventId) {
+            throw new IllegalArgumentException("복제본은 다른 행사입니다: 행사 " + eventId);
+        }
+        return new EventSchedule(newEventId, mode, defaultOperatingHours, List.of());
+    }
+
+    /**
      * 회차형으로 바꾼다. 날짜가 있으면 바꿀 수 없다 — 회차의 시간을 옮겨 적을 기준이 없다.
      *
      * @return 바뀌었는지 — 이미 회차형이면 false
