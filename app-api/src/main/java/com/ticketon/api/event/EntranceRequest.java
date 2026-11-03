@@ -14,7 +14,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  */
 @Schema(description = "입구 추가 · 이름 변경 (위저드 6단계)")
 public record EntranceRequest(
-        @Schema(description = "입구 이름 — 앞뒤 공백은 걷는다. 20자까지(확인 필요). 같은 행사의 다른 입구 이름과 겹칠 수 없다", example = "정문",
+        @Schema(description = "입구 이름 — 앞뒤 공백은 걷는다. 20자까지. 같은 행사의 다른 입구 이름과 겹칠 수 없다", example = "정문",
                 requiredMode = REQUIRED)
         @FilledText(message = "입구 이름을 입력해 주세요.")
         @EntranceNameRule

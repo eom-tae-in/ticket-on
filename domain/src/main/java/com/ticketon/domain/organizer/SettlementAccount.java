@@ -1,6 +1,6 @@
 package com.ticketon.domain.organizer;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.util.Objects;
 
 /**
@@ -29,12 +29,12 @@ public record SettlementAccount(String bankName, String accountNumber, String ac
     }
 
     /**
-     * 마지막 숫자 몇 개({@link ProposedPolicy#SETTLEMENT_ACCOUNT_VISIBLE_TRAILING_DIGITS})만 남기고 나머지 숫자를 {@code *}로 가린 계좌번호
+     * 마지막 숫자 몇 개({@link QuantityPolicy#SETTLEMENT_ACCOUNT_VISIBLE_TRAILING_DIGITS})만 남기고 나머지 숫자를 {@code *}로 가린 계좌번호
      * — 하이픈 · 공백 같은 숫자 아닌 글자는 적은 그대로 둔다(예: {@code 123456-78-901234} → {@code ******-**-**1234}). 숫자가 그 수 이하면
      * 모두 가린다. 소유자가 "어느 계좌인지" 알아볼 만큼만 보인다.
      */
     public String maskedAccountNumber() {
-        int visibleDigits = ProposedPolicy.SETTLEMENT_ACCOUNT_VISIBLE_TRAILING_DIGITS;
+        int visibleDigits = QuantityPolicy.SETTLEMENT_ACCOUNT_VISIBLE_TRAILING_DIGITS;
         long digitCount = accountNumber.chars().filter(Character::isDigit).count();
         long digitsToMask = digitCount > visibleDigits ? digitCount - visibleDigits : digitCount;
         StringBuilder masked = new StringBuilder(accountNumber.length());

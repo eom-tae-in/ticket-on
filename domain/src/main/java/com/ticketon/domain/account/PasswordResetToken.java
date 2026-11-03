@@ -1,7 +1,7 @@
 package com.ticketon.domain.account;
 
 import com.ticketon.domain.error.RuleViolationException;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -17,7 +17,7 @@ import java.util.Set;
  * 링크에 담는 값은 추측할 수 없는 무작위 값이다. 서비스가 TokenGenerator로 {@value #LENGTH}자를 만들어 넘긴다
  * (URL 안전 문자 한 자에 6비트 — 192비트). 추측할 수 있으면 남의 계정 비밀번호를 바꿀 수 있다.
  * <ul>
- *   <li>보낸 때부터 {@link ProposedPolicy#PASSWORD_RESET_LINK_VALIDITY 유효 시간}(확인 필요) 동안만 쓸 수 있다. 만료는 저장하지 않고
+ *   <li>보낸 때부터 {@link TimePolicy#PASSWORD_RESET_LINK_VALIDITY 유효 시간} 동안만 쓸 수 있다. 만료는 저장하지 않고
  *       시각으로 계산한다.</li>
  *   <li>한 번만 쓴다. 비밀번호를 바꾸면 쓴 일시가 남고, 같은 링크로 다시 바꿀 수 없다.</li>
  *   <li>비밀번호 찾기를 다시 하면 새 링크가 가고, 아직 쓰지 않은 이전 링크는 대체된다(대체된 일시가 남는다). 그래서 쓸 수 있는 링크는
@@ -69,7 +69,7 @@ public final class PasswordResetToken {
     }
 
     /**
-     * 비밀번호 찾기를 한 계정에 보낼 링크를 만든다. 유효 시간은 지금부터 {@link ProposedPolicy#PASSWORD_RESET_LINK_VALIDITY}다.
+     * 비밀번호 찾기를 한 계정에 보낼 링크를 만든다. 유효 시간은 지금부터 {@link TimePolicy#PASSWORD_RESET_LINK_VALIDITY}다.
      *
      * @param value   추측할 수 없는 무작위 값
      * @param account 비밀번호를 바꿀 계정 — 관객 계정 또는 운영진 로그인
@@ -77,7 +77,7 @@ public final class PasswordResetToken {
      */
     public static PasswordResetToken issue(String value, AccountRef account, Instant now) {
         Objects.requireNonNull(now, "now");
-        return new PasswordResetToken(value, account, now, now.plus(ProposedPolicy.PASSWORD_RESET_LINK_VALIDITY), null, null);
+        return new PasswordResetToken(value, account, now, now.plus(TimePolicy.PASSWORD_RESET_LINK_VALIDITY), null, null);
     }
 
     /**

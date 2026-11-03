@@ -22,7 +22,7 @@ import jakarta.validation.constraints.NotNull;
  */
 @Schema(description = "구역 수정 (위저드 3단계)")
 public record ChangeZoneRequest(
-        @Schema(description = "이름 — 앞뒤 공백은 걷는다. 20자까지(확인 필요)", example = "스탠딩A", requiredMode = REQUIRED)
+        @Schema(description = "이름 — 앞뒤 공백은 걷는다. 20자까지", example = "스탠딩A", requiredMode = REQUIRED)
         @FilledText(message = "구역 이름을 입력해 주세요.")
         @ZoneNameRule
         String name,

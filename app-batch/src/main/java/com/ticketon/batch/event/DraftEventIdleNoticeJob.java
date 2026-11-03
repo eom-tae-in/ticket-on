@@ -3,7 +3,7 @@ package com.ticketon.batch.event;
 import com.ticketon.application.event.port.in.NotifyIdleDraftEventsResult;
 import com.ticketon.application.event.port.in.NotifyIdleDraftEventsUseCase;
 import com.ticketon.common.KoreanTime;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 import java.time.LocalTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +13,7 @@ import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Component;
 
 /**
- * 작성 중 행사 30일 미수정 알림 작업 — 매일 {@link ProposedPolicy#DRAFT_EVENT_IDLE_NOTICE_RUN_TIME}(한국 시각)에
+ * 작성 중 행사 30일 미수정 알림 작업 — 매일 {@link TimePolicy#DRAFT_EVENT_IDLE_NOTICE_RUN_TIME}(한국 시각)에
  * {@link NotifyIdleDraftEventsUseCase}를 부른다(docs/04 "작성 중 행사 관리", docs/12 "주최자 대상 — 작성 중 행사 30일 미수정").
  * <p>
  * 들어오는 어댑터라 유스케이스를 부르기만 한다 — 누구에게 언제 보낼지, 같은 구간에 다시 보내지 않는 일은 유스케이스가 한다. 그래서 작업이 하루
@@ -40,7 +40,7 @@ public class DraftEventIdleNoticeJob implements SchedulingConfigurer {
 
     /** 매일 그 시각(한국 시각)에 깨우는 시각표. */
     static CronTrigger trigger() {
-        LocalTime runTime = ProposedPolicy.DRAFT_EVENT_IDLE_NOTICE_RUN_TIME;
+        LocalTime runTime = TimePolicy.DRAFT_EVENT_IDLE_NOTICE_RUN_TIME;
         String everyDay = "%d %d %d * * *".formatted(runTime.getSecond(), runTime.getMinute(), runTime.getHour());
         return new CronTrigger(everyDay, KoreanTime.ZONE);
     }

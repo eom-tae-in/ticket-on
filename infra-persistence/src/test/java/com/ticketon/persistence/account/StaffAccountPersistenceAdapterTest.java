@@ -397,7 +397,7 @@ class StaffAccountPersistenceAdapterTest {
         }
 
         @Test
-        @DisplayName("최대 길이 50자 소개가 저장된다 — 칸은 바이트가 아니라 글자 수로 센다(한글 · 이모지 50자, 확인 필요 #28)")
+        @DisplayName("최대 길이 50자 소개가 저장된다 — 칸은 바이트가 아니라 글자 수로 센다(한글 · 이모지 50자)")
         void storesIntroductionOfMaximumLength() {
             long korean = activeAccount(JUNGHOON_EMAIL, WHALE);
             long emoji = activeAccount("dohyun@example.com", WIND);

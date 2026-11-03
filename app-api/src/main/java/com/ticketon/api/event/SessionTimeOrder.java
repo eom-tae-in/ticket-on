@@ -16,7 +16,7 @@ import java.lang.annotation.Target;
  * 회차형 회차의 종료 시각은 시작 시각보다 늦다 — 도메인 {@link TimedSessionTime}과 같은 규칙({@link TimedSessionTime#isValid}). 걸리면 endTime 칸의
  * 오류로 담는다. 시작 · 종료가 다 있고 둘 다 분 단위일 때만 본다 — 비었거나 분 단위가 아니면 그 칸의 규칙이 맡는다.
  * <p>
- * 자정을 넘겨 끝나는 회차(22:00 시작 ~ 00:30 종료)는 받지 않는다 — 문서에 없어 종료가 다음 날임을 적을 길이 없다(확인 필요 #36, #135).
+ * 자정을 넘겨 끝나는 회차(22:00 시작 ~ 00:30 종료)는 받지 않는다 — 문서에 없어 종료가 다음 날임을 적을 길이 없다(확인 필요 #36, #223).
  */
 @Documented
 @Target(ElementType.TYPE)

@@ -71,7 +71,7 @@ public class OrganizerPublicProfileController {
 
     @Operation(summary = "로고 올리기", description = "화면의 크롭 도구로 정사각형으로 자른 로고를 multipart/form-data의 logo 칸으로 올린다. 처음 "
             + "올리기와 바꾸기가 같고, 바꾸기 전 로고는 지워진다. 파일 이름은 쓰지 않고 추측할 수 없는 열쇠로 저장한다. 운영진 누구나 올린다. 빈 파일 · "
-            + "용량 상한(정책값, 확인 필요) 초과 · PNG · JPEG가 아닌 파일(올린 쪽이 적은 형식과 실제 파일 내용을 함께 본다) · 정사각형이 아닌 그림은 "
+            + "용량 상한(정책값) 초과 · PNG · JPEG가 아닌 파일(올린 쪽이 적은 형식과 실제 파일 내용을 함께 본다) · 정사각형이 아닌 그림은 "
             + "400(fieldErrors의 logo 칸에 까닭), logo 칸이 없으면 400. 그 주최자의 운영진이 아니면 403 NOT_ORGANIZER_STAFF, 활동 중인 주최자가 "
             + "아니면 403 ORGANIZER_NOT_ACTIVE. 운영진 조작 기록에 남는다.")
     @PostMapping(path = "/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

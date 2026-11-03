@@ -15,7 +15,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  */
 @Schema(description = "회차 출연")
 public record SessionPerformersRequest(
-        @Schema(description = "출연 — 자유 입력 한 줄. 앞뒤 공백은 걷는다. 100자까지(확인 필요). 비우거나 null이면 출연을 지운다",
+        @Schema(description = "출연 — 자유 입력 한 줄. 앞뒤 공백은 걷는다. 100자까지. 비우거나 null이면 출연을 지운다",
                 example = "김배우 · 박배우", requiredMode = NOT_REQUIRED, nullable = true)
         @SessionPerformersRule
         String performers) {

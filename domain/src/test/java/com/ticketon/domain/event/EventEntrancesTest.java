@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import com.ticketon.domain.error.NotFoundException;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -89,12 +89,12 @@ class EventEntrancesTest {
     }
 
     @Test
-    @DisplayName("입구 이름 — 앞뒤 공백을 걷고, 비우면 받지 않고, 20자까지 받는다 (제안값, 확인 필요)")
+    @DisplayName("입구 이름 — 앞뒤 공백을 걷고, 비우면 받지 않고, 20자까지 받는다")
     void entranceName() {
         assertThat(EntranceName.of("  VIP 입구 ").value()).isEqualTo("VIP 입구");
         assertThat(EntranceName.isValid("  ")).isFalse();
         assertThat(EntranceName.isValid(null)).isFalse();
-        assertThat(ProposedPolicy.ENTRANCE_NAME_MAXIMUM_LENGTH).isEqualTo(20);
+        assertThat(QuantityPolicy.ENTRANCE_NAME_MAXIMUM_LENGTH).isEqualTo(20);
         assertThat(EntranceName.isValid("가".repeat(20))).isTrue();
         assertThat(EntranceName.isValid("가".repeat(21))).isFalse();
         assertThatIllegalArgumentException().isThrownBy(() -> EntranceName.of(" "));

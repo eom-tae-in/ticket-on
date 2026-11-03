@@ -3,7 +3,7 @@ package com.ticketon.domain.account;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,9 +38,9 @@ class StaffIntroductionTest {
     }
 
     @Test
-    @DisplayName("최대 길이는 50자다 (확인 필요 #28) — 50자는 받고 51자는 받지 않는다")
+    @DisplayName("최대 길이는 50자다 — 50자는 받고 51자는 받지 않는다")
     void maximumLengthIsFifty() {
-        assertThat(ProposedPolicy.STAFF_INTRODUCTION_MAXIMUM_LENGTH).isEqualTo(50);
+        assertThat(QuantityPolicy.STAFF_INTRODUCTION_MAXIMUM_LENGTH).isEqualTo(50);
         String fifty = "가".repeat(50);
 
         assertThat(StaffIntroduction.fromInput(fifty)).contains(new StaffIntroduction(fifty));

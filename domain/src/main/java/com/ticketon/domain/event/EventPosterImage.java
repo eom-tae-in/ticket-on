@@ -2,7 +2,6 @@ package com.ticketon.domain.event;
 
 import com.ticketon.common.ImageFile;
 import com.ticketon.common.ImageFormat;
-import com.ticketon.domain.policy.ProposedPolicy;
 import com.ticketon.domain.policy.QuantityPolicy;
 import java.util.Arrays;
 import java.util.Objects;
@@ -14,11 +13,11 @@ import java.util.Optional;
  * 넷을 차례로 본다({@link EventPosterImageProblem}). 처음 걸린 것으로 거절한다. 주최자 로고 그림과 같은 차례이고, 넷째만 다르다.
  * <ol>
  *   <li>빈 파일이 아니다.</li>
- *   <li>용량이 상한({@link ProposedPolicy#EVENT_POSTER_MAXIMUM_SIZE}, 확인 필요) 이하다 — "용량 상한을 둡니다"(docs/03).</li>
- *   <li>형식이 받는 형식({@link ProposedPolicy#EVENT_POSTER_ACCEPTED_FORMATS}, 확인 필요)이다 — <b>올린 쪽이 적은 형식(Content-Type)과 실제
+ *   <li>용량이 상한({@link QuantityPolicy#EVENT_POSTER_MAXIMUM_SIZE}) 이하다 — "용량 상한을 둡니다"(docs/03).</li>
+ *   <li>형식이 받는 형식({@link QuantityPolicy#EVENT_POSTER_ACCEPTED_FORMATS})이다 — <b>올린 쪽이 적은 형식(Content-Type)과 실제
  *       바이트의 시그니처가 모두</b> 받는 형식이고 서로 같아야 한다. 확장자나 적은 형식만 믿지 않는다.</li>
  *   <li>3:4 세로다({@link QuantityPolicy#POSTER_ASPECT_RATIO}) — 가로 ÷ 세로가 3 ÷ 4에서 허용 오차
- *       ({@link ProposedPolicy#EVENT_POSTER_ASPECT_RATIO_TOLERANCE}, 확인 필요) 안이다. 크롭은 화면이 하고, 서버는 잘린 결과의 비율만 본다. 크기는
+ *       ({@link QuantityPolicy#EVENT_POSTER_ASPECT_RATIO_TOLERANCE}) 안이다. 크롭은 화면이 하고, 서버는 잘린 결과의 비율만 본다. 크기는
  *       JDK ImageIO로 그림 머리말만 읽어 확인한다({@link ImageFile}).</li>
  * </ol>
  * 파일 이름은 받지 않는다. 저장할 때는 추측할 수 없는 열쇠로 이름을 새로 붙인다({@link EventPoster#issue}). 픽셀 크기의 상한은 두지 않는다 —
@@ -71,17 +70,17 @@ public final class EventPosterImage {
         if (content.length == 0) {
             return Inspection.rejected(EventPosterImageProblem.EMPTY);
         }
-        if (ProposedPolicy.EVENT_POSTER_MAXIMUM_SIZE.isExceededBy(content.length)) {
+        if (QuantityPolicy.EVENT_POSTER_MAXIMUM_SIZE.isExceededBy(content.length)) {
             return Inspection.rejected(EventPosterImageProblem.TOO_LARGE);
         }
         Optional<ImageFormat> declaredFormat = ImageFormat.ofMediaType(declaredMediaType)
-                .filter(ProposedPolicy.EVENT_POSTER_ACCEPTED_FORMATS::contains);
+                .filter(QuantityPolicy.EVENT_POSTER_ACCEPTED_FORMATS::contains);
         Optional<ImageFile> image = ImageFile.inspect(content);
         if (declaredFormat.isEmpty() || image.isEmpty() || image.get().format() != declaredFormat.get()) {
             return Inspection.rejected(EventPosterImageProblem.UNSUPPORTED_FORMAT);
         }
         if (!QuantityPolicy.POSTER_ASPECT_RATIO.isMatchedBy(image.get().width(), image.get().height(),
-                ProposedPolicy.EVENT_POSTER_ASPECT_RATIO_TOLERANCE)) {
+                QuantityPolicy.EVENT_POSTER_ASPECT_RATIO_TOLERANCE)) {
             return Inspection.rejected(EventPosterImageProblem.NOT_POSTER_ASPECT_RATIO);
         }
         return Inspection.accepted(image.get());

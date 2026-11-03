@@ -24,7 +24,7 @@ class DraftEventIdleNoticeJobTest {
     });
 
     @Test
-    @DisplayName("매일 오전 10시(한국 시각 — 제안값)에 깨운다 — 9:59면 그날 10시, 10시가 지났으면 다음 날 10시")
+    @DisplayName("매일 오전 10시(한국 시각)에 깨운다 — 9:59면 그날 10시, 10시가 지났으면 다음 날 10시")
     void runsEveryDayAtTenInKorea() {
         assertThat(nextRunAfter(LocalDateTime.of(2026, 10, 14, 9, 59)))
                 .isEqualTo(KoreanTime.toInstant(LocalDateTime.of(2026, 10, 14, 10, 0)));

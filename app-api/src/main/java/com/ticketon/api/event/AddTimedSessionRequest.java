@@ -33,7 +33,7 @@ public record AddTimedSessionRequest(
         LocalTime startTime,
 
         @Schema(description = "종료 시각 — 선택(러닝타임). 시작보다 늦게. 비워 두면 회차 시작 1주일 전부터 입력을 요구한다. 자정을 넘겨 끝나는 회차는 "
-                + "아직 받지 않는다(확인 필요)", example = "21:00", type = "string", pattern = "^([01][0-9]|2[0-3]):[0-5][0-9](:00)?$", requiredMode = NOT_REQUIRED, nullable = true)
+                + "아직 받지 않는다", example = "21:00", type = "string", pattern = "^([01][0-9]|2[0-3]):[0-5][0-9](:00)?$", requiredMode = NOT_REQUIRED, nullable = true)
         @WholeMinute
         LocalTime endTime) implements SessionTimeFields {
 

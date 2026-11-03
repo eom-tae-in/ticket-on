@@ -2,7 +2,7 @@ package com.ticketon.api.organizer;
 
 import com.ticketon.domain.organizer.OrganizerLogoImage;
 import com.ticketon.domain.organizer.OrganizerLogoImageProblem;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import jakarta.validation.Constraint;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
@@ -56,14 +56,14 @@ public @interface OrganizerLogoFile {
         static String messageOf(OrganizerLogoImageProblem problem) {
             return switch (problem) {
                 case EMPTY -> "로고 파일을 골라 주세요.";
-                case TOO_LARGE -> "로고는 " + ProposedPolicy.ORGANIZER_LOGO_MAXIMUM_SIZE + " 이하로 올려 주세요.";
+                case TOO_LARGE -> "로고는 " + QuantityPolicy.ORGANIZER_LOGO_MAXIMUM_SIZE + " 이하로 올려 주세요.";
                 case UNSUPPORTED_FORMAT -> "로고는 " + acceptedFormatNames() + " 그림만 올릴 수 있습니다.";
                 case NOT_SQUARE -> "로고는 정사각형으로 잘라 올려 주세요.";
             };
         }
 
         private static String acceptedFormatNames() {
-            return ProposedPolicy.ORGANIZER_LOGO_ACCEPTED_FORMATS.stream()
+            return QuantityPolicy.ORGANIZER_LOGO_ACCEPTED_FORMATS.stream()
                     .map(Enum::name)
                     .collect(Collectors.joining(" 또는 "));
         }

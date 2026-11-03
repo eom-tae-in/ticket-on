@@ -55,7 +55,7 @@ public class EventScheduleController {
     private static final String MODE_NOT_CHOSEN = "회차 방식을 아직 고르지 않았으면 409 SESSION_MODE_NOT_CHOSEN.";
 
     private static final String TIME_RULES = "시각은 HH:mm, 분 단위만 받는다(초가 0이 아니면 400, 확인 필요). 종료는 시작보다 늦게 — 자정을 넘기는 "
-            + "회차 · 운영 시간은 아직 받지 않는다(400, 확인 필요).";
+            + "회차 · 운영 시간은 아직 받지 않는다(400).";
 
     private static final String SAVED = "작성 중이면 진행 단계가 2단계까지 오르고, 바뀌었으면 마지막 수정 시각이 바뀌고 운영진 조작 기록에 남는다. "
             + "지금과 같은 값이면 아무것도 바뀌지 않는다.";
@@ -150,7 +150,7 @@ public class EventScheduleController {
     }
 
     @Operation(summary = "회차 출연", description = "회차의 출연(자유 입력 한 줄)을 저장하고 일정을 돌려준다. 비우면 출연을 지운다. 줄바꿈이 있거나 "
-            + "100자(확인 필요)를 넘으면 400. 출연 칸을 고치는 것만으로는 출연자 변경 알림이 되지 않는다. 예매가 열린 뒤에도 고친다. "
+            + "100자를 넘으면 400. 출연 칸을 고치는 것만으로는 출연자 변경 알림이 되지 않는다. 예매가 열린 뒤에도 고친다. "
             + SESSION_NOT_FOUND + " " + MODE_NOT_CHOSEN + " " + SAVED + " " + LOCKED + " " + REJECTIONS)
     @PutMapping("/sessions/{sessionId}/performers")
     public EventScheduleResponse changeSessionPerformers(@CurrentStaff ActingStaff actingStaff,

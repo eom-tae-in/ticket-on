@@ -2,7 +2,6 @@ package com.ticketon.api.event;
 
 import com.ticketon.domain.event.EventPosterImage;
 import com.ticketon.domain.event.EventPosterImageProblem;
-import com.ticketon.domain.policy.ProposedPolicy;
 import com.ticketon.domain.policy.QuantityPolicy;
 import jakarta.validation.Constraint;
 import jakarta.validation.ConstraintValidator;
@@ -57,14 +56,14 @@ public @interface EventPosterFile {
         static String messageOf(EventPosterImageProblem problem) {
             return switch (problem) {
                 case EMPTY -> "포스터 파일을 골라 주세요.";
-                case TOO_LARGE -> "포스터는 " + ProposedPolicy.EVENT_POSTER_MAXIMUM_SIZE + " 이하로 올려 주세요.";
+                case TOO_LARGE -> "포스터는 " + QuantityPolicy.EVENT_POSTER_MAXIMUM_SIZE + " 이하로 올려 주세요.";
                 case UNSUPPORTED_FORMAT -> "포스터는 " + acceptedFormatNames() + " 그림만 올릴 수 있습니다.";
                 case NOT_POSTER_ASPECT_RATIO -> "포스터는 " + QuantityPolicy.POSTER_ASPECT_RATIO + " 세로 비율로 잘라 올려 주세요.";
             };
         }
 
         private static String acceptedFormatNames() {
-            return ProposedPolicy.EVENT_POSTER_ACCEPTED_FORMATS.stream()
+            return QuantityPolicy.EVENT_POSTER_ACCEPTED_FORMATS.stream()
                     .map(Enum::name)
                     .collect(Collectors.joining(" 또는 "));
         }
