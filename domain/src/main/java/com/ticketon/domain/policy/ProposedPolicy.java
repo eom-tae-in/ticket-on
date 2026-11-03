@@ -38,6 +38,7 @@ import java.time.LocalTime;
  *       좌석을 관객이 잡을 때 "방금 다른 분이 선택했습니다"와 갈라 "판매하지 않는 좌석입니다"로 알리는 것({@code SEAT_NOT_FOR_SALE}) 포함.</li>
  *   <li>확인 필요 (#223) — 조기예매 · 쿠폰을 만들고 고칠 때의 오류 문구(할인 값 범위, 0원이 되는 할인, 마감된 조기예매, 쓴 수 아래로 줄이기).
  *       경우는 docs/99 C · E가 정했고 문구만 지었다: {@code domain.pricing.PricingErrorCode}.</li>
+ *   <li>확인 필요 (#223) — 이미 취소된 티켓 · 이미 포기한 날짜의 오류 문구(문서에 없어 지었다): {@code domain.ticket.TicketErrorCode}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
