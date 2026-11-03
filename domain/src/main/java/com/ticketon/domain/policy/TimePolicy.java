@@ -85,6 +85,27 @@ public final class TimePolicy {
     /** 작성 중 행사 알림 — 30일 동안 수정이 없으면 알림. 자동 삭제는 하지 않는다. docs/04 "작성 중 행사 관리" */
     public static final Period DRAFT_EVENT_IDLE_NOTICE = Period.ofDays(30);
 
+    /** 작성 중 행사 알림을 보내는 시각 — 매일 오전 10시. 메일을 받는 사람이 일을 시작하는 때다. docs/99 C "작성 중 행사 알림" */
+    public static final LocalTime DRAFT_EVENT_IDLE_NOTICE_RUN_TIME = LocalTime.of(10, 0);
+
+    /** 관객 로그인 비활성 만료 — 오픈 정각이나 입구에서 로그인 화면이 끼면 안 된다. docs/01 "로그인 유지와 링크 유효 시간", docs/99 C "로그인 유지" */
+    public static final Duration AUDIENCE_LOGIN_IDLE_TIMEOUT = Duration.ofDays(30);
+
+    /** 주최자 쪽 · 관리자 로그인 비활성 만료 — 돈과 개인정보를 다루는 화면이라 짧게 둔다. 검표 계정은 만료가 없다. docs/01 "로그인 유지와 링크 유효 시간", docs/99 C "로그인 유지" */
+    public static final Duration STAFF_AND_ADMIN_LOGIN_IDLE_TIMEOUT = Duration.ofMinutes(30);
+
+    /** 가입 이메일 인증 링크 유효 시간 — 주최자 쪽 가입도 같다. docs/01 "로그인 유지와 링크 유효 시간", docs/99 C "가입 이메일 인증 링크" */
+    public static final Duration EMAIL_VERIFICATION_LINK_VALIDITY = Duration.ofHours(24);
+
+    /** 비밀번호 재설정 링크 유효 시간 — 링크 하나로 비밀번호가 바뀌므로 짧게 둔다. docs/01 "로그인 유지와 링크 유효 시간", docs/99 C "비밀번호 재설정 링크" */
+    public static final Duration PASSWORD_RESET_LINK_VALIDITY = Duration.ofHours(1);
+
+    /** 운영자 초대 유효 기간 — 다시 초대하면 그때부터 다시 센다. docs/01 "로그인 유지와 링크 유효 시간", docs/99 C "운영자 초대" */
+    public static final Duration STAFF_INVITATION_VALIDITY = Duration.ofDays(7);
+
+    /** 관리자 처리 목록의 주최자 신청 강조 — 심사 목표일까지 남은 영업일이 이 수 이하면 강조한다(지난 신청 포함). docs/99 C "주최자 신청 강조" */
+    public static final BusinessDays ORGANIZER_REVIEW_DEADLINE_APPROACHING_WITHIN = BusinessDays.of(1);
+
     private TimePolicy() {
     }
 }

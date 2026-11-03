@@ -15,7 +15,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  */
 @Schema(description = "블록 이름 변경 (위저드 3단계 배치도 에디터)")
 public record RenameSeatBlockRequest(
-        @Schema(description = "새 이름 — 앞뒤 공백은 걷는다. 비우거나 생략하면 '블록 N'을 붙인다. 20자까지(확인 필요). 같은 행사의 다른 블록 · 구역 "
+        @Schema(description = "새 이름 — 앞뒤 공백은 걷는다. 비우거나 생략하면 '블록 N'을 붙인다. 20자까지. 같은 행사의 다른 블록 · 구역 "
                 + "이름과 겹칠 수 없다", example = "1층", requiredMode = NOT_REQUIRED, nullable = true)
         @BlockNameRule
         String name) {

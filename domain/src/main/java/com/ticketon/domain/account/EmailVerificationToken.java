@@ -1,7 +1,7 @@
 package com.ticketon.domain.account;
 
 import com.ticketon.domain.error.RuleViolationException;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -11,7 +11,7 @@ import java.util.Objects;
  * 링크에 담는 값은 추측할 수 없는 무작위 값이다. 서비스가 TokenGenerator로 {@value #LENGTH}자를 만들어 넘긴다
  * (URL 안전 문자 한 자에 6비트 — 192비트). 순차 번호처럼 추측할 수 있으면 남의 계정을 대신 인증할 수 있다.
  * <p>
- * 링크는 보낸 때부터 {@link ProposedPolicy#EMAIL_VERIFICATION_LINK_VALIDITY 유효 시간}(확인 필요) 동안 열 수 있다.
+ * 링크는 보낸 때부터 {@link TimePolicy#EMAIL_VERIFICATION_LINK_VALIDITY 유효 시간} 동안 열 수 있다.
  * 인증한 뒤에도 링크를 지우지 않는다. 같은 링크를 다시 열면 유효 시간과 상관없이 "이미 인증을 마친 계정"으로 안내한다
  * — 메일의 링크를 두 번 누르는 일은 흔하고, 이미 인증한 사람에게 만료를 알릴 까닭이 없다.
  *
@@ -41,14 +41,14 @@ public record EmailVerificationToken(String value, long audienceAccountId, Insta
     }
 
     /**
-     * 막 가입한 계정에 보낼 링크를 만든다. 유효 시간은 지금부터 {@link ProposedPolicy#EMAIL_VERIFICATION_LINK_VALIDITY}다.
+     * 막 가입한 계정에 보낼 링크를 만든다. 유효 시간은 지금부터 {@link TimePolicy#EMAIL_VERIFICATION_LINK_VALIDITY}다.
      *
      * @param value 추측할 수 없는 무작위 값
      */
     public static EmailVerificationToken issue(String value, long audienceAccountId, Instant now) {
         Objects.requireNonNull(now, "now");
         return new EmailVerificationToken(value, audienceAccountId, now,
-                now.plus(ProposedPolicy.EMAIL_VERIFICATION_LINK_VALIDITY));
+                now.plus(TimePolicy.EMAIL_VERIFICATION_LINK_VALIDITY));
     }
 
     /** 그 순간에 유효 시간이 지났는지. 끝나는 일시 그 순간부터 지난 것이다. */

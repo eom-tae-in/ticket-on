@@ -162,8 +162,8 @@ class EventPersistenceAdapterTest {
         assertThat(row.getBookingCloseLeadMinutes()).isEqualTo(60);
         assertThat(row.getCheckinOpenLeadMinutes()).isEqualTo(60);
         assertThat(row.getMaxSeatsPerSelection()).isEqualTo(4);
-        assertThat(row.getMaxTicketsPerPerson()).isNull();
-        assertThat(row.getTicketsPerPersonBasis()).isNull();
+        assertThat(row.getMaxTicketsPerPerson()).isEqualTo(4);
+        assertThat(row.getTicketsPerPersonBasis()).isEqualTo("PER_DATE");
         assertThat(row.getSessionChoice()).isEqualTo("NONE");
         assertThat(row.getReentry()).isEqualTo("NOT_ALLOWED");
         assertThat(row.getMinimumAge()).isZero();

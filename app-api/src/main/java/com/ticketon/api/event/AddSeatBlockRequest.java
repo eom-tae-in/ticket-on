@@ -9,7 +9,7 @@ import com.ticketon.domain.event.BlockAngle;
 import com.ticketon.domain.event.BlockName;
 import com.ticketon.domain.event.BlockSize;
 import com.ticketon.domain.event.CanvasPoint;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -30,21 +30,21 @@ import jakarta.validation.constraints.NotNull;
  */
 @Schema(description = "블록 얹기 (위저드 3단계 배치도 에디터)")
 public record AddSeatBlockRequest(
-        @Schema(description = "블록 이름 — 앞뒤 공백은 걷는다. 비우거나 생략하면 '블록 1', '블록 2'를 붙인다. 20자까지(확인 필요). 같은 행사의 다른 "
+        @Schema(description = "블록 이름 — 앞뒤 공백은 걷는다. 비우거나 생략하면 '블록 1', '블록 2'를 붙인다. 20자까지. 같은 행사의 다른 "
                 + "블록 · 구역 이름과 겹칠 수 없다", example = "1층", requiredMode = NOT_REQUIRED, nullable = true)
         @BlockNameRule
         String name,
 
-        @Schema(description = "행 수(가로줄 수) — 좌석 표기의 'N열'이 몇까지인가. 1~50(확인 필요)", example = "10", requiredMode = REQUIRED)
+        @Schema(description = "행 수(가로줄 수) — 좌석 표기의 'N열'이 몇까지인가. 1~50", example = "10", requiredMode = REQUIRED)
         @NotNull(message = "행 수를 입력해 주세요.")
         @Min(value = 1, message = AddSeatBlockRequest.ROWS_MESSAGE)
-        @Max(value = ProposedPolicy.SEAT_BLOCK_MAXIMUM_ROWS, message = AddSeatBlockRequest.ROWS_MESSAGE)
+        @Max(value = QuantityPolicy.SEAT_BLOCK_MAXIMUM_ROWS, message = AddSeatBlockRequest.ROWS_MESSAGE)
         Integer rows,
 
-        @Schema(description = "열 수(한 줄의 자리 수) — 좌석 표기의 'N번'이 몇까지인가. 1~50(확인 필요)", example = "20", requiredMode = REQUIRED)
+        @Schema(description = "열 수(한 줄의 자리 수) — 좌석 표기의 'N번'이 몇까지인가. 1~50", example = "20", requiredMode = REQUIRED)
         @NotNull(message = "열 수를 입력해 주세요.")
         @Min(value = 1, message = AddSeatBlockRequest.COLUMNS_MESSAGE)
-        @Max(value = ProposedPolicy.SEAT_BLOCK_MAXIMUM_COLUMNS, message = AddSeatBlockRequest.COLUMNS_MESSAGE)
+        @Max(value = QuantityPolicy.SEAT_BLOCK_MAXIMUM_COLUMNS, message = AddSeatBlockRequest.COLUMNS_MESSAGE)
         Integer columns,
 
         @Schema(description = "놓을 자리 — 비우거나 생략하면 원점(0, 0)", requiredMode = NOT_REQUIRED, nullable = true)
@@ -55,9 +55,9 @@ public record AddSeatBlockRequest(
                 requiredMode = NOT_REQUIRED, nullable = true)
         Integer angleDegrees) {
 
-    static final String ROWS_MESSAGE = "행 수는 1 이상 " + ProposedPolicy.SEAT_BLOCK_MAXIMUM_ROWS + " 이하로 입력해 주세요.";
+    static final String ROWS_MESSAGE = "행 수는 1 이상 " + QuantityPolicy.SEAT_BLOCK_MAXIMUM_ROWS + " 이하로 입력해 주세요.";
 
-    static final String COLUMNS_MESSAGE = "열 수는 1 이상 " + ProposedPolicy.SEAT_BLOCK_MAXIMUM_COLUMNS + " 이하로 입력해 주세요.";
+    static final String COLUMNS_MESSAGE = "열 수는 1 이상 " + QuantityPolicy.SEAT_BLOCK_MAXIMUM_COLUMNS + " 이하로 입력해 주세요.";
 
     AddSeatBlockCommand toCommand(ActingStaff actingStaff, long eventId) {
         return new AddSeatBlockCommand(actingStaff, eventId, BlockName.fromInput(name).orElse(null), BlockSize.of(rows, columns),

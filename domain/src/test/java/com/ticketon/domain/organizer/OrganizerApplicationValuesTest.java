@@ -130,7 +130,7 @@ class OrganizerApplicationValuesTest {
                 "12345            | *2345",
                 "1234             | ****",
                 "12-3             | **-*"})
-        @DisplayName("소유자 화면에는 마지막 숫자 네 개만 남기고 나머지 숫자를 가린다 — 하이픈 · 공백은 그대로, 숫자가 네 개 이하면 모두 가린다 (#31 제안값)")
+        @DisplayName("소유자 화면에는 마지막 숫자 네 개만 남기고 나머지 숫자를 가린다 — 하이픈 · 공백은 그대로, 숫자가 네 개 이하면 모두 가린다")
         void masksAllButLastFourDigits(String accountNumber, String masked) {
             SettlementAccount account = new SettlementAccount("국민은행", accountNumber, "박정훈");
 

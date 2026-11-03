@@ -12,7 +12,7 @@ public enum NotificationPreferenceCode {
     /** 예매·취소 확인. */
     BOOKING_CONFIRMATION(NotificationPreference.BOOKING_CONFIRMATION),
 
-    /** 공연 전날 리마인더. */
+    /** 공연 전날 안내 — 공연 전날 리마인더를 덮는다. */
     DAY_BEFORE_REMINDER(NotificationPreference.DAY_BEFORE_REMINDER),
 
     /** 예매 오픈 알림. */

@@ -6,7 +6,6 @@ import com.ticketon.common.BusinessDayCalculator;
 import com.ticketon.common.HolidayCalendar;
 import com.ticketon.common.KoreanTime;
 import com.ticketon.domain.policy.BusinessDays;
-import com.ticketon.domain.policy.ProposedPolicy;
 import com.ticketon.domain.policy.TimePolicy;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -62,15 +61,15 @@ class OrganizerReviewDeadlineTest {
     }
 
     @Nested
-    @DisplayName("목표일이 다가왔는지 — 처리 목록 강조 (제안값: 남은 영업일 1일 이하, #23)")
+    @DisplayName("목표일이 다가왔는지 — 처리 목록 강조 (남은 영업일 1일 이하)")
     class Approaching {
 
         private final OrganizerReviewDeadline dueTuesday = new OrganizerReviewDeadline(LocalDate.of(2026, 10, 20));
 
         @Test
-        @DisplayName("강조를 시작하는 남은 영업일은 확인 필요 제안값 1일이다")
+        @DisplayName("강조를 시작하는 남은 영업일은 1일이다")
         void proposedThresholdIsOneBusinessDay() {
-            assertThat(ProposedPolicy.ORGANIZER_REVIEW_DEADLINE_APPROACHING_WITHIN).isEqualTo(BusinessDays.of(1));
+            assertThat(TimePolicy.ORGANIZER_REVIEW_DEADLINE_APPROACHING_WITHIN).isEqualTo(BusinessDays.of(1));
         }
 
         @ParameterizedTest(name = "오늘 {0} → {1}")

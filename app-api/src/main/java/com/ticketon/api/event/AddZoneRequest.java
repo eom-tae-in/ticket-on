@@ -28,7 +28,7 @@ public record AddZoneRequest(
         @NotNull(message = "구역 종류를 골라 주세요.")
         ZoneKindCode kind,
 
-        @Schema(description = "이름 — 앞뒤 공백은 걷는다. 20자까지(확인 필요). 같은 행사의 다른 구역 · 블록 이름과 겹칠 수 없다", example = "스탠딩A",
+        @Schema(description = "이름 — 앞뒤 공백은 걷는다. 20자까지. 같은 행사의 다른 구역 · 블록 이름과 겹칠 수 없다", example = "스탠딩A",
                 requiredMode = REQUIRED)
         @FilledText(message = "구역 이름을 입력해 주세요.")
         @ZoneNameRule

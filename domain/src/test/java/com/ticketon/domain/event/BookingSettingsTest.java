@@ -32,7 +32,7 @@ class BookingSettingsTest {
             assertThat(defaults.bookingCloseLeadTime()).isEqualTo(LeadTime.of(Duration.ofHours(1)));
             assertThat(defaults.checkinOpenLeadTime()).isEqualTo(LeadTime.of(Duration.ofHours(1)));
             assertThat(defaults.seatsPerSelection()).isEqualTo(SeatsPerSelectionLimit.of(4));
-            assertThat(defaults.ticketsPerPerson()).isEqualTo(TicketsPerPersonLimit.unlimited());
+            assertThat(defaults.ticketsPerPerson()).isEqualTo(TicketsPerPersonLimit.of(4, TicketsPerPersonBasis.PER_DATE));
             assertThat(defaults.sessionChoice()).isEqualTo(SessionChoiceRestriction.NONE);
             assertThat(defaults.reentry()).isEqualTo(ReentrySetting.NOT_ALLOWED);
             assertThat(defaults.ageRestriction()).isEqualTo(AgeRestriction.none());
@@ -160,14 +160,29 @@ class BookingSettingsTest {
         }
 
         @Test
-        @DisplayName("비율은 올림한 정수 퍼센트 — 경고선을 넘은 비율이 10%로 보이지 않게")
-        void percentRoundedUp() {
+        @DisplayName("비율은 정수로 반올림한다 — 98석 중 4석은 4% (docs/06, Figma O9)")
+        void percentRounded() {
+            assertThat(SeatsPerSelectionLimit.of(4).feedbackFor(98).percentOfTotal()).hasValue(4);
             assertThat(SeatsPerSelectionLimit.of(3).feedbackFor(200).percentOfTotal()).hasValue(2);
-            assertThat(SeatsPerSelectionLimit.of(1).feedbackFor(1000).percentOfTotal()).hasValue(1);
+            assertThat(SeatsPerSelectionLimit.of(21).feedbackFor(200).percentOfTotal()).hasValue(11);
+        }
 
+        @Test
+        @DisplayName("경고는 반올림 전 비율로 판단한다 — 8석 / 79석은 10%로 보여도 10%를 넘어 경고한다")
+        void warningUsesUnroundedShare() {
             SeatsPerSelectionFeedback justOver = SeatsPerSelectionLimit.of(8).feedbackFor(79);
-            assertThat(justOver.percentOfTotal()).hasValue(11);
+
+            assertThat(justOver.percentOfTotal()).hasValue(10);
             assertThat(justOver.isWarning()).isTrue();
+        }
+
+        @Test
+        @DisplayName("1%가 안 되면 \"1% 미만\"이다 — 반올림하면 1%가 되는 0.6%도, 1%는 아니다")
+        void underOnePercent() {
+            assertThat(SeatsPerSelectionLimit.of(1).feedbackFor(1000).isUnderOnePercent()).isTrue();
+            assertThat(SeatsPerSelectionLimit.of(6).feedbackFor(1000).isUnderOnePercent()).isTrue();
+            assertThat(SeatsPerSelectionLimit.of(10).feedbackFor(1000).isUnderOnePercent()).isFalse();
+            assertThat(SeatsPerSelectionLimit.of(4).feedbackFor(0).isUnderOnePercent()).isFalse();
         }
 
         @Test
@@ -200,9 +215,18 @@ class BookingSettingsTest {
     class TicketsPerPerson {
 
         @Test
-        @DisplayName("처음 값은 제한 없음이다 (제안값 — 확인 필요 #35)")
-        void defaultUnlimited() {
+        @DisplayName("처음 값은 4매 · 날짜별이다 — 4일 공연이면 한 사람이 16매까지 (docs/06, Figma O9)")
+        void defaultFourPerDate() {
             TicketsPerPersonLimit limit = TicketsPerPersonLimit.defaultLimit();
+
+            assertThat(limit).isEqualTo(TicketsPerPersonLimit.of(4, TicketsPerPersonBasis.PER_DATE));
+            assertThat(limit.maximumTicketsInEvent(4)).hasValue(16);
+        }
+
+        @Test
+        @DisplayName("주최자는 제한 없음으로 바꿀 수 있다")
+        void unlimitedStaysAvailable() {
+            TicketsPerPersonLimit limit = TicketsPerPersonLimit.unlimited();
 
             assertThat(limit.isLimited()).isFalse();
             assertThat(limit.maximumTicketsInEvent(4)).isEmpty();
@@ -275,6 +299,15 @@ class BookingSettingsTest {
                     "켜면 같은 QR로 여러 번 입장할 수 있습니다. 티켓 이미지를 공유해 여러 명이 들어오는 것을 막을 수 없으니, "
                             + "팔찌나 도장 같은 현장 수단을 함께 쓰시는 걸 권합니다.");
         }
+
+        @Test
+        @DisplayName("이미 산 관객에게 불리한 것은 켬에서 끔으로 끌 때뿐이다 — 켜기와 그대로는 불리하지 않다 (docs/04 \"켜기만\")")
+        void turningOffIsStricter() {
+            assertThat(ReentrySetting.NOT_ALLOWED.isStricterThan(ReentrySetting.ALLOWED)).isTrue();
+            assertThat(ReentrySetting.ALLOWED.isStricterThan(ReentrySetting.NOT_ALLOWED)).isFalse();
+            assertThat(ReentrySetting.ALLOWED.isStricterThan(ReentrySetting.ALLOWED)).isFalse();
+            assertThat(ReentrySetting.NOT_ALLOWED.isStricterThan(ReentrySetting.NOT_ALLOWED)).isFalse();
+        }
     }
 
     @Nested
@@ -308,6 +341,22 @@ class BookingSettingsTest {
             assertThatIllegalArgumentException().isThrownBy(() -> AgeRestriction.atLeast(0));
             assertThatIllegalArgumentException().isThrownBy(() -> new AgeRestriction(-1));
             assertThat(new AgeRestriction(0)).isEqualTo(AgeRestriction.none());
+        }
+
+        @Test
+        @DisplayName("이미 산 관객에게 불리한 것은 기준 나이가 오를 때다 — 없음에서 만 19세로 새로 거는 것도, 만 15세를 만 19세로 올리는 것도 (docs/04 \"낮추거나 없애기만\")")
+        void raisingIsStricter() {
+            assertThat(AgeRestriction.atLeast(19).isStricterThan(AgeRestriction.none())).isTrue();
+            assertThat(AgeRestriction.atLeast(19).isStricterThan(AgeRestriction.atLeast(15))).isTrue();
+        }
+
+        @Test
+        @DisplayName("낮추기 · 없애기 · 그대로는 불리하지 않다 — 만 19세를 만 15세로, 만 19세를 없음으로")
+        void loweringOrRemovingIsNotStricter() {
+            assertThat(AgeRestriction.atLeast(15).isStricterThan(AgeRestriction.atLeast(19))).isFalse();
+            assertThat(AgeRestriction.none().isStricterThan(AgeRestriction.atLeast(19))).isFalse();
+            assertThat(AgeRestriction.atLeast(19).isStricterThan(AgeRestriction.atLeast(19))).isFalse();
+            assertThat(AgeRestriction.none().isStricterThan(AgeRestriction.none())).isFalse();
         }
     }
 }

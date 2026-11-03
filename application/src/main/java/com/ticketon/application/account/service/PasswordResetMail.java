@@ -7,7 +7,7 @@ import com.ticketon.domain.account.PasswordResetToken;
 import com.ticketon.domain.notification.EmailMessage;
 import com.ticketon.domain.notification.EmailSubject;
 import com.ticketon.domain.notification.RecipientSide;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 
 /**
  * 비밀번호 재설정 메일 — 관객 계정과 운영진 로그인이 같은 내용을 쓰고, 링크가 가리키는 쪽에 따라 제목과 링크가 다르다.
@@ -62,6 +62,6 @@ final class PasswordResetMail {
 
                 링크는 %d분 동안 한 번만 쓸 수 있습니다. 비밀번호 찾기를 다시 하면 이 링크는 쓸 수 없게 됩니다.
                 비밀번호 찾기를 한 적이 없다면 이 메일을 무시해 주세요. 비밀번호는 바뀌지 않습니다.
-                """.formatted(link, ProposedPolicy.PASSWORD_RESET_LINK_VALIDITY.toMinutes());
+                """.formatted(link, TimePolicy.PASSWORD_RESET_LINK_VALIDITY.toMinutes());
     }
 }

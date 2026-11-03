@@ -32,7 +32,7 @@ import com.ticketon.domain.error.PermissionDeniedException;
 import com.ticketon.domain.organizer.ExternalLink;
 import com.ticketon.domain.organizer.OrganizerErrorCode;
 import com.ticketon.domain.organizer.OrganizerLogoImage;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
@@ -171,10 +171,10 @@ class OrganizerPublicProfileControllerTest {
     }
 
     @Test
-    @DisplayName("용량 상한(제안 2MB)을 넘는 파일은 400이고 상한을 알려 준다")
+    @DisplayName("용량 상한(2MB)을 넘는 파일은 400이고 상한을 알려 준다")
     void rejectsOverSizeLogo() throws Exception {
         byte[] overLimit = Arrays.copyOf(TestImages.png(64, 64),
-                (int) ProposedPolicy.ORGANIZER_LOGO_MAXIMUM_SIZE.bytes() + 1);
+                (int) QuantityPolicy.ORGANIZER_LOGO_MAXIMUM_SIZE.bytes() + 1);
 
         expectLogoRejected(new MockMultipartFile("logo", "logo.png", "image/png", overLimit),
                 "로고는 2MB 이하로 올려 주세요.");

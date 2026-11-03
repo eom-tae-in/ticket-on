@@ -1,6 +1,6 @@
 package com.ticketon.domain.account;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import java.util.Objects;
 
@@ -15,8 +15,8 @@ import java.util.Objects;
  * 화면에는 똑같이 보인다. 맞추지 않으면 눈으로 구분되지 않는 닉네임 둘이 중복 확인을 통과한다. 대소문자는 가린다 — 'Whale'과 'whale'은
  * 눈으로 구분된다.
  * <p>
- * 맞춘 값이 {@value ProposedPolicy#NICKNAME_MAXIMUM_LENGTH}자를 넘으면 받지 않는다({@link ProposedPolicy#NICKNAME_MAXIMUM_LENGTH},
- * 확인 필요). 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자). 쓸 수 있는 글자는 문서에 없어 정하지 않았다.
+ * 맞춘 값이 {@value QuantityPolicy#NICKNAME_MAXIMUM_LENGTH}자를 넘으면 받지 않는다({@link QuantityPolicy#NICKNAME_MAXIMUM_LENGTH}).
+ * 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자). 쓸 수 있는 글자는 문서에 없어 정하지 않았다.
  * 부적절한 닉네임은 관리자가 초기화한다(docs/01 "닉네임 — 부적절하면").
  *
  * @param value 앞뒤 공백을 걷고 NFC로 맞춘 닉네임
@@ -30,7 +30,7 @@ public record Nickname(String value) {
             throw new IllegalArgumentException("닉네임이 비어 있습니다");
         }
         if (exceedsMaximumLength(value)) {
-            throw new IllegalArgumentException("닉네임은 " + ProposedPolicy.NICKNAME_MAXIMUM_LENGTH + "자 이하여야 합니다");
+            throw new IllegalArgumentException("닉네임은 " + QuantityPolicy.NICKNAME_MAXIMUM_LENGTH + "자 이하여야 합니다");
         }
     }
 
@@ -57,6 +57,6 @@ public record Nickname(String value) {
     }
 
     private static boolean exceedsMaximumLength(String normalized) {
-        return normalized.codePointCount(0, normalized.length()) > ProposedPolicy.NICKNAME_MAXIMUM_LENGTH;
+        return normalized.codePointCount(0, normalized.length()) > QuantityPolicy.NICKNAME_MAXIMUM_LENGTH;
     }
 }

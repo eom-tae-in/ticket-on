@@ -8,7 +8,7 @@ import static com.ticketon.domain.account.StaffAccountFixtures.storedWithdrawnAc
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
@@ -25,11 +25,11 @@ class StaffEmailVerificationTokenTest {
     private static final Instant ISSUED_AT = SIGNUP_TIME;
 
     @Test
-    @DisplayName("유효 시간은 관객과 같은 24시간이다 (확인 필요 #11) — 보낸 때부터 센다")
+    @DisplayName("유효 시간은 관객과 같은 24시간이다 — 보낸 때부터 센다")
     void validForTwentyFourHoursFromIssue() {
         StaffEmailVerificationToken token = StaffEmailVerificationToken.issue(TOKEN_VALUE, ACCOUNT_ID, ISSUED_AT);
 
-        assertThat(ProposedPolicy.EMAIL_VERIFICATION_LINK_VALIDITY).isEqualTo(Duration.ofHours(24));
+        assertThat(TimePolicy.EMAIL_VERIFICATION_LINK_VALIDITY).isEqualTo(Duration.ofHours(24));
         assertThat(token.issuedAt()).isEqualTo(ISSUED_AT);
         assertThat(token.expiresAt()).isEqualTo(ISSUED_AT.plus(Duration.ofHours(24)));
         assertThat(token.staffAccountId()).isEqualTo(ACCOUNT_ID);

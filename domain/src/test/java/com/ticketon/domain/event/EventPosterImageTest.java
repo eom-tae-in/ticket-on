@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 
 import com.ticketon.common.ImageFormat;
 import com.ticketon.common.TestImages;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import org.junit.jupiter.api.DisplayName;
@@ -30,7 +30,7 @@ class EventPosterImageTest {
     }
 
     @ParameterizedTest(name = "{0}x{1}")
-    @DisplayName("허용 오차(제안 1%) 안이면 받는다 — 세로 1,200픽셀이면 가로 891~909픽셀, 크롭 도구의 반올림(세로 1,199 → 가로 899)")
+    @DisplayName("허용 오차(1%) 안이면 받는다 — 세로 1,200픽셀이면 가로 891~909픽셀, 크롭 도구의 반올림(세로 1,199 → 가로 899)")
     @CsvSource({"891, 1200", "909, 1200", "899, 1199", "76, 101"})
     void acceptsWithinTolerance(int width, int height) {
         assertThat(EventPosterImage.problemOf("image/png", TestImages.png(width, height))).isEmpty();
@@ -44,9 +44,9 @@ class EventPosterImageTest {
     }
 
     @Test
-    @DisplayName("용량 상한(제안 5MB)을 넘으면 받지 않는다 — 상한과 같은 크기는 받는다")
+    @DisplayName("용량 상한(5MB)을 넘으면 받지 않는다 — 상한과 같은 크기는 받는다")
     void rejectsOverSizeLimit() {
-        long limit = ProposedPolicy.EVENT_POSTER_MAXIMUM_SIZE.bytes();
+        long limit = QuantityPolicy.EVENT_POSTER_MAXIMUM_SIZE.bytes();
         byte[] poster = TestImages.png(30, 40);
         byte[] atLimit = Arrays.copyOf(poster, (int) limit);
         byte[] overLimit = Arrays.copyOf(poster, (int) limit + 1);
@@ -60,7 +60,7 @@ class EventPosterImageTest {
     @DisplayName("용량을 먼저 본다 — 상한을 넘은 파일은 비율이 맞지 않아도 용량으로 거절한다")
     void sizeIsCheckedBeforeAspectRatio() {
         byte[] overLimitSquare = Arrays.copyOf(TestImages.png(64, 64),
-                (int) ProposedPolicy.EVENT_POSTER_MAXIMUM_SIZE.bytes() + 1);
+                (int) QuantityPolicy.EVENT_POSTER_MAXIMUM_SIZE.bytes() + 1);
 
         expectProblem("image/png", overLimitSquare, EventPosterImageProblem.TOO_LARGE);
     }

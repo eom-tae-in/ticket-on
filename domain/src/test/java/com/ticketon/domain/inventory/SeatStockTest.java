@@ -190,7 +190,7 @@ class SeatStockTest {
         }
 
         @Test
-        @DisplayName("확인 필요 (#53) — 관객이 선점한 좌석은 판매 제외할 수 없다")
+        @DisplayName("docs/99 E \"재고 · 초대권\" — 관객이 선점한 좌석은 판매 제외할 수 없다")
         void heldSeatIsRejected() {
             SeatStock seat = held();
 
@@ -282,7 +282,7 @@ class SeatStockTest {
         }
 
         @Test
-        @DisplayName("확인 필요 (#53) — 회수하면 걸기 전의 상태로 돌아간다: 관계자석은 판매 제외, 일반 좌석은 빈자리")
+        @DisplayName("docs/99 E \"재고 · 초대권\" — 회수하면 걸기 전의 상태로 돌아간다: 관계자석은 판매 제외, 일반 좌석은 빈자리")
         void withdrawReturnsToPreviousStatus() {
             SeatStock onExcluded = invitedOnExcludedSeat();
             SeatStock onGeneral = invitedOnGeneralSeat();

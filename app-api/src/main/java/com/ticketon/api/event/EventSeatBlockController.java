@@ -39,7 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
         + "(docs/02 \"블록\", \"에디터는 블록 단위\")")
 public class EventSeatBlockController {
 
-    private static final String NAME_RULES = "너무 긴 이름(20자, 확인 필요)은 400, 같은 행사의 다른 블록 이름이면 409 BLOCK_NAME_ALREADY_TAKEN, "
+    private static final String NAME_RULES = "너무 긴 이름(20자)은 400, 같은 행사의 다른 블록 이름이면 409 BLOCK_NAME_ALREADY_TAKEN, "
             + "구역 이름이면 409 BLOCK_NAME_TAKEN_BY_ZONE.";
 
     private static final String BLOCK_NOT_FOUND = "도면에 없는(지운) 블록이면 404 BLOCK_NOT_FOUND.";
@@ -62,7 +62,7 @@ public class EventSeatBlockController {
 
     @Operation(summary = "블록 얹기", description = "이름 + 행 × 열 덩어리를 얹고 201에 블록과 그 좌석(격자의 모든 자리, 활성 · 일반 · 구역 없음)을 "
             + "돌려준다. 10행 × 20열이면 좌석 200개. 이름을 비우면 '블록 N'을 붙인다. 작성 중이면 진행 단계가 3단계까지 오른다. 예매가 열린 뒤에도 빈 "
-            + "블록은 얹는다. 행 · 열이 비었거나 1~50(확인 필요) 밖이면 400. " + NAME_RULES + " " + LOCKS + " " + REJECTIONS
+            + "블록은 얹는다. 행 · 열이 비었거나 1~50 밖이면 400. " + NAME_RULES + " " + LOCKS + " " + REJECTIONS
             + " 좌석이 생긴 것을 재고에 알리고 운영진 조작 기록에 남는다.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

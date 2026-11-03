@@ -132,7 +132,7 @@ class OrganizerApplicationReviewControllerTest {
                                 },
                                 "settlementAccount": {
                                   "bankName": "신한은행",
-                                  "accountNumber": "110-123-456789",
+                                  "maskedAccountNumber": "***-***-**6789",
                                   "accountHolder": "늦여름 레코드"
                                 }
                               },
@@ -354,7 +354,7 @@ class OrganizerApplicationReviewControllerTest {
                         BusinessStatus.BUSINESS,
                         new OrganizerApplicationReviewResult.BusinessInformation("늦여름 레코드", "최여름",
                                 "서울특별시 마포구 와우산로 12", "02-123-4567", "1234567890"),
-                        new OrganizerApplicationReviewResult.SettlementAccount("신한은행", "110-123-456789", "늦여름 레코드")),
+                        new OrganizerApplicationReviewResult.MaskedSettlementAccount("신한은행", "***-***-**6789", "늦여름 레코드")),
                 List.of(OrganizerReviewChecklistItem.values()),
                 List.of("연락이 닿지 않음", "정보가 부족함", "서비스 성격과 맞지 않음"),
                 List.of(new SimilarClosedOrganizer(8, "늦여름", false, true)));
@@ -365,7 +365,7 @@ class OrganizerApplicationReviewControllerTest {
                 LocalDate.of(2026, 10, 20), REVIEWED_AT, "연락이 닿지 않음",
                 new OrganizerApplicationReviewResult.Form(OrganizerType.GROUP, "극단 열두달", "010-2345-6789",
                         "twelve-months@example.com", List.of(), "소극장 정기공연", BusinessStatus.NON_BUSINESS, null,
-                        new OrganizerApplicationReviewResult.SettlementAccount("국민은행", "123456-78-901234", "박정훈")),
+                        new OrganizerApplicationReviewResult.MaskedSettlementAccount("국민은행", "******-**-**1234", "박정훈")),
                 List.of(OrganizerReviewChecklistItem.values()),
                 List.of("연락이 닿지 않음", "정보가 부족함", "서비스 성격과 맞지 않음"),
                 List.of());

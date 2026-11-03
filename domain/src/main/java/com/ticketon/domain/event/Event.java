@@ -53,8 +53,9 @@ import java.util.Set;
  * 상태 이름이 아니라 <b>예매가 한 번이라도 열렸는지</b>로 정한다({@link #hasBookingOpened}) — 판매 대기에서 관리자 조치로 멈춘 판매 중단은 예매가
  * 열린 적이 없어 판매 대기와 같다. 이 판정은 저장된 상태로 하므로, 시간이 움직이는 상태의 행사는 먼저 {@link #advanceByTime}으로 지금 시각을
  * 반영한다. 위저드 단계 저장({@link #saveBasicInformationStep}, {@link #saveBookingStep}, 구역 · 입구 저장)은 바뀐 항목마다, 포스터
- * 바꾸기({@link #changePoster})는 포스터에 이 판정을 건다. 낱낱의 수정 메서드(기본 정보 · 공개 수준 · 예매 설정 · 취소 규정)에 이 판정을 거는 일과 제목 · 소개 · 포스터의 변경
- * 이력은 수정 유스케이스가 한다(#65, #46).
+ * 바꾸기({@link #changePoster})는 포스터에 이 판정을 건다. 낱낱의 수정 메서드(기본 정보 · 공개 수준 · 예매 설정 · 취소 규정)에 이 판정을 거는 일은
+ * 수정 유스케이스가 한다(#65). 제목 · 소개 · 포스터 · 회차 출연의 변경 이력은 수정 유스케이스가 바꾸기 전 값과 바꾼 행사로
+ * {@link EventChangeHistory}에 물어 쌓는다.
  * <p>
  * <b>삭제</b>는 상태가 아니라 팔린 표나 초대권이 있었는지로 정한다({@link #requireDeletable}). 누가 지울 수 있는지는 판매를 시작했는지로 갈린다
  * ({@link #deleteAction}).
@@ -173,17 +174,23 @@ public final class Event {
      * <ol>
      *   <li>공개 수준을 바꾼 설정을 만든다({@link EventVisibilitySetting#change}) — 암호 보호로 두면서 새 암호를 적지 않으면 걸려 있던 암호를
      *       그대로 쓴다.</li>
-     *   <li><b>바뀐 항목마다 지금 상태의 수정 범위를 확인한다</b> — 공개 수준({@link EventEditTarget#VISIBILITY}), 예매 종료 · 그 밖의 예매
-     *       설정({@link BookingSettings#changedEditTargets}), 취소 규정({@link EventEditTarget#CANCELLATION_POLICY}). 바뀌지 않은 항목은 보지
-     *       않는다 — 예매가 열린 뒤 예매 종료만 고치면서 취소 규정을 그대로 보내도 막지 않는다. 하나라도 막히면 아무것도 바꾸지 않는다.</li>
-     *   <li>셋을 바꾸고, 작성 중이면 진행 단계를 이 단계까지로 올리고, 무엇이든 바뀌었으면 마지막 수정 시각을 지금으로 한다.</li>
+     *   <li><b>바뀐 항목마다 지금 상태의 수정 범위를 확인한다</b> — 공개 수준({@link EventEditTarget#VISIBILITY}), 예매 설정의 항목
+     *       ({@link BookingSettings#changedEditTargets}), 취소 규정({@link EventEditTarget#CANCELLATION_POLICY}). 바뀌지 않은 항목은 보지
+     *       않는다 — 예매가 열린 뒤 예매 종료만 고치면서 취소 규정을 그대로 보내도 막지 않는다.</li>
+     *   <li><b>예매가 열린 뒤에는 산 사람의 조건을 관객에게 유리한 쪽으로만 바꾼다</b> — 재입장은 켜기만, 연령 제한은 낮추거나 없애기만 한다
+     *       ({@link ReentrySetting#isStricterThan}, {@link AgeRestriction#isStricterThan}). 재입장을 끄거나 연령 제한을 올리면 이미 산
+     *       서윤이 현장에서 막힌다(docs/04 "산 사람의 조건은 관객에게 유리한 쪽으로만 바꿉니다"). 판매 대기 · 작성 중은 예매가 없어 자유다.</li>
+     *   <li>하나라도 막히면 아무것도 바꾸지 않는다. 셋을 바꾸고, 작성 중이면 진행 단계를 이 단계까지로 올리고, 무엇이든 바뀌었으면 마지막 수정
+     *       시각을 지금으로 한다.</li>
      * </ol>
      * 같은 값을 몇 번 저장해도 안전하다 — 바뀐 것이 없으면 아무것도 바꾸지 않고 false다. {@link #requireEditable}처럼 저장된 상태로 판정한다.
      *
      * @param newPasswordHash 새로 정한 암호의 해시 — 암호 보호로 두면서 암호를 새로 적었을 때만. 아니면 null
      * @return 바뀐 것(공개 수준 · 예매 설정 · 취소 규정 · 진행 단계)이 있는지
      * @throws RuleViolationException   암호 보호인데 새 암호도 걸려 있던 암호도 없으면({@link EventErrorCode#EVENT_PASSWORD_REQUIRED}), 바뀐
-     *                                  항목을 지금 상태에서 고칠 수 없으면({@link #requireEditable}과 같은 오류)
+     *                                  항목을 지금 상태에서 고칠 수 없으면({@link #requireEditable}과 같은 오류), 예매가 열린 뒤 재입장을
+     *                                  끄면({@link EventErrorCode#REENTRY_TURN_OFF_LOCKED_AFTER_BOOKING_OPENED}), 예매가 열린 뒤 연령 제한을
+     *                                  새로 걸거나 올리면({@link EventErrorCode#AGE_RESTRICTION_RAISE_LOCKED_AFTER_BOOKING_OPENED})
      * @throws IllegalArgumentException 암호 보호가 아닌데 새 암호 해시를 넘기면
      */
     public boolean saveBookingStep(EventVisibility newVisibility, EventPasswordHash newPasswordHash,
@@ -201,6 +208,7 @@ public final class Event {
             changedTargets.add(EventEditTarget.CANCELLATION_POLICY);
         }
         changedTargets.forEach(this::requireEditable);
+        requireBookedAudienceNotDisadvantaged(newBookingSettings);
         visibility = newVisibilitySetting;
         bookingSettings = newBookingSettings;
         cancellationPolicy = newCancellationPolicy;
@@ -231,7 +239,7 @@ public final class Event {
      *       지금으로 한다. 새로 올린 포스터는 늘 새 열쇠라 늘 바뀐 것이다.</li>
      * </ol>
      * {@link #requireEditable}처럼 저장된 상태로 판정하므로, 시간이 움직이는 상태의 행사는 먼저 {@link #advanceByTime}으로 지금 시각을 반영한다.
-     * 제목 · 소개 · 포스터의 변경 이력은 변경 이력 기능이 남긴다(#46).
+     * 판매를 시작한 뒤의 포스터 변경 이력은 유스케이스가 바꾸기 전 포스터로 쌓는다({@link EventChangeHistory#posterVersion}).
      *
      * @param newPoster 새로 올린 포스터 — 새로 붙인 열쇠({@link EventPoster#issue})
      * @param now       올린 시각
@@ -437,8 +445,9 @@ public final class Event {
 
     /**
      * 위저드 2단계에서 회차의 출연을 바꾼다(docs/02 "출연 (선택)"). 바뀔 때만 출연의 수정 범위({@link EventEditTarget#PERFORMERS})를 확인한다 — 제목
-     * · 소개 · 포스터와 같아 예매가 열린 뒤에도 고친다. 출연 칸을 고치는 것만으로는 출연자 변경 알림이 되지 않는다. 변경 이력은 #46이 남긴다. 진행
-     * 단계 · 마지막 수정 시각은 {@link #changeSessionDateTime}과 같다.
+     * · 소개 · 포스터와 같아 예매가 열린 뒤에도 고친다. 출연 칸을 고치는 것만으로는 출연자 변경 알림이 되지 않는다. 판매를 시작한 뒤의 변경
+     * 이력은 유스케이스가 바꾸기 전 출연으로 쌓는다({@link EventChangeHistory#performersVersion}). 진행 단계 · 마지막 수정 시각은
+     * {@link #changeSessionDateTime}과 같다.
      *
      * @param newPerformers 새 출연. 지우려면 null
      * @return 바뀐 것(출연 · 진행 단계)이 있는지
@@ -1030,7 +1039,7 @@ public final class Event {
      *   <li>판매 중이면 판매 중단이 된다.</li>
      *   <li>이미 판매 중단이면(주최자가 먼저 멈춰 뒀거나 다른 관리자 조치가 걸려 있으면) 상태는 그대로이고 이 조치가 더 걸린다 — 조치가 모두 풀려야
      *       주최자가 재개한다.</li>
-     *   <li>확인 필요 (#38) — 판매 대기도 판매 중단이 된다. 정지 2단계의 대상은 "진행 중인 행사"(판매 대기 · 판매 중 · 판매 종료, docs/13)이고
+     *   <li>docs/99 E "행사 · 배치도" — 판매 대기도 판매 중단이 된다. 정지 2단계의 대상은 "진행 중인 행사"(판매 대기 · 판매 중 · 판매 종료, docs/13)이고
      *       조치 중에 오픈 시각이 와서 판매가 열리면 안 되므로 오픈 전부터 멈춘다. 조치가 풀린 뒤 주최자가 재개하면 시각대로 판매 대기 또는 판매
      *       중이 된다. 페이지 내리기는 문서가 "판매 중이었다면 판매 중단"이라 하지만, 다시 올린 뒤 판매 재개는 주최자가 한다는 원칙과 맞춰 같게
      *       둔다. 이렇게 멈춘 동안은 예매가 열린 적이 없어 수정 범위가 판매 대기와 같다({@link #editScope}).</li>
@@ -1392,6 +1401,26 @@ public final class Event {
             case NOTHING -> EventErrorCode.EDIT_LOCKED_FOR_PAST_EVENT;
             case EVERYTHING, EVERYTHING_EXCEPT_INVITED -> throw new IllegalStateException("전부 고치는 범위에는 잠긴 항목이 없습니다: " + scope);
         };
+    }
+
+    /**
+     * 예매가 열린 뒤 재입장 · 연령 제한을 이미 산 관객에게 불리하게 바꾸는지 확인한다 — 재입장은 켜기만, 연령 제한은 낮추거나 없애기만
+     * 한다({@link EventEditTarget#REENTRY}, {@link EventEditTarget#AGE_RESTRICTION}). 판매 대기 · 작성 중은 예매가 없어 보지 않고, 판매 대기의
+     * 초대권에도 미리 붙지 않는다(docs/04 "판매 대기에 초대권을 발권했으면"의 목록에 없다). 판매가 끝난 뒤는 수정 범위가 먼저 막는다.
+     */
+    private void requireBookedAudienceNotDisadvantaged(BookingSettings newBookingSettings) {
+        if (editScope() != EventEditScope.AFTER_BOOKING_OPENED) {
+            return;
+        }
+        if (newBookingSettings.reentry().isStricterThan(bookingSettings.reentry())) {
+            throw new RuleViolationException(EventErrorCode.REENTRY_TURN_OFF_LOCKED_AFTER_BOOKING_OPENED,
+                    detail() + ", 재입장: " + bookingSettings.reentry() + " → " + newBookingSettings.reentry());
+        }
+        if (newBookingSettings.ageRestriction().isStricterThan(bookingSettings.ageRestriction())) {
+            throw new RuleViolationException(EventErrorCode.AGE_RESTRICTION_RAISE_LOCKED_AFTER_BOOKING_OPENED,
+                    detail() + ", 연령 제한 기준 나이: " + bookingSettings.ageRestriction().minimumAge() + " → "
+                            + newBookingSettings.ageRestriction().minimumAge());
+        }
     }
 
     private boolean endActivePause(SalesPauseCause cause, Instant now) {

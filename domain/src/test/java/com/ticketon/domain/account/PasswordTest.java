@@ -3,7 +3,7 @@ package com.ticketon.domain.account;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -18,9 +18,9 @@ class PasswordTest {
     class NewPasswordRule {
 
         @Test
-        @DisplayName("최소 길이는 8자다 (확인 필요 #11)")
+        @DisplayName("최소 길이는 8자다")
         void minimumLengthIsEight() {
-            assertThat(ProposedPolicy.PASSWORD_MINIMUM_LENGTH).isEqualTo(8);
+            assertThat(QuantityPolicy.PASSWORD_MINIMUM_LENGTH).isEqualTo(8);
         }
 
         @ParameterizedTest(name = "\"{0}\"")

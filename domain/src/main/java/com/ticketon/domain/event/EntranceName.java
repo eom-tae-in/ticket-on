@@ -1,6 +1,6 @@
 package com.ticketon.domain.event;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import java.text.Normalizer;
 import java.util.Objects;
 
@@ -8,8 +8,8 @@ import java.util.Objects;
  * 입구 이름 — "정문", "2층 전용", "VIP 입구"(docs/02 "입구 (게이트)"), "옆문"(docs/04 "판매 종료는 공연이 끝난 때가 아닙니다"). 검표를 시작할 때
  * 고르는 목록과 게이트별 입장 현황에 보인다.
  * <p>
- * 적은 값에서 앞뒤 공백을 걷고 유니코드 NFC(완성형)로 맞춘다. 맞춘 값이 {@value ProposedPolicy#ENTRANCE_NAME_MAXIMUM_LENGTH}자를 넘으면 받지
- * 않는다({@link ProposedPolicy#ENTRANCE_NAME_MAXIMUM_LENGTH}, 확인 필요). 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자).
+ * 적은 값에서 앞뒤 공백을 걷고 유니코드 NFC(완성형)로 맞춘다. 맞춘 값이 {@value QuantityPolicy#ENTRANCE_NAME_MAXIMUM_LENGTH}자를 넘으면 받지
+ * 않는다({@link QuantityPolicy#ENTRANCE_NAME_MAXIMUM_LENGTH}). 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자).
  *
  * @param value 앞뒤 공백을 걷고 NFC로 맞춘 이름
  */
@@ -22,7 +22,7 @@ public record EntranceName(String value) {
             throw new IllegalArgumentException("입구 이름이 비어 있습니다");
         }
         if (exceedsMaximumLength(value)) {
-            throw new IllegalArgumentException("입구 이름은 " + ProposedPolicy.ENTRANCE_NAME_MAXIMUM_LENGTH + "자 이하여야 합니다");
+            throw new IllegalArgumentException("입구 이름은 " + QuantityPolicy.ENTRANCE_NAME_MAXIMUM_LENGTH + "자 이하여야 합니다");
         }
     }
 
@@ -49,6 +49,6 @@ public record EntranceName(String value) {
     }
 
     private static boolean exceedsMaximumLength(String normalized) {
-        return normalized.codePointCount(0, normalized.length()) > ProposedPolicy.ENTRANCE_NAME_MAXIMUM_LENGTH;
+        return normalized.codePointCount(0, normalized.length()) > QuantityPolicy.ENTRANCE_NAME_MAXIMUM_LENGTH;
     }
 }

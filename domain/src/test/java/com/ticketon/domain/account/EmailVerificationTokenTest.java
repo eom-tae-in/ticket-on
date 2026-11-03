@@ -7,7 +7,7 @@ import static com.ticketon.domain.account.AudienceAccountFixtures.assertRejected
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -25,11 +25,11 @@ class EmailVerificationTokenTest {
     private static final Instant ISSUED_AT = SIGNUP_TIME;
 
     @Test
-    @DisplayName("유효 시간은 24시간이다 (확인 필요 #11) — 보낸 때부터 센다")
+    @DisplayName("유효 시간은 24시간이다 — 보낸 때부터 센다")
     void validForTwentyFourHoursFromIssue() {
         EmailVerificationToken token = EmailVerificationToken.issue(TOKEN_VALUE, ACCOUNT_ID, ISSUED_AT);
 
-        assertThat(ProposedPolicy.EMAIL_VERIFICATION_LINK_VALIDITY).isEqualTo(Duration.ofHours(24));
+        assertThat(TimePolicy.EMAIL_VERIFICATION_LINK_VALIDITY).isEqualTo(Duration.ofHours(24));
         assertThat(token.issuedAt()).isEqualTo(ISSUED_AT);
         assertThat(token.expiresAt()).isEqualTo(ISSUED_AT.plus(Duration.ofHours(24)));
         assertThat(token.audienceAccountId()).isEqualTo(ACCOUNT_ID);

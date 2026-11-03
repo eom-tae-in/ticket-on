@@ -5,7 +5,7 @@ import static com.ticketon.domain.account.AudienceAccountFixtures.assertRejected
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.TimePolicy;
 import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
@@ -31,11 +31,11 @@ class PasswordResetTokenTest {
     private static final PasswordHash NEW_PASSWORD_HASH = new PasswordHash("{test}new-password");
 
     @Test
-    @DisplayName("유효 시간은 1시간이다 (확인 필요 #16) — 보낸 때부터 센다")
+    @DisplayName("유효 시간은 1시간이다 — 보낸 때부터 센다")
     void validForOneHourFromIssue() {
         PasswordResetToken token = PasswordResetToken.issue(TOKEN_VALUE, SEOYUN, ISSUED_AT);
 
-        assertThat(ProposedPolicy.PASSWORD_RESET_LINK_VALIDITY).isEqualTo(Duration.ofHours(1));
+        assertThat(TimePolicy.PASSWORD_RESET_LINK_VALIDITY).isEqualTo(Duration.ofHours(1));
         assertThat(token.issuedAt()).isEqualTo(ISSUED_AT);
         assertThat(token.expiresAt()).isEqualTo(ISSUED_AT.plus(Duration.ofHours(1)));
         assertThat(token.account()).isEqualTo(SEOYUN);

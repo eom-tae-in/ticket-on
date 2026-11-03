@@ -1,7 +1,7 @@
 package com.ticketon.api.account;
 
 import com.ticketon.domain.account.NewPassword;
-import com.ticketon.domain.policy.ProposedPolicy;
+import com.ticketon.domain.policy.QuantityPolicy;
 import jakarta.validation.Constraint;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
@@ -13,7 +13,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 새 비밀번호 최소 규칙 — 도메인 {@link NewPassword}와 같은 규칙({@value ProposedPolicy#PASSWORD_MINIMUM_LENGTH}자 이상, 확인 필요)으로 본다.
+ * 새 비밀번호 최소 규칙 — 도메인 {@link NewPassword}와 같은 규칙({@value QuantityPolicy#PASSWORD_MINIMUM_LENGTH}자 이상)으로 본다.
  * 빈 값도 규칙에 걸린다. 값이 아예 없으면 {@code @NotNull}이 맡는다.
  */
 @Documented
@@ -22,7 +22,7 @@ import java.lang.annotation.Target;
 @Constraint(validatedBy = NewPasswordRule.Validator.class)
 public @interface NewPasswordRule {
 
-    String message() default "비밀번호는 " + ProposedPolicy.PASSWORD_MINIMUM_LENGTH + "자 이상 입력해 주세요.";
+    String message() default "비밀번호는 " + QuantityPolicy.PASSWORD_MINIMUM_LENGTH + "자 이상 입력해 주세요.";
 
     Class<?>[] groups() default {};
 
