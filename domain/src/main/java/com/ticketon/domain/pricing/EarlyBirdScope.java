@@ -46,6 +46,27 @@ public record EarlyBirdScope(Set<Long> excludedZoneIds, Set<TicketProduct> exclu
         return new EarlyBirdScope(excludedZoneIds, union(excludedProducts, product));
     }
 
+    /**
+     * 이 범위에서 그 구역을 끈 기록을 지운 범위 — 도면에서 지워진 구역은 팔리지 않아 끈 기록이 닿는 티켓을 바꾸지 않는다({@link EarlyBird#dropRemovedZone}).
+     * 끄지 않았으면 그대로다.
+     */
+    public EarlyBirdScope forgetZone(long zoneId) {
+        Set<Long> remaining = new HashSet<>(excludedZoneIds);
+        remaining.remove(zoneId);
+        return new EarlyBirdScope(remaining, excludedProducts);
+    }
+
+    /**
+     * 이 범위에서 그 상품을 끈 기록을 지운 범위 — 지운 묶음권 상품은 팔리지 않아 끈 기록이 닿는 티켓을 바꾸지 않는다
+     * ({@link EarlyBird#dropRemovedBundleProduct}). 끄지 않았으면 그대로다.
+     */
+    public EarlyBirdScope forgetProduct(TicketProduct product) {
+        Objects.requireNonNull(product, "product");
+        Set<TicketProduct> remaining = new HashSet<>(excludedProducts);
+        remaining.remove(product);
+        return new EarlyBirdScope(excludedZoneIds, remaining);
+    }
+
     /** 그 구역의 그 상품 티켓에 이 조기예매가 닿는지 — 구역도 상품도 끄지 않았다. */
     public boolean covers(long zoneId, TicketProduct product) {
         Objects.requireNonNull(product, "product");

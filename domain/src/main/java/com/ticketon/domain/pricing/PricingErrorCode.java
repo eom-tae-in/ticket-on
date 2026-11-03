@@ -93,7 +93,44 @@ public enum PricingErrorCode implements ErrorCode {
      * 쿠폰의 전체 사용 가능 횟수를 이미 쓴 횟수보다 적게 줄이려 한다({@link Coupon#reconfigure}, docs/99 E "가격 · 할인").
      * 문구는 문서에 없다 — 확인 필요 (#223).
      */
-    COUPON_USAGE_LIMIT_BELOW_USED("이미 사용된 횟수보다 적게 줄일 수 없습니다.");
+    COUPON_USAGE_LIMIT_BELOW_USED("이미 사용된 횟수보다 적게 줄일 수 없습니다."),
+
+    /** 이 행사에 없거나 지운 조기예매다. 문구는 문서에 없다 — 확인 필요 (#223). */
+    EARLY_BIRD_NOT_FOUND("조기예매를 찾을 수 없습니다."),
+
+    /** 이 행사에 없거나 지운 쿠폰이다. 문구는 문서에 없다 — 확인 필요 (#223). */
+    COUPON_NOT_FOUND("쿠폰을 찾을 수 없습니다."),
+
+    /** 이 행사에 없거나 지운 묶음권 상품이다. 문구는 문서에 없다 — 확인 필요 (#223). */
+    BUNDLE_PRODUCT_NOT_FOUND("묶음권을 찾을 수 없습니다."),
+
+    /**
+     * 이 행사의 다른 쿠폰과 코드가 같다 — 대소문자만 다른 코드도 같은 코드다({@link CouponCode}, {@link Coupon#issueAmong}). 관객은 코드로 쿠폰을 찾으므로
+     * 한 행사 안에서 코드가 겹치면 어느 쿠폰인지 알 수 없다. 지운 쿠폰의 코드는 다시 쓸 수 있다. 문구는 문서에 없다 — 확인 필요 (#223).
+     */
+    COUPON_CODE_ALREADY_TAKEN("이 행사에 같은 코드의 쿠폰이 이미 있습니다."),
+
+    /**
+     * 조기예매의 적용 범위가 아무 티켓에도 닿지 않는다 — 모든 구역을 껐거나, 1일권과 모든 묶음권을 껐다({@link EventPriceTable#requireEarlyBirdApplicable}).
+     * 기간 겹침 경고만 띄우고 할인은 한 장도 주지 않는 조기예매가 된다. 확인 필요 (#223) — 문서는 "구역별로 끌 수 있습니다", "상품별로도 끌 수
+     * 있습니다"만 적었다. 문구도 문서에 없다.
+     */
+    EARLY_BIRD_SCOPE_EMPTY("조기예매를 적용할 구역과 상품을 하나 이상 남겨 주세요."),
+
+    /**
+     * 지우려는 구역이 어느 묶음권 상품의 하나뿐인 대상 구역이다({@link BundleProduct#dropRemovedZone}). 빼면 팔 구역이 없는 묶음권이 남고, 묶음권을
+     * 말없이 지우면 주최자가 만든 상품이 사라진다. 확인 필요 (#223) — 구역이 하나도 남지 않는 묶음권의 처리는 문서에 없다. 문구도 문서에 없다.
+     */
+    BUNDLE_ONLY_ZONE("이 구역에서만 파는 묶음권이 있습니다. 묶음권에 다른 구역을 더하거나 묶음권을 먼저 지워 주세요."),
+
+    /**
+     * 구역 기본가 · 회차 가격 조정을 바꾸거나 구역 · 회차를 더한 뒤, 묶음권 할인율이나 조기예매 · 쿠폰의 할인을 적용하면 0원이 되는 가격이 생긴다
+     * ({@link EventPriceTable#requirePricesStayPositive}). 할인을 정할 때 막는 것({@link #DISCOUNT_MAKES_PRICE_ZERO},
+     * {@link #BUNDLE_PRICE_NOT_POSITIVE})과 같은 까닭이다 — 막지 않으면 관객이 예매하는 순간 주최자용 문구로 막힌다. 바꾸는 쪽은 가격이라 할인을
+     * 정할 때의 문구("할인 값을 낮춰 주세요")와 나눴다. 확인 필요 (#223) — 문구는 문서에 없다.
+     */
+    PRICE_CHANGE_MAKES_DISCOUNTED_PRICE_ZERO("이 가격이면 묶음권 · 조기예매 · 쿠폰을 적용해 0원이 되는 가격이 생깁니다. 가격을 높이거나 할인을 먼저 "
+            + "낮춰 주세요.");
 
     private final String message;
 

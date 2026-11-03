@@ -60,12 +60,22 @@ public record BundleDayPrices(List<SessionPrice> prices) {
      */
     public Money bundlePrice(Percent discountRate) {
         Objects.requireNonNull(discountRate, "discountRate");
-        Money discounted = total().percentRoundedDown(WHOLE_PERCENT - discountRate.value());
+        Money discounted = discounted(discountRate);
         if (discounted.isZero()) {
             throw new RuleViolationException(PricingErrorCode.BUNDLE_PRICE_NOT_POSITIVE,
                     "날짜별 가격 합계 " + total() + ", 할인율 " + discountRate);
         }
         return discounted;
+    }
+
+    /** 그 할인율로 계산한 묶음권 가격이 1원 이상인지 — {@link #bundlePrice}가 막는 경우를 예외 없이 묻는다. */
+    public boolean leavesPositivePrice(Percent discountRate) {
+        Objects.requireNonNull(discountRate, "discountRate");
+        return !discounted(discountRate).isZero();
+    }
+
+    private Money discounted(Percent discountRate) {
+        return total().percentRoundedDown(WHOLE_PERCENT - discountRate.value());
     }
 
     /**

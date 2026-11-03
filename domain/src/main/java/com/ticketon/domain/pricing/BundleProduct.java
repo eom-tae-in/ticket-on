@@ -24,6 +24,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 /**
  * 묶음권 상품 — 날짜 N개를 묶은 상품(docs/05 "묶음권 (수량형 전용)", docs/14 "묶음권 상품은 날짜를, 티켓은 회차를 가리킵니다"). 3일 행사에서
@@ -210,15 +211,78 @@ public final class BundleProduct {
      */
     public Optional<Money> startingPrice(EventSchedule schedule, FloorPlan floorPlan, Set<Long> bookableSessionIds) {
         requireSameEvent(schedule, floorPlan);
-        Set<Long> bookable = Set.copyOf(Objects.requireNonNull(bookableSessionIds, "bookableSessionIds"));
-        Predicate<EventSession> selectable = session -> !session.isCancelled()
-                && session.id().isPresent() && bookable.contains(session.id().getAsLong());
-        return floorPlan.zones().stream()
-                .filter(zone -> zone.id().isPresent() && terms.zoneIds().contains(zone.id().getAsLong()))
+        Predicate<EventSession> selectable = selectableAmong(bookableSessionIds);
+        return soldZones(floorPlan)
                 .map(zone -> cheapestDayPrices(terms, zone, schedule, selectable))
                 .flatMap(Optional::stream)
                 .map(dayPrices -> dayPrices.bundlePrice(terms.discountRate()))
                 .min(Comparator.naturalOrder());
+    }
+
+    /**
+     * 그 구역 하나에서 가장 싼 회차 조합의 묶음권 가격 — 시작 가격({@link #startingPrice})을 구역 하나로 좁힌 것이다. 조기예매가 구역별로 꺼져 있을
+     * 때 그 조기예매가 닿는 가장 낮은 가격을 내는 데 쓴다({@link EventPriceTable#lowestPriceReachedBy}).
+     *
+     * @param bookableSessionIds 고를 수 있는 회차 — 시작 가격과 같다
+     * @return 그 구역의 시작 가격. 이 묶음권을 팔지 않거나 도면에서 지워진 구역이거나, 한 날짜라도 고를 회차가 없으면 비어 있다
+     * @throws RuleViolationException 그 조합이 0원이 되면({@link PricingErrorCode#BUNDLE_PRICE_NOT_POSITIVE})
+     */
+    public Optional<Money> cheapestPriceIn(long zoneId, EventSchedule schedule, FloorPlan floorPlan, Set<Long> bookableSessionIds) {
+        requireSameEvent(schedule, floorPlan);
+        Predicate<EventSession> selectable = selectableAmong(bookableSessionIds);
+        return soldZones(floorPlan)
+                .filter(zone -> zone.id().getAsLong() == zoneId)
+                .findFirst()
+                .flatMap(zone -> cheapestDayPrices(terms, zone, schedule, selectable))
+                .map(dayPrices -> dayPrices.bundlePrice(terms.discountRate()));
+    }
+
+    /**
+     * 지금 할인율이 구역마다 가장 싼 회차 조합(취소되지 않은 회차)에 적용해도 1원 이상 남기는지 — 만들 때 · 바꿀 때의 확인({@link #create})을 그 뒤에
+     * 다시 묻는다. 구역 기본가나 회차 조정을 낮추면 98 · 99% 같은 할인율에서 0원이 될 수 있어, 가격을 바꾼 뒤 점검한다
+     * ({@link EventPriceTable#requirePricesStayPositive}).
+     */
+    public boolean leavesPositivePrice(EventSchedule schedule, FloorPlan floorPlan) {
+        requireSameEvent(schedule, floorPlan);
+        return soldZones(floorPlan)
+                .map(zone -> cheapestDayPrices(terms, zone, schedule, session -> !session.isCancelled()))
+                .flatMap(Optional::stream)
+                .allMatch(dayPrices -> dayPrices.leavesPositivePrice(terms.discountRate()));
+    }
+
+    /**
+     * 도면에서 지워진 구역을 대상 구역에서 뺀다 — 지워진 구역은 팔리지 않으므로, 대상 구역 목록이 늘 도면에 있는 구역만 가리키게 한다. 화면이 받은
+     * 설정을 그대로 다시 보내도 "지워진 구역"으로 막히지 않는다.
+     * <p>
+     * 확인 필요 (#223) — 그 구역이 이 묶음권의 <b>하나뿐인 대상 구역</b>이면 빼지 않고 막는다. 빼면 팔 구역이 없는 묶음권이 남고(대상 구역은 하나
+     * 이상, {@link BundleProductTerms}), 묶음권을 말없이 지우면 주최자가 만든 상품이 사라진다. 주최자가 묶음권에 다른 구역을 더하거나 묶음권을 먼저
+     * 지운 뒤 구역을 지운다. 구역이 하나도 남지 않을 때의 처리는 문서에 없다.
+     *
+     * @return 뺐는지 — 그 구역에서 팔지 않았으면 false
+     * @throws RuleViolationException 하나뿐인 대상 구역이면({@link PricingErrorCode#BUNDLE_ONLY_ZONE})
+     */
+    public boolean dropRemovedZone(long zoneId) {
+        if (!terms.zoneIds().contains(zoneId)) {
+            return false;
+        }
+        if (terms.zoneIds().size() == 1) {
+            throw new RuleViolationException(PricingErrorCode.BUNDLE_ONLY_ZONE, "묶음권 " + id + ", 구역 " + zoneId);
+        }
+        Set<Long> remainingZoneIds = new HashSet<>(terms.zoneIds());
+        remainingZoneIds.remove(zoneId);
+        terms = new BundleProductTerms(terms.name(), terms.dateIds(), remainingZoneIds, terms.discountRate());
+        return true;
+    }
+
+    /** 도면에 있는(지워지지 않은) 대상 구역 — 도면 순서. */
+    private Stream<Zone> soldZones(FloorPlan floorPlan) {
+        return floorPlan.zones().stream()
+                .filter(zone -> zone.id().isPresent() && terms.zoneIds().contains(zone.id().getAsLong()));
+    }
+
+    private static Predicate<EventSession> selectableAmong(Set<Long> bookableSessionIds) {
+        Set<Long> bookable = Set.copyOf(Objects.requireNonNull(bookableSessionIds, "bookableSessionIds"));
+        return session -> !session.isCancelled() && session.id().isPresent() && bookable.contains(session.id().getAsLong());
     }
 
     /**

@@ -527,7 +527,9 @@ public final class Event {
 
     /**
      * 회차의 가격 조정을 바꾼다(docs/05 "회차별 가격 조정" — 위저드 화면에서는 4단계에 보이지만 회차에 붙는 값이라 회차와 함께 저장한다). 바뀔 때만
-     * 가격의 수정 범위({@link EventEditTarget#PRICE})를 확인한다 — 예매가 열린 뒤에도 바꾸되 신규 예매부터 적용한다(가격 계산 #48). 확인 필요 (#41) —
+     * 가격의 수정 범위({@link EventEditTarget#PRICE})를 확인한다 — 예매가 열린 뒤에도 바꾸되 신규 예매부터 적용한다(이미 산 표의 금액은 티켓이 직접
+     * 갖는다, docs/14 "무엇을 가리키고 무엇을 직접 갖나"). 바꾼 가격이 0원 이하가 되거나 묶음권 · 조기예매 · 쿠폰을 적용해 0원이 되는지는 바꾼 뒤
+     * 가격이 본다(pricing 서비스의 가격 점검, #51). 확인 필요 (#41) —
      * 진행 단계는 회차를 저장하는 2단계로 다룬다 — 2단계만 마친 행사가 가격 조정을 저장해도 4단계까지 마친 것으로 보이지 않게 한다. 마지막 수정
      * 시각은 {@link #changeSessionDateTime}과 같다.
      *
@@ -547,6 +549,33 @@ public final class Event {
             schedule.changePriceAdjustment(sessionId, newPriceAdjustment);
         }
         return completeWizardStep(EventWizardStep.SCHEDULE, changed, now);
+    }
+
+    /**
+     * 위저드 4단계에서 조기예매 · 쿠폰 · 묶음권 상품을 더하거나 고치거나 지울 때의 행사 쪽 처리. 그 객체들은 가격(②)이 갖고 행사(①)는 모르므로,
+     * 고치는 규칙(할인 값 범위, 끝난 조기예매, 쓴 수 아래로 줄이기, 묶음권의 날짜 · 구역 · 할인율)은 그 객체가 보고, 행사는 수정 범위와 진행 단계만
+     * 맡는다.
+     * <ol>
+     *   <li><b>바뀌었으면 가격의 수정 범위를 확인한다</b>({@link EventEditTarget#PRICE}) — 예매가 열린 뒤에도 고치되 신규 예매부터 적용하고(이미 산
+     *       표의 금액 · 받은 할인은 티켓이 직접 갖는다, docs/14), 판매가 끝나면 고정이다(docs/04 "판매 종료는 공연이 끝난 때가 아닙니다").</li>
+     *   <li>작성 중이면 진행 단계를 4단계까지로 올리고(내려가지 않는다), 바뀌었으면 마지막 수정 시각을 지금으로 한다.</li>
+     * </ol>
+     * 확인 필요 (#223) — 묶음권 할인율 변경과, 판매 중에 조기예매 · 쿠폰 · 묶음권을 새로 만들고 지우는 것도 가격 변경으로 다룬다(예매가 열린 뒤
+     * 가능, 신규 예매부터). docs/04 표는 "가격"만 적었다 — 아티스트별 팬 쿠폰을 판매 중에 발급하는 이도현(docs/15)의 일을 막지 않게 했다.
+     * <p>
+     * {@link #requireEditable}처럼 저장된 상태로 판정한다. 막히면 예외를 던지고, 부르는 유스케이스의 트랜잭션이 되돌려져 그 사이 고친 가격 객체도
+     * 저장되지 않는다. 같은 값을 다시 저장해 바뀐 것이 없으면 확인하지 않는다.
+     *
+     * @param pricingChanged 조기예매 · 쿠폰 · 묶음권 상품이 바뀌었는지(더하기 · 지우기는 늘 바뀐 것)
+     * @return 바뀐 것(가격 · 진행 단계)이 있는지
+     * @throws RuleViolationException 바뀌었는데 지금 상태에서 가격을 고칠 수 없으면({@link #requireEditable}과 같은 오류)
+     */
+    public boolean savePricingStep(boolean pricingChanged, Instant now) {
+        Objects.requireNonNull(now, "now");
+        if (pricingChanged) {
+            requireEditable(EventEditTarget.PRICE);
+        }
+        return completeWizardStep(EventWizardStep.PRICING, pricingChanged, now);
     }
 
     /**

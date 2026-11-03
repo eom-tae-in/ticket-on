@@ -25,5 +25,7 @@
  *       남은 수량 대신 임박 단계({@link com.ticketon.domain.pricing.EarlyBirdUrgency})를 보인다.</li>
  *   <li>쿠폰({@link com.ticketon.domain.pricing.Coupon}) — 잘못된 코드는 한 문구로 답하고, 전체 취소일 때만 돌려준다.</li>
  * </ul>
+ * 한 행사의 가격표({@link com.ticketon.domain.pricing.EventPriceTable})가 위저드 4단계의 가격 미리보기를 내고, 조기예매 · 쿠폰을 정할 때와 가격을
+ * 바꾼 뒤에 0원이 되는 가격이 없는지 본다.
  */
 package com.ticketon.domain.pricing;
