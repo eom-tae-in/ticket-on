@@ -13,7 +13,8 @@ import java.util.Objects;
  * 맞춘 값이 {@value ProposedPolicy#EVENT_TITLE_MAXIMUM_LENGTH}자를 넘으면 받지 않는다({@link ProposedPolicy#EVENT_TITLE_MAXIMUM_LENGTH},
  * 확인 필요). 글자 수는 사람이 세는 대로 센다(한글 한 자, 이모지 하나가 한 자). 쓸 수 있는 글자는 문서에 없어 정하지 않았다.
  * <p>
- * 제목은 예매가 열린 뒤에도 운영진 누구나 고칠 수 있지만 덮어쓰지 않고 변경 이력을 남긴다(docs/03 "제목 · 소개 · 포스터는 변경 이력을 남깁니다").
+ * 제목은 예매가 열린 뒤에도 운영진 누구나 고칠 수 있지만 덮어쓰지 않고 변경 이력을 남긴다(docs/03 "제목 · 소개 · 포스터는 변경 이력을 남깁니다", {@link EventChangeHistory}). 운영자가
+ * 바꾸면 소유자에게 알린다({@link EventChangeHistory#notifiesOwner}).
  *
  * @param value 앞뒤 공백을 걷고 NFC로 맞춘 제목
  */

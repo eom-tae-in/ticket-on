@@ -38,7 +38,7 @@ public enum EventEditTarget {
      */
     SESSION_DATE_TIME(ALLOWED_WITH_RULES, true, false),
 
-    /** 제목 · 포스터 · 소개 — 예매가 열린 뒤에도 자유 변경. 변경 이력을 남긴다(docs/03 "변경 이력", #46). */
+    /** 제목 · 포스터 · 소개 — 예매가 열린 뒤에도 자유 변경. 변경 이력을 남긴다(docs/03 "변경 이력", {@link EventChangeHistory}). */
     TITLE_POSTER_DESCRIPTION(ALLOWED, false, false),
 
     /** 입구 목록 — 자유 변경. 판매가 끝난 뒤에도 행사가 끝날 때까지 고친다(18:10 정문 줄이 길어 "옆문" 추가). */
@@ -82,7 +82,7 @@ public enum EventEditTarget {
 
     // ── 표 밖
 
-    /** 회차 출연 — 제목 · 소개 · 포스터와 같다(docs/03 "회차별 출연 칸도 같습니다", docs/02 "출연 (선택)"). 변경 이력을 남긴다(#46). */
+    /** 회차 출연 — 제목 · 소개 · 포스터와 같다(docs/03 "회차별 출연 칸도 같습니다", docs/02 "출연 (선택)"). 변경 이력을 남긴다({@link EventChangeHistory}). */
     PERFORMERS(ALLOWED, false, false),
 
     /**

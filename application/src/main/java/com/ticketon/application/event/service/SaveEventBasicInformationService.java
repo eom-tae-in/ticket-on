@@ -15,6 +15,7 @@ import com.ticketon.application.organizer.port.in.StaffPermissionResult;
 import com.ticketon.application.organizer.port.out.OrganizerRepository;
 import com.ticketon.domain.event.Event;
 import com.ticketon.domain.event.EventBasicInformation;
+import com.ticketon.domain.event.EventChangeHistory;
 import com.ticketon.domain.organizer.StaffAction;
 import com.ticketon.domain.organizer.StaffOperationTargetKind;
 import java.time.Clock;
@@ -27,8 +28,12 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link Event#saveBasicInformationStep}이 갖고, 여기서는 권한을 확인하고 줄을 잠가 읽은 뒤 카테고리를 고르고, 바뀌었으면 저장하고 조작 기록을
  * 남긴다.
  * <p>
- * <b>한 트랜잭션이다.</b> 권한 확인 → 계정 줄(KEY SHARE) → 주최자 줄(KEY SHARE) → 권한 다시 확인 → 행사 줄(FOR UPDATE) → 저장 → 조작 기록
- * ({@link EventEditingLocks}). 지금과 같은 값이면(자동 임시저장을 여러 번 해도) 저장도 기록도 하지 않는다. 같은 행사를 거의 동시에 저장하면 뒤의
+ * <b>한 트랜잭션이다.</b> 권한 확인 → 계정 줄(KEY SHARE) → 주최자 줄(KEY SHARE) → 권한 다시 확인 → 행사 줄(FOR UPDATE) → 저장 → 변경 이력 →
+ * 조작 기록({@link EventEditingLocks}). 지금과 같은 값이면(자동 임시저장을 여러 번 해도) 저장도 이력도 기록도 하지 않는다.
+ * <p>
+ * <b>변경 이력</b> — 판매를 시작한 뒤 제목 · 소개가 바뀌면 바꾸기 전 기본 정보와 견줘 칸마다 새 버전을 쌓는다
+ * ({@link EventChangeHistory#basicInformationVersions}, {@link EventChangeHistoryRecorder}). 작성 중에는 쌓지 않는다. 운영자가 제목을 바꾸면
+ * 소유자에게 '운영자가 행사 제목을 바꿈' 메일이 간다 — 소유자 본인이 바꾸면 가지 않는다({@link EventChangeHistory#notifiesOwner}). 같은 행사를 거의 동시에 저장하면 뒤의
  * 저장은 행사 줄에서 앞의 저장을 기다렸다가 바뀐 값을 읽는다 — 같은 값이면 뒤의 저장은 바뀐 것이 없다.
  * <p>
  * 수정 범위는 저장된 상태로 판정한다. 시간이 움직이는 상태(판매 대기 · 판매 중 등)의 행사에 지금 시각을 반영하는 일은 일정(#41)이 생긴 뒤 상태별
@@ -46,12 +51,13 @@ public class SaveEventBasicInformationService implements SaveEventBasicInformati
     private final EventRepository eventRepository;
     private final EventCategoryRepository categoryRepository;
     private final EventPosterStoragePort posterStorage;
+    private final EventChangeHistoryRecorder historyRecorder;
     private final Clock clock;
 
     public SaveEventBasicInformationService(CheckStaffPermissionUseCase checkStaffPermissionUseCase,
             RecordStaffOperationUseCase recordStaffOperationUseCase, StaffAccountRepository staffAccountRepository,
             OrganizerRepository organizerRepository, EventRepository eventRepository, EventCategoryRepository categoryRepository,
-            EventPosterStoragePort posterStorage, Clock clock) {
+            EventPosterStoragePort posterStorage, EventChangeHistoryRecorder historyRecorder, Clock clock) {
         this.checkStaffPermissionUseCase = checkStaffPermissionUseCase;
         this.recordStaffOperationUseCase = recordStaffOperationUseCase;
         this.staffAccountRepository = staffAccountRepository;
@@ -59,21 +65,24 @@ public class SaveEventBasicInformationService implements SaveEventBasicInformati
         this.eventRepository = eventRepository;
         this.categoryRepository = categoryRepository;
         this.posterStorage = posterStorage;
+        this.historyRecorder = historyRecorder;
         this.clock = clock;
     }
 
     @Override
     @Transactional
     public EventWizardResult save(SaveEventBasicInformationCommand command) {
-        Instant now = clock.instant();
         StaffPermissionResult permission = EventEditingLocks.lockOrganizer(checkStaffPermissionUseCase,
                 staffAccountRepository, organizerRepository,
                 new CheckStaffPermissionQuery(command.actingStaff(), StaffAction.EDIT_EVENT));
         Event event = EventEditingLocks.lockEvent(eventRepository, permission, command.eventId());
+        Instant now = clock.instant();
         EventBasicInformation basicInformation = command.basicInformation().toBasicInformation(categoryRepository.loadCatalog());
+        EventBasicInformation before = event.basicInformation();
 
         if (event.saveBasicInformationStep(basicInformation, now)) {
             eventRepository.save(event);
+            historyRecorder.record(permission, command.eventId(), EventChangeHistory.basicInformationVersions(event, before), now);
             recordStaffOperationUseCase.record(new RecordStaffOperationCommand(permission, StaffOperationTargetKind.EVENT,
                     command.eventId(), OPERATION_SUMMARY, now));
         }

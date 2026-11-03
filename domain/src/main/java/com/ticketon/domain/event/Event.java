@@ -53,8 +53,9 @@ import java.util.Set;
  * 상태 이름이 아니라 <b>예매가 한 번이라도 열렸는지</b>로 정한다({@link #hasBookingOpened}) — 판매 대기에서 관리자 조치로 멈춘 판매 중단은 예매가
  * 열린 적이 없어 판매 대기와 같다. 이 판정은 저장된 상태로 하므로, 시간이 움직이는 상태의 행사는 먼저 {@link #advanceByTime}으로 지금 시각을
  * 반영한다. 위저드 단계 저장({@link #saveBasicInformationStep}, {@link #saveBookingStep}, 구역 · 입구 저장)은 바뀐 항목마다, 포스터
- * 바꾸기({@link #changePoster})는 포스터에 이 판정을 건다. 낱낱의 수정 메서드(기본 정보 · 공개 수준 · 예매 설정 · 취소 규정)에 이 판정을 거는 일과 제목 · 소개 · 포스터의 변경
- * 이력은 수정 유스케이스가 한다(#65, #46).
+ * 바꾸기({@link #changePoster})는 포스터에 이 판정을 건다. 낱낱의 수정 메서드(기본 정보 · 공개 수준 · 예매 설정 · 취소 규정)에 이 판정을 거는 일은
+ * 수정 유스케이스가 한다(#65). 제목 · 소개 · 포스터 · 회차 출연의 변경 이력은 수정 유스케이스가 바꾸기 전 값과 바꾼 행사로
+ * {@link EventChangeHistory}에 물어 쌓는다.
  * <p>
  * <b>삭제</b>는 상태가 아니라 팔린 표나 초대권이 있었는지로 정한다({@link #requireDeletable}). 누가 지울 수 있는지는 판매를 시작했는지로 갈린다
  * ({@link #deleteAction}).
@@ -231,7 +232,7 @@ public final class Event {
      *       지금으로 한다. 새로 올린 포스터는 늘 새 열쇠라 늘 바뀐 것이다.</li>
      * </ol>
      * {@link #requireEditable}처럼 저장된 상태로 판정하므로, 시간이 움직이는 상태의 행사는 먼저 {@link #advanceByTime}으로 지금 시각을 반영한다.
-     * 제목 · 소개 · 포스터의 변경 이력은 변경 이력 기능이 남긴다(#46).
+     * 판매를 시작한 뒤의 포스터 변경 이력은 유스케이스가 바꾸기 전 포스터로 쌓는다({@link EventChangeHistory#posterVersion}).
      *
      * @param newPoster 새로 올린 포스터 — 새로 붙인 열쇠({@link EventPoster#issue})
      * @param now       올린 시각
@@ -437,8 +438,9 @@ public final class Event {
 
     /**
      * 위저드 2단계에서 회차의 출연을 바꾼다(docs/02 "출연 (선택)"). 바뀔 때만 출연의 수정 범위({@link EventEditTarget#PERFORMERS})를 확인한다 — 제목
-     * · 소개 · 포스터와 같아 예매가 열린 뒤에도 고친다. 출연 칸을 고치는 것만으로는 출연자 변경 알림이 되지 않는다. 변경 이력은 #46이 남긴다. 진행
-     * 단계 · 마지막 수정 시각은 {@link #changeSessionDateTime}과 같다.
+     * · 소개 · 포스터와 같아 예매가 열린 뒤에도 고친다. 출연 칸을 고치는 것만으로는 출연자 변경 알림이 되지 않는다. 판매를 시작한 뒤의 변경
+     * 이력은 유스케이스가 바꾸기 전 출연으로 쌓는다({@link EventChangeHistory#performersVersion}). 진행 단계 · 마지막 수정 시각은
+     * {@link #changeSessionDateTime}과 같다.
      *
      * @param newPerformers 새 출연. 지우려면 null
      * @return 바뀐 것(출연 · 진행 단계)이 있는지

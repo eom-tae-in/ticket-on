@@ -63,6 +63,8 @@ final class EventWizardScene {
     final FakeFloorPlanRepository floorPlanRepository = new FakeFloorPlanRepository();
     final FakeEventEntranceRepository entranceRepository = new FakeEventEntranceRepository();
     final FakeEventScheduleRepository scheduleRepository = new FakeEventScheduleRepository();
+    final FakeEventChangeHistoryRepository historyRepository = new FakeEventChangeHistoryRepository(rowLockLog);
+    final RecordingSendNotificationUseCase sendNotificationUseCase = new RecordingSendNotificationUseCase();
     final RecordingEventPublisher eventPublisher = new RecordingEventPublisher();
     final RecordingStaffOperationRecordRepository recordRepository = new RecordingStaffOperationRecordRepository();
     final FixedTokenGenerator tokenGenerator = new FixedTokenGenerator(FIRST_ADDRESS, SECOND_ADDRESS);
@@ -126,7 +128,17 @@ final class EventWizardScene {
 
     SaveEventBasicInformationService saveEventBasicInformationService() {
         return new SaveEventBasicInformationService(checkStaffPermissionService, recordStaffOperationService,
-                staffAccountRepository, organizerRepository, eventRepository, categoryRepository, posterStorage, clock);
+                staffAccountRepository, organizerRepository, eventRepository, categoryRepository, posterStorage, historyRecorder(),
+                clock);
+    }
+
+    /** 변경 이력 쌓기 — 바꾼 운영진의 닉네임은 계정 저장소에서, 주최자명은 주최자 저장소에서 읽고 알림은 모아 둔다. */
+    EventChangeHistoryRecorder historyRecorder() {
+        return new EventChangeHistoryRecorder(historyRepository, staffAccountRepository, organizerRepository, sendNotificationUseCase);
+    }
+
+    RecordChangeHistoryFirstVersionService recordChangeHistoryFirstVersionService() {
+        return new RecordChangeHistoryFirstVersionService(eventRepository, scheduleRepository, historyRepository, historyRecorder());
     }
 
     SaveEventBookingSettingsService saveEventBookingSettingsService() {
@@ -141,7 +153,7 @@ final class EventWizardScene {
     /** 포스터 열쇠는 넘긴 생성기로 붙인다 — 행사 공개 주소의 생성기와 따로 둔다. */
     UploadEventPosterService uploadEventPosterService(TokenGenerator posterTokenGenerator) {
         return new UploadEventPosterService(checkStaffPermissionService, recordStaffOperationService, staffAccountRepository,
-                organizerRepository, eventRepository, posterStorage, posterTokenGenerator, clock);
+                organizerRepository, eventRepository, posterStorage, posterTokenGenerator, historyRecorder(), clock);
     }
 
     /** 일정 편집 유스케이스들이 함께 쓰는 차례 — 권한 · 잠금 · 저장 · 알림 · 조작 기록. */
@@ -171,7 +183,7 @@ final class EventWizardScene {
     }
 
     ChangeSessionPerformersService changeSessionPerformersService() {
-        return new ChangeSessionPerformersService(scheduleEditing());
+        return new ChangeSessionPerformersService(scheduleEditing(), historyRecorder());
     }
 
     ChangeSessionPriceAdjustmentService changeSessionPriceAdjustmentService() {

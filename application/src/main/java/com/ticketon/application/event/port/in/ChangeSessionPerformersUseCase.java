@@ -12,8 +12,8 @@ import com.ticketon.domain.organizer.StaffAction;
  * 회차 출연 — 들어오는 포트. 회차마다 누가 나오는지 적는다(docs/02 "출연 (선택)"). 출연 칸을 고치는 것만으로는 출연자 변경 알림이 되지 않는다.
  * 운영진 누구나 한다({@link StaffAction#EDIT_EVENT}).
  * <p>
- * 수정 범위 확인 · 진행 단계 · 마지막 수정 시각은 {@link Event#changeSessionPerformers}가 정한다. 같은 값이면 아무것도 바뀌지 않는다. 변경 이력은
- * #46이 남긴다. 바뀌면 운영진 조작 기록에 남는다.
+ * 수정 범위 확인 · 진행 단계 · 마지막 수정 시각은 {@link Event#changeSessionPerformers}가 정한다. 같은 값이면 아무것도 바뀌지 않는다. 판매를
+ * 시작한 뒤 바뀌면 그 회차 출연의 변경 이력에 새 버전이 쌓인다(작성 중에는 쌓지 않는다). 바뀌면 운영진 조작 기록에 남는다.
  */
 public interface ChangeSessionPerformersUseCase {
 

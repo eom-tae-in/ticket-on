@@ -77,10 +77,10 @@ class EventScheduleEditing {
      * @throws com.ticketon.domain.error.NotFoundException         없거나 지운 행사, 다른 주최자의 행사면
      */
     LockedSchedule lock(ActingStaff actingStaff, long eventId) {
-        Instant now = clock.instant();
         StaffPermissionResult permission = EventEditingLocks.lockOrganizer(checkStaffPermissionUseCase, staffAccountRepository,
                 organizerRepository, new CheckStaffPermissionQuery(actingStaff, StaffAction.EDIT_EVENT));
         Event event = EventEditingLocks.lockEvent(eventRepository, permission, eventId);
+        Instant now = clock.instant();
         return new LockedSchedule(permission, event, scheduleRepository.findByEventId(eventId), now);
     }
 
@@ -91,8 +91,7 @@ class EventScheduleEditing {
      */
     EventScheduleResult edit(ActingStaff actingStaff, long eventId, ScheduleEdit edit) {
         LockedSchedule locked = lock(actingStaff, eventId);
-        EventSchedule schedule = locked.schedule().orElseThrow(
-                () -> new RuleViolationException(EventErrorCode.SESSION_MODE_NOT_CHOSEN, "행사 " + eventId));
+        EventSchedule schedule = locked.requireSchedule();
         Set<Long> sessionIdsBefore = ScheduleResults.sessionIdsOf(schedule);
         Optional<String> summary = edit.apply(locked.event(), schedule, locked.now());
         if (summary.isEmpty()) {
@@ -137,6 +136,16 @@ class EventScheduleEditing {
             Objects.requireNonNull(event, "event");
             Objects.requireNonNull(schedule, "schedule");
             Objects.requireNonNull(now, "now");
+        }
+
+        /**
+         * 일정이 있어야 하는 편집의 일정.
+         *
+         * @throws RuleViolationException 회차 방식을 아직 고르지 않았으면({@link EventErrorCode#SESSION_MODE_NOT_CHOSEN})
+         */
+        EventSchedule requireSchedule() {
+            return schedule.orElseThrow(() -> new RuleViolationException(EventErrorCode.SESSION_MODE_NOT_CHOSEN,
+                    "행사 " + event.id().orElseThrow()));
         }
     }
 
