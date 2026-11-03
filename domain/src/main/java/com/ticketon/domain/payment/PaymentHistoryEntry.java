@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 
@@ -105,6 +106,19 @@ public final class PaymentHistoryEntry {
     /** 대상 티켓 id들, 티켓 순번 순서대로. */
     public List<Long> ticketIds() {
         return ticketIds;
+    }
+
+    /**
+     * 목록에서 금액 옆에 붙는 설명 — "2매 취소", "R석 12열 10번 변경", "5/4 그날 몫"({@link PaymentHistoryCause#describe}). 저장하지 않고
+     * 그릴 때마다 대상 티켓의 지금 표기로 만든다.
+     *
+     * @param source 그 예매 건의 티켓 표기 · 받은 할인 · 회차 날짜
+     * @return 설명. 할인 없는 예매 결제는 비어 있다
+     * @throws IllegalArgumentException 이 줄의 설명에 쓰는 값이 source에 빠졌으면
+     */
+    public Optional<String> description(PaymentHistoryDescriptionSource source) {
+        Objects.requireNonNull(source, "source");
+        return cause.describe(ticketIds, source);
     }
 
     private static void requireTicketIds(List<Long> ticketIds) {

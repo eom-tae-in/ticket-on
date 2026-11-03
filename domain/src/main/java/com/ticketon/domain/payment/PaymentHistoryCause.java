@@ -2,7 +2,10 @@ package com.ticketon.domain.payment;
 
 import com.ticketon.domain.ticket.TicketCancellationReason;
 import com.ticketon.domain.ticket.TicketParentKind;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * 내역 한 줄이 생긴 까닭 — 어떤 일로 돈이 움직였나. 종류({@link PaymentHistoryEntryKind})가 "돈이 어느 쪽으로 움직였나"라면 까닭은 "왜"다.
@@ -56,12 +59,45 @@ public sealed interface PaymentHistoryCause {
     /** 이 까닭으로 남을 수 있는 종류의 줄인지. */
     boolean allows(PaymentHistoryEntryKind kind);
 
+    /**
+     * 이 까닭으로 남은 줄의 설명 — 내역 목록에서 금액 옆에 붙는 한 줄(docs/08 "결제·환불 내역"). 저장하지 않고 그릴 때마다 대상 티켓의 지금
+     * 표기와 회차의 지금 날짜로 만든다.
+     * <table>
+     *   <caption>설명</caption>
+     *   <tr><th>까닭</th><th>설명</th></tr>
+     *   <tr><td>예매 결제</td><td>받은 할인 "조기예매 2매 · 쿠폰 1매", 할인이 없으면 없음</td></tr>
+     *   <tr><td>변경 결제</td><td>새 티켓 표기 "A석 15열 3번", 할인을 받았으면 " · 쿠폰 1매"</td></tr>
+     *   <tr><td>좌석 변경 환불</td><td>기존 티켓 표기 + " 변경" — "R석 12열 10번 변경"</td></tr>
+     *   <tr><td>관객 취소 환불</td><td>"2매 취소"</td></tr>
+     *   <tr><td>회차 취소 · 행사 취소 · 공연 중단 · 관리자 조치 환불</td><td>"2매 취소 (회차 취소)"</td></tr>
+     *   <tr><td>결제 오류 환불</td><td>"결제 오류 환불"</td></tr>
+     *   <tr><td>묶음권 그날 몫</td><td>"5/4 그날 몫"</td></tr>
+     *   <tr><td>공연 지연</td><td>"공연 지연 환급"</td></tr>
+     * </table>
+     * 배상 줄은 함께 나간 환불 줄과 같은 설명이다 — 종류 칸의 "배상"이 둘을 가른다.
+     * <p>
+     * 문서 예시는 "2매 취소", "12열 10번 변경", "15열 3번", "5/4 그날 몫", "공연 지연 환급", "결제 오류 환불"이다. 확인 필요 (#223) — 티켓 표기는
+     * 예매 카드와 같이 구역 이름까지 붙이고("R석 12열 10번 변경"), 여러 장은 쉼표로 잇는다. 관객 취소가 아닌 취소는 사유를 괄호로 붙이고, 적용 할인은
+     * 결제 줄에 종류별 장수로 붙인다. 이 모양은 문서에 없어 지었다.
+     *
+     * @param ticketIds 그 줄의 대상 티켓 id, 순번 순서대로
+     * @return 설명. 할인 없는 예매 결제는 비어 있다
+     * @throws IllegalArgumentException 설명에 쓰는 티켓 표기 · 할인 종류 · 회차 날짜가 빠졌으면
+     */
+    Optional<String> describe(List<Long> ticketIds, PaymentHistoryDescriptionSource source);
+
     /** 예매 결제 — 내역의 첫 줄. 예매 건에 결제는 처음 한 번이고, 그 뒤의 결제는 모두 변경 결제다. */
     record BookingPayment() implements PaymentHistoryCause {
 
         @Override
         public boolean allows(PaymentHistoryEntryKind kind) {
             return kind == PaymentHistoryEntryKind.PAYMENT;
+        }
+
+        /** 받은 할인 — "조기예매 2매 · 쿠폰 1매". 할인이 없으면 비어 있다(docs/08 예시 "3/1 결제 165,000원"). */
+        @Override
+        public Optional<String> describe(List<Long> ticketIds, PaymentHistoryDescriptionSource source) {
+            return source.appliedDiscountSummaryOf(ticketIds);
         }
     }
 
@@ -71,6 +107,15 @@ public sealed interface PaymentHistoryCause {
         @Override
         public boolean allows(PaymentHistoryEntryKind kind) {
             return kind == PaymentHistoryEntryKind.PAYMENT;
+        }
+
+        /** 새 티켓 표기 — "A석 15열 3번". 할인을 받았으면 "A석 15열 3번 · 쿠폰 1매"(옮겨 온 쿠폰, docs/08 "새 티켓에 쿠폰을 적용하는 법"). */
+        @Override
+        public Optional<String> describe(List<Long> ticketIds, PaymentHistoryDescriptionSource source) {
+            List<String> parts = new ArrayList<>();
+            parts.add(source.labelsOf(ticketIds));
+            source.appliedDiscountSummaryOf(ticketIds).ifPresent(parts::add);
+            return Optional.of(PaymentHistoryDescriptionSource.joinParts(parts));
         }
     }
 
@@ -100,6 +145,19 @@ public sealed interface PaymentHistoryCause {
                 case COMPENSATION -> isCompensable();
                 case PAYMENT, DELAY_REFUND -> false;
             };
+        }
+
+        /** "R석 12열 10번 변경" · "2매 취소" · "2매 취소 (회차 취소)" · "결제 오류 환불". */
+        @Override
+        public Optional<String> describe(List<Long> ticketIds, PaymentHistoryDescriptionSource source) {
+            return Optional.of(switch (reason) {
+                case SEAT_CHANGE -> source.labelsOf(ticketIds) + " 변경";
+                case AUDIENCE_CANCELLATION -> ticketIds.size() + "매 취소";
+                case PAYMENT_ERROR_REFUND -> reason.label();
+                case SESSION_CANCELLED, EVENT_CANCELLED, PERFORMANCE_STOPPED, ADMIN_ACTION ->
+                        ticketIds.size() + "매 취소 (" + reason.label() + ")";
+                case INVITATION_RECALLED -> throw new IllegalStateException("초대권 회수는 내역의 까닭이 아닙니다");
+            });
         }
 
         /** 좌석 변경인지 — 환불 줄 바로 뒤에 변경 결제 줄이 붙는다. */
@@ -138,6 +196,12 @@ public sealed interface PaymentHistoryCause {
         public boolean allows(PaymentHistoryEntryKind kind) {
             return kind == PaymentHistoryEntryKind.REFUND || kind == PaymentHistoryEntryKind.COMPENSATION;
         }
+
+        /** "5/4 그날 몫" — 회차의 지금 날짜. */
+        @Override
+        public Optional<String> describe(List<Long> ticketIds, PaymentHistoryDescriptionSource source) {
+            return Optional.of(source.monthDayOf(sessionId) + " 그날 몫");
+        }
     }
 
     /**
@@ -157,6 +221,12 @@ public sealed interface PaymentHistoryCause {
         @Override
         public boolean allows(PaymentHistoryEntryKind kind) {
             return kind == PaymentHistoryEntryKind.DELAY_REFUND;
+        }
+
+        /** "공연 지연 환급"(docs/08 "공연 지연" — 결제·환불 내역에 "공연 지연 환급" 한 줄). */
+        @Override
+        public Optional<String> describe(List<Long> ticketIds, PaymentHistoryDescriptionSource source) {
+            return Optional.of("공연 지연 환급");
         }
     }
 }

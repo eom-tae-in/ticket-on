@@ -9,6 +9,10 @@
  * {@link com.ticketon.domain.payment.PaymentHistoryEntryKind}) · 까닭({@link com.ticketon.domain.payment.PaymentHistoryCause}) · 금액 ·
  * 시각 · 대상 티켓들을 갖는다. 실 결제액은 결제 합 − 환불 합이고, 지연 환급은 환불처럼 빼고 배상은 빼지 않는다.
  * <p>
+ * 줄의 설명("2매 취소", "R석 12열 10번 변경", "5/4 그날 몫", 적용 할인)은 글자로 저장하지 않고, 그릴 때마다 대상 티켓의 지금 표기 · 받은 할인 ·
+ * 회차의 지금 날짜({@link com.ticketon.domain.payment.PaymentHistoryDescriptionSource})로 까닭이 만든다 — 티켓 표기를 글자로 복사하지 않는
+ * 원칙과 같다(docs/99 B "티켓에 좌석 표기를 글자로 복사").
+ * <p>
  * <b>변경은 환불 한 줄 + 결제 한 줄</b>이다. 티켓에 "변경됨" 상태나 "이전 티켓" 사슬을 두지 않고, 예매 건과 티켓을 잇는 이력은 이 내역이 갖는다
  * (docs/99 B "티켓 변경 사슬"). 화면 이름은 "결제·환불 내역", 개별 항목은 "결제 상세"이고 <b>"영수증"이라 부르지 않는다</b> — 세금계산서 ·
  * 현금영수증은 만들지 않는다(docs/99 B "세금계산서·현금영수증·자동 송금").
