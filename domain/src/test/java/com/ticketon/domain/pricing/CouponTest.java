@@ -136,6 +136,17 @@ class CouponTest {
         }
 
         @Test
+        @DisplayName("이 행사의 코드인지 먼저 본다 — 다른 행사 · 기간 밖이면 소진되거나 이미 썼어도 통일 문구라 다른 행사 쿠폰이 드러나지 않는다 (docs/05 \"잘못된 코드\")")
+        void eventAndPeriodCheckedBeforeUsage() {
+            Coupon exhausted = coupon(1, true, 1);
+
+            assertRuleViolation(() -> exhausted.use(OTHER_EVENT_ID, MARCH_5, true), PricingErrorCode.COUPON_NOT_USABLE_FOR_EVENT);
+            assertRuleViolation(() -> exhausted.use(EVENT_ID, MARCH_10, true), PricingErrorCode.COUPON_NOT_USABLE_FOR_EVENT);
+            assertRuleViolation(() -> coupon(100, true, 1).use(OTHER_EVENT_ID, MARCH_5, true), PricingErrorCode.COUPON_NOT_USABLE_FOR_EVENT);
+            assertThat(exhausted.usedCount()).isEqualTo(1);
+        }
+
+        @Test
         @DisplayName("묶음권에도 쓴다 — 3일권 94,500원 − 5,000원 = 89,500원 (docs/05 \"묶음권에도 쓸 수 있습니다\", docs/08)")
         void bundle() {
             Coupon coupon = Coupon.restore(100L, EVENT_ID, SPRING20, new CouponTerms(FIVE_THOUSAND_WON, 100, true, MARCH_1_TO_10), 0);

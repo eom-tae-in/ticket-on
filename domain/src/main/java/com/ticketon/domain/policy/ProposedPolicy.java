@@ -34,8 +34,8 @@ import java.time.LocalTime;
  *   <li>확인 필요 (#53) — 재고 오류 문구: {@code domain.inventory.InventoryErrorCode}에서 SEAT_ALREADY_TAKEN(docs/06 원문)과 찾을 수 없음 세
  *       가지(행사 오류와 같은 문구) 밖의 문구는 모두 지었다. 경우 자체가 문서에 없는 코드에는 따로 확인 필요 (#53)를 달았다 — 판매 제외 · 초대권
  *       좌석을 관객이 잡을 때 "방금 다른 분이 선택했습니다"와 갈라 "판매하지 않는 좌석입니다"로 알리는 것({@code SEAT_NOT_FOR_SALE}) 포함.</li>
- *   <li>확인 필요 (#223) — 조기예매 할인은 정액 · 정률로 받고 조기예매가(고정가)는 따로 두지 않는다(docs/15 "1일권 30,000원 · 3일권 85,000원"은
- *       상품별로 켠 정액 · 정률 조기예매 둘로 만든다): {@code domain.pricing.Discount}.</li>
+ *   <li>확인 필요 (#223) — 조기예매 · 쿠폰을 만들고 고칠 때의 오류 문구(할인 값 범위, 0원이 되는 할인, 마감된 조기예매, 쓴 수 아래로 줄이기).
+ *       경우는 docs/99 C · E가 정했고 문구만 지었다: {@code domain.pricing.PricingErrorCode}.</li>
  * </ul>
  */
 public final class ProposedPolicy {
