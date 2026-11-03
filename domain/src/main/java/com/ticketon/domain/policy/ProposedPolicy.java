@@ -49,6 +49,8 @@ import java.time.LocalTime;
  *       오류 문구. 경우는 docs/05가 정했고 문구만 지었다: {@code domain.pricing.PricingErrorCode}.</li>
  *   <li>확인 필요 (#223) — 묶음권 할인율을 정할 때 구역마다 가장 싼 회차 조합에 적용해 0원이 되면 받지 않는다(조기예매 · 쿠폰의 "가장 낮은 가격에
  *       적용해도 1원 이상"을 묶음권에도 썼다, docs/99 C "할인 값"): {@code domain.pricing.BundleProduct#create}.</li>
+ *   <li>확인 필요 (#223) — 묶음권 목록의 시작 가격은 매진 여부를 보지 않는다(한 구역만 매진된 회차도 조합에 들어감):
+ *       {@code domain.pricing.BundleProduct#startingPrice}.</li>
  * </ul>
  */
 public final class ProposedPolicy {

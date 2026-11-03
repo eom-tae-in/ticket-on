@@ -200,7 +200,10 @@ public final class BundleProduct {
      * 가장 싼 조합 15,000 + 15,000 + 15,000 = 45,000원 → 41,800원~
      * </blockquote>
      * 관객이 고를 수 있는 회차만 본다 — 취소되지 않았고, 부르는 쪽이 넘긴 예매할 수 있는 회차. 한 날짜라도 고를 회차가 없는 구역은 빼고, 어느 구역도
-     * 조합이 없으면 비어 있다(그 묶음권은 지금 살 수 없다).
+     * 조합이 없으면 비어 있다(그 묶음권은 지금 살 수 없다). 도면에서 지워진 구역도 지워진 날짜처럼 뺀다.
+     * <p>
+     * 확인 필요 (#223) — 매진 여부는 보지 않는다. 한 구역만 매진된 회차도 그 구역 조합에 들어간다(넘기는 회차는 모든 구역에 같다). docs/05 "가장 싼
+     * 조합 기준"은 매진을 말하지 않는다.
      *
      * @param bookableSessionIds 지금 예매할 수 있는 회차 — 그 회차의 예매가 마감되지 않은 회차. 부르는 쪽이 고른다
      * @return 시작 가격. 살 수 있는 조합이 없으면 비어 있다
@@ -210,8 +213,8 @@ public final class BundleProduct {
         Set<Long> bookable = Set.copyOf(Objects.requireNonNull(bookableSessionIds, "bookableSessionIds"));
         Predicate<EventSession> selectable = session -> !session.isCancelled()
                 && session.id().isPresent() && bookable.contains(session.id().getAsLong());
-        return terms.zoneIds().stream()
-                .map(floorPlan::zone)
+        return floorPlan.zones().stream()
+                .filter(zone -> zone.id().isPresent() && terms.zoneIds().contains(zone.id().getAsLong()))
                 .map(zone -> cheapestDayPrices(terms, zone, schedule, selectable))
                 .flatMap(Optional::stream)
                 .map(dayPrices -> dayPrices.bundlePrice(terms.discountRate()))

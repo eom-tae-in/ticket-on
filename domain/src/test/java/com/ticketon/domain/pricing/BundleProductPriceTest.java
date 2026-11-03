@@ -34,6 +34,7 @@ import com.ticketon.domain.error.ErrorCode;
 import com.ticketon.domain.error.NotFoundException;
 import com.ticketon.domain.error.RuleViolationException;
 import com.ticketon.domain.event.EventErrorCode;
+import com.ticketon.domain.event.FloorPlan;
 import com.ticketon.domain.policy.Percent;
 import java.util.List;
 import java.util.Set;
@@ -195,6 +196,20 @@ class BundleProductPriceTest {
             BundleProduct product = festivalProduct(terms(Set.of(MAY_3, MAY_4, 599L), Set.of(STANDING_A), 7));
 
             assertThat(product.startingPrice(festivalSchedule(), festivalFloorPlan(), ALL_FESTIVAL_SESSIONS)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("묶은 구역이 도면에서 지워지면 그 구역만 뺀다 — 스탠딩B를 지우면 스탠딩A 130,200원, 둘 다 지우면 조합이 없다")
+        void removedZone() {
+            BundleProduct product = festivalProduct(terms(Set.of(MAY_3, MAY_4, MAY_5), Set.of(STANDING_A, STANDING_B), 7));
+            FloorPlan withoutStandingB = festivalFloorPlan();
+            withoutStandingB.removeZone(STANDING_B);
+
+            assertThat(product.startingPrice(festivalSchedule(), withoutStandingB, ALL_FESTIVAL_SESSIONS)).contains(Money.of(130_200));
+
+            withoutStandingB.removeZone(STANDING_A);
+
+            assertThat(product.startingPrice(festivalSchedule(), withoutStandingB, ALL_FESTIVAL_SESSIONS)).isEmpty();
         }
     }
 
