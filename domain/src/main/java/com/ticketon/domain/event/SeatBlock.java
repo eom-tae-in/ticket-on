@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.function.LongUnaryOperator;
 
 /**
  * 블록 — 좌석 번호를 유일하게 만드는 덩어리(docs/02 "블록", docs/14 "1층 — 도면"). 블록이 둘인데 이름이 없으면 양쪽에 "1열 7번"이 생겨 구분이
@@ -65,6 +66,17 @@ public final class SeatBlock {
         }
         Objects.requireNonNull(seats, "seats");
         return new SeatBlock(id, name, size, position, angle, seats);
+    }
+
+    /**
+     * 이 블록을 좌석과 함께 복사한 새 블록 — 이름 · 크기 · 위치 · 각도가 같고, 좌석은 격자의 자리 · 번호 그대로 복사한다({@link Seat#copy}). 블록 ·
+     * 좌석 모두 id가 없다(행사 복제, {@link FloorPlan#copyBlocksFrom}).
+     *
+     * @param copiedZoneIdOf 원본 구역 id → 복사본 도면에서 그 구역을 복사한 구역의 id
+     */
+    SeatBlock copy(LongUnaryOperator copiedZoneIdOf) {
+        List<Seat> copiedSeats = seats.stream().map(seat -> seat.copy(copiedZoneIdOf)).toList();
+        return new SeatBlock(null, name, size, position, angle, copiedSeats);
     }
 
     /** 저장 전이면 비어 있다. */

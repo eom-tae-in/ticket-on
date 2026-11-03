@@ -20,6 +20,9 @@ import java.util.Objects;
  */
 public record EventTitle(String value) {
 
+    /** 복제본 제목의 뒤에 붙이는 말 — "○○공연 (복사본)"(docs/04 "행사 복제"). */
+    public static final String COPY_SUFFIX = " (복사본)";
+
     public EventTitle {
         Objects.requireNonNull(value, "value");
         value = normalize(value);
@@ -38,6 +41,22 @@ public record EventTitle(String value) {
      */
     public static EventTitle of(String input) {
         return new EventTitle(input);
+    }
+
+    /**
+     * 이 제목으로 복제한 행사의 제목 — "○○공연 (복사본)"(docs/04 "행사 복제"). 복사본을 다시 복제하면 "(복사본)"이 한 번 더 붙는다.
+     * <p>
+     * 확인 필요 (#223) — 붙인 제목이 {@value QuantityPolicy#EVENT_TITLE_MAXIMUM_LENGTH}자를 넘으면 원래 제목의 뒤를 잘라 "(복사본)"이 들어갈
+     * 자리를 만든다. 문서에 없는 경우라, 복제를 막지 않고 복사본임을 제목에 남기는 쪽으로 했다. 자른 끝의 공백은 걷는다. 주최자가 복제본의 제목을
+     * 고친다.
+     */
+    public EventTitle copyTitle() {
+        int roomForOriginal = QuantityPolicy.EVENT_TITLE_MAXIMUM_LENGTH - COPY_SUFFIX.codePointCount(0, COPY_SUFFIX.length());
+        String original = value;
+        if (original.codePointCount(0, original.length()) > roomForOriginal) {
+            original = original.substring(0, original.offsetByCodePoints(0, roomForOriginal)).stripTrailing();
+        }
+        return new EventTitle(original + COPY_SUFFIX);
     }
 
     /** {@link #of}로 만들 수 있는 값인지. 입력 검증에서 같은 규칙을 쓰려고 둔다. */

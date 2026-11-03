@@ -144,6 +144,44 @@ public final class Event {
     }
 
     /**
+     * 이 행사를 복제한 새 행사를 만든다 — 정기공연 주최자가 매번 처음부터 만들지 않고, 날짜만 바꾸면 바로 판매를 시작할 수 있게 한다(docs/04 "행사
+     * 복제"). <b>상태와 상관없이 복제한다</b> — 종료된 행사든 진행 중인 행사든 된다. 확인 필요 (#223) — 작성 중 행사는 문서가 말하지 않지만 막을
+     * 까닭이 없어 함께 받는다.
+     * <ul>
+     *   <li><b>작성 중으로 시작한다.</b> 제목은 "○○공연 (복사본)"이다({@link EventTitle#copyTitle}). 판매 중단 이력 · 예매가 열린 시각은 없다.</li>
+     *   <li><b>가져오는 것</b> — 나머지 기본 정보(유형 · 카테고리 · 소개 · 장소 · 상세 안내 · 지도 링크 · 공개용 연락처), 예매 설정(예매 종료 ·
+     *       검표 시작의 앞섬, 매수 제한, 회차 선택 제약, 재입장, 연령 제한), 취소 규정 조정. 도면(구역 · 블록 · 좌석 · 무대)과 입구 목록은 도면
+     *       ({@link FloorPlan#copyZonesFor})과 입구 목록({@link EventEntrances#copyFor})이 복사한다.</li>
+     *   <li><b>가져오지 않는 것</b> — 날짜 · 회차(회차 가격 조정 · 출연 포함 — 복제본에는 일정이 없다), 공개 수준(공개로 시작한다 — 비공개를
+     *       물려받으면 주최자가 깜빡하고 그대로 열어 아무도 못 찾는 행사가 된다), 예매 오픈 시각({@link BookingSettings#withoutBookingOpenTime}).
+     *       예매 기록 · 초대권 · 검표 계정 · 조기예매 · 쿠폰 · 묶음권은 행사가 갖지 않아 처음부터 없다.</li>
+     *   <li>확인 필요 (#223) — <b>포스터는 가져오지 않는다.</b> docs/04의 "가져오는 것"에 없고, 포스터 열쇠는 행사마다 하나라(두 행사가 같은 파일을
+     *       가리키지 않는다) 가져오려면 파일을 복사해야 한다. 판매를 시작하기 전에 새로 올린다({@link #isBasicInformationComplete}).</li>
+     *   <li>확인 필요 (#223) — <b>진행 단계는 1단계다.</b> 날짜 · 회차를 가져오지 않아 2단계가 비어 있으므로, 작성 중 행사 목록의 [이어서 작성]이
+     *       2단계를 연다(docs/04 "작성 중 행사 관리").</li>
+     * </ul>
+     * 복제한 뒤로 원본과 복제본은 아무 관계가 없다 — 공개 주소는 새로 발급한 것이고, 원본은 바뀌지 않는다.
+     *
+     * @param newPublicAddress 복제본에 새로 발급한 공개 주소 — 서비스가 TokenGenerator로 만든 값으로 발급한다
+     * @param now              복제하는 시각 — 복제본의 마지막 수정 시각
+     * @return 복제본(아직 id 없음)
+     * @throws IllegalArgumentException 이 행사의 공개 주소를 넘기면
+     */
+    public Event duplicate(EventPublicAddress newPublicAddress, Instant now) {
+        Objects.requireNonNull(newPublicAddress, "newPublicAddress");
+        Objects.requireNonNull(now, "now");
+        if (newPublicAddress.equals(publicAddress)) {
+            throw new IllegalArgumentException("복제본은 새 공개 주소를 받습니다: 행사 " + id);
+        }
+        EventBasicInformation copiedInformation = new EventBasicInformation(basicInformation.title().copyTitle(),
+                basicInformation.type(), basicInformation.category(), basicInformation.introduction(), basicInformation.venue(),
+                basicInformation.venueDetails(), basicInformation.mapLink(), basicInformation.publicContact());
+        return new Event(null, organizerId, newPublicAddress, copiedInformation, null, EventVisibilitySetting.publicByDefault(),
+                bookingSettings.withoutBookingOpenTime(), cancellationPolicy, EventStatus.DRAFT, null, List.of(),
+                EventWizardStep.BASIC_INFORMATION, now);
+    }
+
+    /**
      * 위저드 1단계(기본 정보)를 저장한다 — 단계를 넘길 때마다 부르는 자동 임시저장이다(docs/03 "임시저장은 자동으로").
      * <ol>
      *   <li><b>바뀐 항목마다 지금 상태의 수정 범위를 확인한다</b>({@link EventBasicInformation#changedEditTargets}, {@link #requireEditable}).

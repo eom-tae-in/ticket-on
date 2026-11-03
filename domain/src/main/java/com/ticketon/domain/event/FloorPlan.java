@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.LongUnaryOperator;
 import java.util.function.Predicate;
 
 /**
@@ -25,7 +26,8 @@ import java.util.function.Predicate;
  * </pre>
  * <b>도면은 행사에 하나이고 회차마다 다를 수 없다</b>(docs/99 B "회차별 도면"). 회차마다 도면이 생기면 구역 기본가도 회차 수만큼 생겨 "기본가는
  * 하나, 회차에는 조정값만"(docs/05)이 성립하지 않는다. 판매 상태 · 판매 제외처럼 회차마다 다른 것은 재고가 회차 × 좌석으로 갖는다(#53). 다른 행사와
- * 도면을 같이 쓰지 않는다 — 행사를 복제하면 통째로 복사되고 그 뒤로 아무 관계가 없다(docs/02 "도면은 행사마다 따로 갖습니다").
+ * 도면을 같이 쓰지 않는다 — 행사를 복제하면 통째로 복사되고 그 뒤로 아무 관계가 없다(docs/02 "도면은 행사마다 따로 갖습니다",
+ * {@link #copyZonesFor}, {@link #copyBlocksFrom}).
  * <ul>
  *   <li><b>구역</b> — 지정형은 좌석을 배정받고, 수량형은 정원만 있다. <b>수량형 구역에는 블록도 좌석도 없다</b> — 좌석을 배정하려 하면
  *       {@link EventErrorCode#QUANTITY_ZONE_HAS_NO_SEATS}로 막는다. 구역을 지우면 그 구역에 배정했던 좌석은 배정이 풀린다.</li>
@@ -102,6 +104,59 @@ public final class FloorPlan {
             block.seats().forEach(seat -> requireSaved(seat.id().isPresent(), "좌석"));
         });
         return new FloorPlan(eventId, zones, blocks, stagePosition);
+    }
+
+    /**
+     * 행사 복제의 도면 복사 1단계 — 이 도면의 구역과 무대 위치를 복제본 행사의 새 도면으로 복사한다(docs/04 "도면은 통째로 복사됩니다"). 구역은
+     * 종류 · 이름 · 색 · 기본가 · 정원을 그대로 가져오되 새 구역(id 없음)이다 — 원본과 줄을 같이 쓰지 않아, 복제본을 고쳐도 원본은 그대로다
+     * (docs/02 "도면은 행사마다 따로 갖습니다").
+     * <p>
+     * 블록 · 좌석은 아직 담지 않는다. 좌석은 구역을 id로 가리키므로, 새 구역을 저장해 id가 붙은 뒤 2단계({@link #copyBlocksFrom})에서 얹는다. 지운
+     * 구역 · 블록 · 좌석은 도면에 없으므로 복사하지 않는다 — 복제본은 원본의 지금 도면에서 시작한다.
+     *
+     * @param newEventId 복제본 행사의 id
+     * @return 구역 · 무대 위치만 있는 복제본의 도면
+     * @throws IllegalArgumentException 이 도면의 행사 id를 넘기면
+     */
+    public FloorPlan copyZonesFor(long newEventId) {
+        if (newEventId == eventId) {
+            throw new IllegalArgumentException("복제본은 다른 행사입니다: 행사 " + eventId);
+        }
+        return new FloorPlan(newEventId, zones.stream().map(Zone::copy).toList(), List.of(), stagePosition);
+    }
+
+    /**
+     * 행사 복제의 도면 복사 2단계 — 1단계({@link #copyZonesFor})로 복사해 저장한 이 도면에 원본 도면의 블록을 좌석과 함께 복사해 얹는다. 블록은
+     * 이름 · 크기 · 위치 · 각도를, 좌석은 번호 · 구역 배정 · 속성 · 활성을 그대로 가져오고 모두 새 것(id 없음)이다. 좌석이 가리키는 구역은 원본
+     * 구역과 이름 · 종류가 같은 이 도면의 구역이다 — 구역 이름은 도면 안에서 겹치지 않는다. 블록은 원본에서 얹은 순서대로 얹는다.
+     *
+     * @param source 복제하는 원본 도면 — 저장소에서 읽은 것
+     * @throws IllegalStateException 이 도면에 블록이 이미 있거나, 원본 구역과 이름 · 종류가 같은 구역이 이 도면에 없거나 저장 전이면 — 1단계로
+     *                               복사해 저장한 도면에만 부른다
+     */
+    public void copyBlocksFrom(FloorPlan source) {
+        Objects.requireNonNull(source, "source");
+        if (!blocks.isEmpty()) {
+            throw new IllegalStateException("블록이 이미 있는 도면에는 원본의 블록을 복사하지 않습니다: 행사 " + eventId);
+        }
+        Map<Long, Long> copiedZoneIds = new HashMap<>();
+        for (Zone sourceZone : source.zones) {
+            copiedZoneIds.put(sourceZone.id().orElseThrow(), copiedZoneIdOf(sourceZone));
+        }
+        LongUnaryOperator copiedZoneIdOf = sourceZoneId -> Objects.requireNonNull(copiedZoneIds.get(sourceZoneId),
+                () -> "원본 도면에 없는 구역을 가리키는 좌석입니다: 구역 " + sourceZoneId);
+        source.blocks.forEach(block -> blocks.add(block.copy(copiedZoneIdOf)));
+    }
+
+    /** 원본 구역을 1단계에서 복사해 저장한 이 도면의 구역 id. */
+    private long copiedZoneIdOf(Zone sourceZone) {
+        Zone copied = zones.stream()
+                .filter(zone -> zone.name().equals(sourceZone.name()) && zone.kind() == sourceZone.kind())
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("원본 구역을 복사한 구역이 없습니다: 행사 " + eventId + ", 구역 "
+                        + sourceZone.name().value()));
+        return copied.id().orElseThrow(() -> new IllegalStateException("저장 전 구역에는 좌석을 배정하지 않습니다 — 1단계로 복사한 도면을 "
+                + "저장한 뒤에 부릅니다: 행사 " + eventId));
     }
 
     /**
