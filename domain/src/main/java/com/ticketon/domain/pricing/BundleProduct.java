@@ -14,6 +14,7 @@ import com.ticketon.domain.policy.QuantityPolicy;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,8 @@ import java.util.function.Predicate;
  *       회차별 가격 조정이 저절로 반영된다(docs/99 D "묶음권 가격"). 할인율은 기본값({@link #defaultDiscountRate})을 채워 두고 주최자가 바꾼다.
  *       상품 목록에는 가장 싼 회차 조합의 가격("3일권 40,000원~", {@link #startingPrice})이 보이고, 관객이 회차를 다 고르면 확정된다
  *       ({@link #priceFor}).</li>
+ *   <li><b>매수 세는 법</b> — 1인 총 매수에서는 날짜마다 1매({@link #ticketsPerPersonCountByDate}), 1회 선택 매수에서는 티켓 장수
+ *       ({@link #seatsPerSelectionCount})로 센다(docs/05 "매수 제한 계산").</li>
  * </ul>
  * 조기예매의 상품별 켜고 끔은 이 상품을 {@link TicketProduct#bundle}로 가리킨다({@link #product}). 날짜마다 들어갈 회차가 남았는지(판매 멈춤)는
  * 재고가 본다({@code domain.inventory.BundleAvailability}).
@@ -260,6 +263,53 @@ public final class BundleProduct {
      */
     public Money priceFor(long zoneId, List<Long> chosenSessionIds, EventSchedule schedule, FloorPlan floorPlan) {
         return dayPricesFor(zoneId, chosenSessionIds, schedule, floorPlan).bundlePrice(terms.discountRate());
+    }
+
+    /**
+     * 1인 총 매수 "날짜별"로 세는 매수 — <b>3일권 1장 = 날짜마다 1매</b>(docs/05 "매수 제한 계산"). 날짜별 4매 제한이면 3일권 1장이 5/3에 1매, 5/4에
+     * 1매, 5/5에 1매를 차지한다. 매수 제한은 "그 날 몇 자리를 차지하는가"를 보는 장치라 그대로 센다. 실제로 세어 막는 일은 예매 자격 판정이 한다
+     * ({@code domain.event.TicketsPerPersonLimit}).
+     *
+     * @param ticketCount 이번에 사는 이 묶음권의 장수, 1 이상
+     * @return 묶은 날짜(id)마다 차지하는 매수 — 모두 ticketCount
+     * @throws IllegalArgumentException ticketCount가 1보다 작으면
+     */
+    public Map<Long, Integer> ticketsPerPersonCountByDate(int ticketCount) {
+        requirePositiveTicketCount(ticketCount);
+        Map<Long, Integer> countByDate = new HashMap<>();
+        terms.dateIds().forEach(dateId -> countByDate.put(dateId, ticketCount));
+        return Map.copyOf(countByDate);
+    }
+
+    /**
+     * 1인 총 매수 "행사 전체"로 세는 매수 — 날짜마다 1매를 더해 <b>3일권 1장 = 3매</b>다. 날짜마다 1매로 센다는 규칙(docs/05 "매수 제한 계산")을 행사
+     * 전체에 그대로 쓴 것이다 — 1일권 세 장(5/3 · 5/4 · 5/5)과 같은 자리를 차지한다.
+     *
+     * @param ticketCount 이번에 사는 이 묶음권의 장수, 1 이상
+     * @throws IllegalArgumentException ticketCount가 1보다 작으면
+     */
+    public int ticketsPerPersonCountInEvent(int ticketCount) {
+        requirePositiveTicketCount(ticketCount);
+        return Math.multiplyExact(ticketCount, terms.dateCount());
+    }
+
+    /**
+     * 1회 선택 매수(한 번에 담는 매수)로 세는 매수 — <b>티켓 장수</b>다. 3일권 4장은 4매다(docs/05 "매수 제한 계산", docs/06 "좌석 선점", docs/99 D
+     * "1회 선택 매수의 묶음권"). 한 번에 잡을 수 있는 양을 막는 장치라 날짜 수를 곱해 12매로 셀 까닭이 없다 — 친구 몫까지 한 사람이 대표로 예매하는
+     * 일이 흔하다(docs/15 한서윤).
+     *
+     * @param ticketCount 이번에 담는 이 묶음권의 장수, 1 이상
+     * @throws IllegalArgumentException ticketCount가 1보다 작으면
+     */
+    public int seatsPerSelectionCount(int ticketCount) {
+        requirePositiveTicketCount(ticketCount);
+        return ticketCount;
+    }
+
+    private static void requirePositiveTicketCount(int ticketCount) {
+        if (ticketCount < 1) {
+            throw new IllegalArgumentException("묶음권 장수는 1 이상이어야 합니다: " + ticketCount);
+        }
     }
 
     private void requireApplicable(BundleProductTerms candidate, EventSchedule schedule, FloorPlan floorPlan) {
