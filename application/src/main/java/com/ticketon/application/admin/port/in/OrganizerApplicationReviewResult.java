@@ -60,11 +60,11 @@ public record OrganizerApplicationReviewResult(long applicationId, long organize
      * @param eventHistoryOrPlan  과거 행사 이력 또는 계획
      * @param businessStatus      사업자 여부
      * @param businessInformation 사업자 정보. 비사업자면 null.
-     * @param settlementAccount   정산 계좌
+     * @param settlementAccount   정산 계좌 — 계좌번호는 끝 4자리만
      */
     public record Form(OrganizerType organizerType, String name, String contactPhoneNumber, String email,
             List<String> websiteAndSnsLinks, String eventHistoryOrPlan, BusinessStatus businessStatus,
-            BusinessInformation businessInformation, SettlementAccount settlementAccount) {
+            BusinessInformation businessInformation, MaskedSettlementAccount settlementAccount) {
 
         public Form {
             Objects.requireNonNull(organizerType, "organizerType");
@@ -111,23 +111,29 @@ public record OrganizerApplicationReviewResult(long applicationId, long organize
     }
 
     /**
-     * 정산 계좌.
+     * 정산 계좌 — 계좌번호는 끝 4자리만 보인다. 심사에는 번호가 필요 없어, 전체 번호는 계좌 변경 확인 · 정산 완료 처리 화면에서만 보인다
+     * (docs/99 C "정산 계좌 표시", D "정산 계좌 표시").
      *
-     * @param bankName      은행
-     * @param accountNumber 계좌번호
-     * @param accountHolder 예금주
+     * @param bankName            은행
+     * @param maskedAccountNumber 가린 계좌번호 — 마지막 숫자 네 개만 보인다
+     * @param accountHolder       예금주
      */
-    public record SettlementAccount(String bankName, String accountNumber, String accountHolder) {
+    public record MaskedSettlementAccount(String bankName, String maskedAccountNumber, String accountHolder) {
 
-        public SettlementAccount {
+        public MaskedSettlementAccount {
             Objects.requireNonNull(bankName, "bankName");
-            Objects.requireNonNull(accountNumber, "accountNumber");
+            Objects.requireNonNull(maskedAccountNumber, "maskedAccountNumber");
             Objects.requireNonNull(accountHolder, "accountHolder");
+        }
+
+        /** 도메인 정산 계좌의 계좌번호를 가려 옮긴다. */
+        public static MaskedSettlementAccount from(com.ticketon.domain.organizer.SettlementAccount account) {
+            return new MaskedSettlementAccount(account.bankName(), account.maskedAccountNumber(), account.accountHolder());
         }
 
         @Override
         public String toString() {
-            return "SettlementAccount[****]";
+            return "MaskedSettlementAccount[****]";
         }
     }
 }

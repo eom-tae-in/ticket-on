@@ -255,6 +255,8 @@ class AdminApiDocsTest {
                 .andExpect(jsonPath("$.components.schemas.ReviewedApplicationForm.required",
                         containsInAnyOrder("organizerType", "name", "contactPhoneNumber", "email", "websiteAndSnsLinks",
                                 "eventHistoryOrPlan", "businessStatus", "settlementAccount")))
+                .andExpect(jsonPath("$.components.schemas.ReviewedSettlementAccount.required",
+                        containsInAnyOrder("bankName", "maskedAccountNumber", "accountHolder")))
                 .andExpect(jsonPath("$.components.schemas.ReviewChecklistItem.properties.item.enum",
                         containsInAnyOrder("CONTACT_REACHED_BY_PHONE", "EXISTENCE_CONFIRMED_BY_LINKS_AND_HISTORY",
                                 "EVENT_PLAN_IS_CONCRETE")))

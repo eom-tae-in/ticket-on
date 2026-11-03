@@ -156,12 +156,12 @@ public record OrganizerApplicationReviewResponse(
             @Schema(description = "사업자 정보 — 사업자만. 비사업자면 null", requiredMode = NOT_REQUIRED, nullable = true)
             ReviewedBusinessInformation businessInformation,
 
-            @Schema(description = "정산 계좌", requiredMode = REQUIRED)
+            @Schema(description = "정산 계좌 — 계좌번호는 끝 4자리만", requiredMode = REQUIRED)
             ReviewedSettlementAccount settlementAccount) {
 
         static ReviewedApplicationForm from(OrganizerApplicationReviewResult.Form form) {
             OrganizerApplicationReviewResult.BusinessInformation business = form.businessInformation();
-            OrganizerApplicationReviewResult.SettlementAccount account = form.settlementAccount();
+            OrganizerApplicationReviewResult.MaskedSettlementAccount account = form.settlementAccount();
             return new ReviewedApplicationForm(
                     OrganizerTypeCode.from(form.organizerType()),
                     form.name(),
@@ -173,7 +173,7 @@ public record OrganizerApplicationReviewResponse(
                     business == null ? null : new ReviewedBusinessInformation(business.tradeName(),
                             business.representativeName(), business.businessAddress(), business.businessPhoneNumber(),
                             business.businessRegistrationNumber()),
-                    new ReviewedSettlementAccount(account.bankName(), account.accountNumber(),
+                    new ReviewedSettlementAccount(account.bankName(), account.maskedAccountNumber(),
                             account.accountHolder()));
         }
 
@@ -214,17 +214,20 @@ public record OrganizerApplicationReviewResponse(
     }
 
     /**
-     * @param bankName      은행
-     * @param accountNumber 계좌번호
-     * @param accountHolder 예금주
+     * 심사에는 번호가 필요 없어 끝 4자리만 보인다. 전체 번호는 계좌 변경 확인 · 정산 완료 처리 화면에서만 보인다(docs/99 C "정산 계좌 표시").
+     *
+     * @param bankName            은행
+     * @param maskedAccountNumber 가린 계좌번호 — 마지막 숫자 네 개만 보인다
+     * @param accountHolder       예금주
      */
-    @Schema(description = "심사하는 신청서의 정산 계좌")
+    @Schema(description = "심사하는 신청서의 정산 계좌 — 계좌번호는 마지막 숫자 네 개만 보이고 나머지 숫자는 *로 가렸다")
     public record ReviewedSettlementAccount(
             @Schema(description = "은행", example = "국민은행", requiredMode = REQUIRED)
             String bankName,
 
-            @Schema(description = "계좌번호 — 적은 그대로", example = "123456-78-901234", requiredMode = REQUIRED)
-            String accountNumber,
+            @Schema(description = "가린 계좌번호 — 마지막 숫자 네 개만 보인다. 하이픈 · 공백은 적은 그대로", example = "******-**-**1234",
+                    requiredMode = REQUIRED)
+            String maskedAccountNumber,
 
             @Schema(description = "예금주", example = "박정훈", requiredMode = REQUIRED)
             String accountHolder) {
