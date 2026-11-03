@@ -36,6 +36,7 @@ import com.ticketon.domain.event.EventChangeHistoryTarget;
 import com.ticketon.domain.event.EventChangeHistoryVersion;
 import com.ticketon.domain.event.EventPoster;
 import com.ticketon.domain.event.EventPosterImage;
+import com.ticketon.domain.event.EventPublicContact;
 import com.ticketon.domain.event.EventStatus;
 import com.ticketon.domain.event.EventTitle;
 import com.ticketon.domain.event.SessionMode;
@@ -43,6 +44,7 @@ import com.ticketon.domain.event.SessionPerformers;
 import com.ticketon.domain.event.TimedSessionTime;
 import com.ticketon.domain.notification.NotificationKind;
 import com.ticketon.domain.notification.NotificationRecipient;
+import com.ticketon.domain.organizer.ExternalLink;
 import com.ticketon.domain.organizer.StaffAction;
 import com.ticketon.domain.organizer.StaffRole;
 import java.time.Instant;
@@ -125,6 +127,14 @@ class EventChangeHistoryRecordingTest {
         scene.saveEventBasicInformationService().save(new SaveEventBasicInformationCommand(acting(staffAccountId, scene.twelveMonths),
                 springPlay, new EventBasicInformationItems(EventTitle.of(title), items.type(), items.categoryName(), items.genreName(),
                         introduction, items.venue(), items.venueDetails(), items.mapLink(), items.publicContact())));
+    }
+
+    /** 제목 · 소개는 그대로 두고 상세 안내 · 지도 링크 · 공개용 연락처만 그 값으로 저장한다 — null이면 비운다. */
+    private void saveVenueGuide(long staffAccountId, String venueDetails, ExternalLink mapLink, EventPublicContact publicContact) {
+        EventBasicInformationItems items = springPlayItems();
+        scene.saveEventBasicInformationService().save(new SaveEventBasicInformationCommand(acting(staffAccountId, scene.twelveMonths),
+                springPlay, new EventBasicInformationItems(items.title(), items.type(), items.categoryName(), items.genreName(),
+                        items.introduction(), items.venue(), venueDetails, mapLink, publicContact)));
     }
 
     /** 운영자 기획 단원이 판매를 시작한 것으로 둔다 — 판매 대기로 바꿔 저장한 뒤 같은 트랜잭션에서 첫 버전을 쌓는다(판매 시작 #58이 할 일). */
@@ -224,7 +234,7 @@ class EventChangeHistoryRecordingTest {
         }
 
         @ParameterizedTest
-        @EnumSource(value = EventChangeHistoryTarget.class, names = {"TITLE", "POSTER", "SESSION_PERFORMERS"})
+        @EnumSource(value = EventChangeHistoryTarget.class, names = {"TITLE", "POSTER", "VENUE_DETAILS", "SESSION_PERFORMERS"})
         @DisplayName("잠금을 기다리는 동안 다른 편집이 먼저 끝나면 잠금을 얻은 시각부터 새 버전이 유효하다")
         void waitingEditUsesTimeAfterAcquiringEventLock(EventChangeHistoryTarget target) {
             scene.clock.moveTo(FIRST_CHANGE.minusSeconds(1));
@@ -251,8 +261,58 @@ class EventChangeHistoryRecordingTest {
                 case POSTER -> uploadService.upload(new UploadEventPosterCommand(acting(JUNGHOON, scene.twelveMonths),
                         springPlay, EventPosterImage.of("image/jpeg", TestImages.jpeg(300, 400))));
                 case SESSION_PERFORMERS -> changePerformers(JUNGHOON, novemberFourteenth, content);
-                case INTRODUCTION -> throw new IllegalArgumentException("기본 정보 저장은 제목 변경으로 검증한다");
+                case VENUE_DETAILS -> saveVenueGuide(JUNGHOON, content, springPlayItems().mapLink(), springPlayItems().publicContact());
+                case INTRODUCTION, MAP_LINK, PUBLIC_CONTACT ->
+                        throw new IllegalArgumentException("기본 정보 저장은 제목 · 상세 안내 변경으로 검증한다");
             }
+        }
+
+        @Test
+        @DisplayName("판매 중에 운영자가 상세 안내를 고치고 지도 링크를 비우고 연락처를 바꾸면 칸마다 버전이 쌓인다 — 소유자에게 알리지 않는다")
+        void venueGuideChangeOnSale() {
+            scene.moveEventTo(springPlay, EventStatus.ON_SALE);
+            scene.clock.moveTo(FIRST_CHANGE);
+
+            saveVenueGuide(PLANNER, "지하 1층, 주차 불가 (근처 공영주차장 이용)", null, EventPublicContact.of("010-1234-5678"));
+
+            assertThat(scene.historyRepository.versionsOf(springPlay))
+                    .filteredOn(stored -> stored.validFrom().equals(FIRST_CHANGE))
+                    .extracting(StoredVersion::version, StoredVersion::validUntil, stored -> stored.author().nickname().value())
+                    .containsExactly(
+                            tuple(new EventChangeHistoryVersion(EventChangeHistoryTarget.VENUE_DETAILS, null, "지하 1층, 주차 불가",
+                                    "지하 1층, 주차 불가 (근처 공영주차장 이용)"), null, "푸른바람"),
+                            tuple(new EventChangeHistoryVersion(EventChangeHistoryTarget.MAP_LINK, null, "https://map.example/place/12",
+                                    null), null, "푸른바람"),
+                            tuple(new EventChangeHistoryVersion(EventChangeHistoryTarget.PUBLIC_CONTACT, null, "twelve-months@example.com",
+                                    "010-1234-5678"), null, "푸른바람"));
+            assertThat(versionsOf(EventChangeHistoryTarget.VENUE_DETAILS)).first()
+                    .satisfies(first -> assertThat(first.validUntil()).isEqualTo(FIRST_CHANGE));
+            assertThat(versionsOf(EventChangeHistoryTarget.TITLE)).singleElement()
+                    .satisfies(title -> assertThat(title.validUntil()).isNull());
+            assertThat(scene.sendNotificationUseCase.sentCommands()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("비운 지도 링크를 다시 적으면 바꾸기 전이 빈 버전이 쌓이고, 같은 안내를 다시 저장하면 늘지 않는다")
+        void refillMapLinkAndSameGuide() {
+            scene.clock.moveTo(FIRST_CHANGE);
+            saveVenueGuide(PLANNER, "지하 1층, 주차 불가", null, springPlayItems().publicContact());
+            scene.clock.moveTo(SECOND_CHANGE);
+            saveVenueGuide(PLANNER, "지하 1층, 주차 불가", ExternalLink.of("https://map.example/place/34"),
+                    springPlayItems().publicContact());
+            saveVenueGuide(PLANNER, " 지하 1층, 주차 불가 ", ExternalLink.of("https://map.example/place/34"),
+                    springPlayItems().publicContact());
+
+            assertThat(versionsOf(EventChangeHistoryTarget.MAP_LINK))
+                    .extracting(StoredVersion::version, StoredVersion::validFrom, StoredVersion::validUntil)
+                    .containsExactly(
+                            tuple(new EventChangeHistoryVersion(EventChangeHistoryTarget.MAP_LINK, null, null,
+                                    "https://map.example/place/12"), NOW, FIRST_CHANGE),
+                            tuple(new EventChangeHistoryVersion(EventChangeHistoryTarget.MAP_LINK, null, "https://map.example/place/12",
+                                    null), FIRST_CHANGE, SECOND_CHANGE),
+                            tuple(new EventChangeHistoryVersion(EventChangeHistoryTarget.MAP_LINK, null, null,
+                                    "https://map.example/place/34"), SECOND_CHANGE, null));
+            assertThat(scene.historyRepository.versionsOf(springPlay)).hasSize(9);
         }
 
         @Test
